@@ -27,7 +27,7 @@ set -o errexit # exit on errors
 #ulimit -S -s unlimited
 
 # Input file
-INPUT=$SUBMITDIR"/input/file_"$TASK_ID".p"
+INPUT=$SUBMITDIR"/input/file_"$TASK_ID".yml"
 
 # Output file
 OUTPUT=$(python outfile.py $INPUT)
