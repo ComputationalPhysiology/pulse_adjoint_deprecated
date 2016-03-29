@@ -341,6 +341,24 @@ class ActiveForwardRunner(BasicForwardRunner):
 	    
         except StopIteration:
             logger.debug("Stepping up gamma failed")
+
+            # Save the gamma
+            file_format = "a" if os.path.isfile("gamma_crash.h5") else "w"
+
+            p = 0
+            acin = self.active_contraction_iteration_number
+            if file_format == "a":
+                import h5py
+                h5pyfile = h5py.File("gamma_crash.h5", "r")
+                if "point_{}".format(acin) in h5pyfile.keys():
+                    while "point_{}/crash_point_{}".format(acin, p) in h5pyfile["point_{}".format(acin)].keys():
+                        p += 1
+
+            with HDF5File(mpi_comm_world(), "gamma_crash.h5", file_format) as h5file:
+                h5file.write(m, "point{}/crash_point_{}".format(acin, p))
+                
+                
+
             # If stepping up gamma fails, assign the previous gamma
             # and return a crash=True, so that the Reduced functional
             # knows that we were unable to step up gamma
