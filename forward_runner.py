@@ -355,7 +355,7 @@ class ActiveForwardRunner(BasicForwardRunner):
                         p += 1
 
             with HDF5File(mpi_comm_world(), "gamma_crash.h5", file_format) as h5file:
-                h5file.write(m, "point{}/crash_point_{}".format(acin, p))
+                h5file.write(m, "point_{}/crash_point_{}".format(acin, p))
                 
                 
 
