@@ -1,7 +1,7 @@
 import os
 from itertools import product
 import yaml
-from pscm.setup_optimization import setup_adjoint_contraction_parameters
+from campass.setup_optimization import setup_adjoint_contraction_parameters
 
 filepath= os.path.dirname(os.path.abspath(__file__))
 OUTPATH_REAL = filepath+"/results/real/patient_{}/alpha_{}/regpar{}/rule_{}_dir_{}/{}"

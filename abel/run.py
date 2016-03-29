@@ -1,7 +1,7 @@
-from pscm.run_full_optimization import main as real_main
-from pscm.synthetic_data import run_active_synth_data as synth_main
-from pscm.adjoint_contraction_args import *
-from pscm.setup_optimization import setup_adjoint_contraction_parameters
+from campass.run_full_optimization import main as real_main
+from campass.synthetic_data import run_active_synth_data as synth_main
+from campass.adjoint_contraction_args import *
+from campass.setup_optimization import setup_adjoint_contraction_parameters
 from numpy_mpi import mpi_print
 
 
@@ -28,8 +28,6 @@ if __name__=="__main__":
     params = setup_adjoint_contraction_parameters()
     params.update(params_dict)
     assert outfile == params["sim_file"]
-
-    from IPython import embed; embed()
 
     shutil.copy(infile, params["outdir"] + "/input.yml")
         
