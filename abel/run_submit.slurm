@@ -1,0 +1,34 @@
+#!/bin/bash
+
+#SBATCH --job-name=AdjointContractionArray
+#
+# Project:
+#SBATCH --account=NN9249K
+#
+# Wall clock limit:
+#SBATCH --time=72:00:00
+#
+# Max memory usage:
+#SBATCH --mem-per-cpu=4G
+
+#Send emails for start, stop, fail, etc...
+#SBATCH --mail-type=END
+#SBATCH --output=slurmfiles/impact-%j.out
+#SBATCH --mail-user=henriknf@simula.no
+
+## Set up job environment:
+source /cluster/bin/jobsetup
+
+set -o errexit # exit on errors
+
+module purge   # clear any inherited modules
+module load gcc/5.1.0
+module load openmpi.gnu/1.8.8
+module load cmake/3.1.0
+#module load gcc/4.9.2
+#module load openmpi.gnu/1.8.4
+#module load cmake/2.8.9
+
+ulimit -S -s unlimited
+
+arrayrun $1-$2 run.slurm
