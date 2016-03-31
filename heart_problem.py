@@ -99,7 +99,7 @@ class BasicHeartProblem(collections.Iterator):
         
         
         self.strainfieldspace = spaces.strainfieldspace
-        self.strainfield = Function(self.strainfieldspace)
+        self.strainfield = Function(self.strainfieldspace, name = "Simulated StrainField")
         
         self.strainspace = spaces.strainspace
         self.strains = [Function(self.strainspace,

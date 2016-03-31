@@ -9,19 +9,33 @@ from adjoint_contraction_args import *
 from scipy.optimize import minimize as scipy_minimize
 from store_opt_results import write_opt_results_to_h5
 
-
 def run_passive_optimization(params, patient):
-    
+
     logger.info(Text.blue("\nRun Passive Optimization"))
 
     #Load patient data, and set up the simulation
     measurements, solver_parameters, p_lv, paramvec = setup_simulation(params, patient)
 
+    controls, rd, for_run, forward_result = \
+      run_passive_optimization_step(params, 
+                                    patient, 
+                                    solver_parameters, 
+                                    measurements, 
+                                    p_lv, paramvec)
+
+    solve_passive_oc_problem(rd, params, paramvec, for_run, forward_result)
+
+
+def run_passive_optimization_step(params, patient, solver_parameters, measurements, p_lv, paramvec):
+    
+
+    
+
     mesh = solver_parameters["mesh"]
     spaces = get_spaces(mesh)
     crl_basis = (patient.e_circ, patient.e_rad, patient.e_long)
      
-
+    
     #Solve calls are not registred by libajoint
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
@@ -32,16 +46,14 @@ def run_passive_optimization(params, patient):
                               p_lv, patient.ENDO, 
                               crl_basis, spaces)
 
+    
     # Load target data
     target_data = load_target_data(measurements, params, spaces)
 
-
+    adj_reset()
     # Start recording for dolfin adjoint 
     logger.debug(Text.yellow("Start annotating"))
     parameters["adjoint"]["stop_annotating"] = False
-
-    #Assign guess parameters
-    paramvec.assign(Constant(params["Material_parameters"].values()))
 
        
     logger.debug(Text.blue("\nCreating Recording for Dolfin-adjoint"))
@@ -54,8 +66,10 @@ def run_passive_optimization(params, patient):
                                    params, 
                                    spaces)
 
+    #Assign guess parameters
+    paramvec.assign(Constant(params["Material_parameters"].values()))
     
-
+    
     #Solve the forward problem
     forward_result = for_run(paramvec, True)
     
@@ -71,25 +85,26 @@ def run_passive_optimization(params, patient):
     # Compute functional as a function of the control parameters only
     rd = ReducedFunctional(I, controls)
 
-    # Dump html visualization of the forward system
-    # adj_html("forward.htm", "forward")
-    
-    if params["mode"] == MODES[0]:
-        # Test that the functional has the correct value
-        test_functional(rd, paramvec, for_run, args)
-    
-    elif params["mode"] == MODES[1]: 
-        # Test that the gradient is computed correctly
-        run_taylor_test(rd, controls, forward_res.func_value)
 
-    elif params["mode"] == MODES[2]:
-        solve_passive_oc_problem(rd, params, paramvec, for_run, forward_result)
+    return controls, rd, for_run, forward_result
+    
+    
+    # if params["mode"] == MODES[0]:
+    #     # Test that the functional has the correct value
+    #     test_functional(rd, paramvec, for_run, args)
+    
+    # elif params["mode"] == MODES[1]: 
+    #     # Test that the gradient is computed correctly
+    #     run_taylor_test(rd, controls, forward_res.func_value)
+
+
         
         
-    elif params["mode"] == MODES[3]:
-        tol = 1e-12
-        assert replay_dolfin(tol=tol), "replay test fail with tolerance {}".format(tol)
-        #mpi_print(replay_dolfin(tol=1e-12))
+        
+    # elif params["mode"] == MODES[3]:
+    #     tol = 1e-12
+    #     assert replay_dolfin(tol=tol), "replay test fail with tolerance {}".format(tol)
+    #     #mpi_print(replay_dolfin(tol=1e-12))
 
 def run_active_optimization(params, patient):
     
@@ -226,7 +241,7 @@ def solve_passive_oc_problem(rd, params, paramvec, forward_runner, ini_for_res):
 
     # Solve the forward problem with optimal parameters
     for_result_opt = forward_runner(opt_controls)
-    print_optimization_report(params, paramvec, ini_for_res, for_result_opt, opt_result)
+    print_optimization_report(params, opt_controls, ini_for_res, for_result_opt, opt_result)
     
     if params["store"]:
         

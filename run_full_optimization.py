@@ -1,4 +1,4 @@
-from setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters
+from setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, initialize_patient_data
 from run_optimization import run_passive_optimization, run_active_optimization
 from adjoint_contraction_args import *
 from numpy_mpi import *
@@ -6,22 +6,6 @@ from utils import passive_inflation_exists, contract_point_exists,  Text, pforma
 from dolfin_adjoint import adj_reset
 
 
-def initialize_patient_data(patient_parameters, synth_data):
-
-    logger.info(Text.blue("Initialize patient data"))
-    from patient_data import Patient
-    
-    patient = Patient(**patient_parameters)
-
-    # if args_full.use_deintegrated_strains:
-        # patient.load_deintegrated_strains(STRAIN_FIELDS_PATH)
-
-    if synth_data:
-        patient.passive_filling_duration = SYNTH_PASSIVE_FILLING
-        patient.num_contract_points =  NSYNTH_POINTS + 1
-        patient.num_points = SYNTH_PASSIVE_FILLING + NSYNTH_POINTS + 1
-
-    return patient
 
 
 def main(params):

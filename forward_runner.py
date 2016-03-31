@@ -25,7 +25,7 @@ class BasicForwardRunner(object):
         self.solver_parameters = solver_parameters
         self.p_lv = p_lv 
 
-        self.alpha = params["alpha"]
+        
         self.use_deintegrated_strains = params["use_deintegrated_strains"]
 
         #Circumferential, radial, longtitudal basis.
@@ -127,6 +127,7 @@ class BasicForwardRunner(object):
         functional_values_volume = []
         functionals_time = []
         
+
         if phase == "passive":
             # We must record the initial state
             if self.use_deintegrated_strains:
@@ -139,7 +140,7 @@ class BasicForwardRunner(object):
             self._save_state(Vector(phm.solver.w.vector()), self._get_exprval(phm.p_lv, phm.mesh),
                              float(phm.get_inner_cavity_volume()), phm.strains, phm.strainfield)
 
-
+        
         logger.debug("Volume - Strain interpolation {}".format(self.alpha))
         logger.info("\nLVP (cPa)  LV Volume(ml)  Target Volume(ml)  I_strain  I_volume  I_reg")
 	
@@ -149,7 +150,7 @@ class BasicForwardRunner(object):
         
         functional = self.alpha*self.V_diff/self.mesh_vol*dx + (1 - self.alpha)*strain_diff/self.mesh_vol*dx
         
-
+        
         if phase == "active":
             # Add regulatization term to the functional
             m = phm.solver.parameters['material']['gamma']
@@ -165,6 +166,7 @@ class BasicForwardRunner(object):
             functionals_time.append(functional*dt[0.0])
             reg_term = 0.0
 
+        
         for strains_at_pressure, target_vol in zip(self.target_strains[1:], self.target_vols[1:]):
 
             sol, model_strain = phm.next()
@@ -181,7 +183,7 @@ class BasicForwardRunner(object):
 
             # Compute the strain misfit
             strain_error = get_strain_error()
-
+            
             #Volume Projections to get dolfin-adjoint to record.            
             self.projector.project(phm.vol, phm.ds, self.V_sim)
             self.projector.project(((self.V_sim - self.V_meas)/self.V_meas)**2, dx, self.V_diff)
@@ -195,8 +197,8 @@ class BasicForwardRunner(object):
                 
             
             # Gathering the vector if running in parallell
-            v_diff = gather_broadcast(self.V_diff.vector().array())[0]
-
+            v_diff = gather_broadcast(self.V_diff.vector().array())[0]#/float(self.mesh_vol)
+            
             self.print_solve_line(phm, strain_error, v_diff, reg_term)
 
             if phase == "active":
@@ -205,20 +207,20 @@ class BasicForwardRunner(object):
                 functionals_time.append(functional*dt[1])
             else:
                 # Check if we are done with the passive phase
-                adj_inc_timestep(count, near(count, len(self.target_vols)-1))
+                
+                adj_inc_timestep(count, count == len(self.target_vols)-1)
                 count += 1
                 functionals_time.append(functional*dt[count])
-                
                 
 
             functional_values_strain.append(strain_error)
             functional_values_volume.append(v_diff)
-
+            
             # Save the state
             self._save_state(Vector(phm.solver.w.vector()), self._get_exprval(phm.p_lv, phm.mesh),
                              float(phm.get_inner_cavity_volume()), phm.strains, phm.strainfield)
-
-     
+            
+            
         forward_result = self._make_forward_result(functional_values_strain, functional_values_volume, functionals_time, phm)
 
         if phase == "active":
@@ -291,6 +293,7 @@ class ActiveForwardRunner(BasicForwardRunner):
         self.active_contraction_iteration_number = params["active_contraction_iteration_number"]
         self.gamma_previous = gamma_previous
         self.reg_par = Constant(params["reg_par"])
+        self.alpha = params["alpha"]
 
         self.passive_filling_duration = patient.passive_filling_duration
         self.strain_markers = patient.strain_markers
@@ -406,7 +409,17 @@ class ActiveForwardRunner(BasicForwardRunner):
 
 
 
-class PassiveForwardRunner(BasicForwardRunner):    
+class PassiveForwardRunner(BasicForwardRunner):
+    def __init__(self, solver_parameters, p_lv, 
+                 target_data, endo_lv_marker,
+                 crl_basis, params, spaces):
+
+        self.alpha = params["alpha_matparams"]
+
+        BasicForwardRunner.__init__(self, solver_parameters, p_lv, 
+                                    target_data, endo_lv_marker,
+                                    crl_basis, params, spaces)
+
     def __call__(self, m, annotate = False, phm=None):
         m = split(m)
         self.solver_parameters["material"]["a"] = m[0]
@@ -421,6 +434,7 @@ class PassiveForwardRunner(BasicForwardRunner):
                                   self.crl_basis, self.spaces)
 
     
+        
         forward_result = BasicForwardRunner.solve_the_forward_problem(self, annotate, phm, "passive")
 
 

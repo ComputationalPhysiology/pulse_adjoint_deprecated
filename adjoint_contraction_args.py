@@ -3,7 +3,7 @@ from patient_data.scripts.data import STRAIN_REGIONS, STRAIN_DIRECTIONS
 import os, logging
 import dolfin
 
-log_level = logging.INFO
+log_level = logging.DEBUG
 
 # Setup logger
 def make_logger(name, level = logging.INFO):
@@ -76,7 +76,7 @@ WEIGHT_DIRECTIONS = ["c", "l", "r", "all"]
 DEFAULT_WEIGHT_DIRECTION = "all"
 
 #Spring constant for base.
-BASE_K = 10.0
+BASE_K = 1.0
 
 # Regularization patameter
 REG_PAR = 0.0
@@ -99,6 +99,7 @@ PHASES = ['passive_inflation', 'active_contraction', "all"]
 
 # Initial material parameters
 INITIAL_MATPARAMS = [0.795, 6.855, 21.207, 40.545] 
+# INITIAL_MATPARAMS = [0.291, 2.582, 5,5] 
 
 # If true, Optimize material parameters, otherswise use the default material parameters
 OPTIMIZE_MATPARAMS = True
@@ -121,11 +122,11 @@ OPTIMIZATION_METHODS = ["TNC", "L-BFGS-B", "SLSQP"]
 
 # Optimization tolerance 
 OPTIMIZATION_TOLERANCE_GAMMA = 1.0e-5
-OPTIMIZATION_TOLERANCE_MATPARAMS = 1.0e-5
+OPTIMIZATION_TOLERANCE_MATPARAMS = 1.0e-8
 
 # Maximum number of iterations
-OPTIMIZATION_MAXITER_GAMMA = 1
-OPTIMIZATION_MAXITER_MATPARAMS = 1
+OPTIMIZATION_MAXITER_GAMMA = 100
+OPTIMIZATION_MAXITER_MATPARAMS = 30
 
 
 ############### SYNTHETIC DATA  #####################
@@ -168,7 +169,7 @@ SYNTH_OUTDIR_CONTINUOUS_GAMMA =  SYNTH_OUTDIR + "/data_continuous_gamma"
 path_to_data = "/".join(os.path.dirname(__file__).split("/")[:-1])
 SIMULATION_FILE = os.path.join(path_to_data,
                                'adjoint_contraction/numerical_results/{}/{}/{}/results.h5')  #.format(args.patient,alpha, casename)
-DFEAULT_SIMULATION_FILE = os.path.join(path_to_data,
+DEFAULT_SIMULATION_FILE = os.path.join(path_to_data,
                                        'adjoint_contraction/numerical_results/{}/results.h5'.format(DEFAULT_PATIENT))  
 
 ########## DOLFIN PARAMETERS ############################
@@ -188,8 +189,8 @@ SNES_SOLVER_MAXITR = 50
 SNES_SOLVER_ABSTOL = 1.0e-5
 
 # Linear solver "
-SNES_SOLVER_LINSOLVER = "mumps"#"lu"#"superlu_dist"#"lu"
-SNES_SOLVER_PRECONDITIONER = "amg"
+SNES_SOLVER_LINSOLVER = "lu"#"superlu_dist"#"lu"
+SNES_SOLVER_PRECONDITIONER = "default"
 
 OPTIMIZATION_METHOD = "SLSQP"
 

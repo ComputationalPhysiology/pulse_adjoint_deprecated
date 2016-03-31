@@ -10,29 +10,30 @@ from numpy_mpi import *
 
 def setup_adjoint_contraction_parameters():
 
-    parameters = setup_application_parameters()
+    params = setup_application_parameters()
 
     # Patient parameters
     patient_parameters = setup_patient_parameters()
-    parameters.add(patient_parameters)
+    params.add(patient_parameters)
 
     # Optimization parameters
     opt_parameters = setup_optimization_parameters()
-    parameters.add(opt_parameters)
+    params.add(opt_parameters)
     
-    return parameters
+    return params
     
     
 def setup_solver_parameters():
-    from dolfin.cpp.fem import NonlinearVariationalSolver
-    solver_parameters = NonlinearVariationalSolver.default_parameters()
+    # from dolfin.cpp.fem import NonlinearVariationalSolver
+    #NonlinearVariationalSolver.default_parameters()
+    solver_parameters = {"snes_solver":{}}
 
     solver_parameters["nonlinear_solver"] = NONLINSOLVER
     solver_parameters["snes_solver"]["method"] = SNES_SOLVER_METHOD
     solver_parameters["snes_solver"]["maximum_iterations"] = SNES_SOLVER_MAXITR
     solver_parameters["snes_solver"]["absolute_tolerance"] = SNES_SOLVER_ABSTOL 
     solver_parameters["snes_solver"]["linear_solver"] = SNES_SOLVER_LINSOLVER
-    solver_parameters["snes_solver"]["preconditioner"] = SNES_SOLVER_PRECONDITIONER
+    # solver_parameters["snes_solver"]["preconditioner"] = SNES_SOLVER_PRECONDITIONER
     solver_parameters["snes_solver"]["report"] = VIEW_NLS_CONVERGENCE
 
     return solver_parameters
@@ -47,78 +48,98 @@ def setup_general_parameters():
     dolfin.parameters["form_compiler"]["representation"] = "uflacs"
     dolfin.parameters["form_compiler"]["cpp_optimize"] = True
     dolfin.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
-    
+    # dolfin.parameters["adjoint"]["test_derivative"] = True
     # dolfin.parameters["std_out_all_processes"] = False
     # dolfin.parameters["num_threads"] = 8
     
-    
+    dolfin.set_log_active(True)
+    dolfin.set_log_level(INFO)
 
 
 def setup_patient_parameters():
-    parameters = Parameters("Patient_parameters")
+    params = Parameters("Patient_parameters")
     # parameters.add("patient", DEFAULT_PATIENT)
-    parameters.add("patient", "test")
+    params.add("patient", "test")
     # parameters.add("patient_type", DEFAULT_PATIENT_TYPE)
-    parameters.add("patient_type", "test")
-    parameters.add("weight_rule", DEFAULT_WEIGHT_RULE, WEIGHT_RULES)
-    parameters.add("weight_direction", DEFAULT_WEIGHT_DIRECTION, WEIGHT_DIRECTIONS)
-    parameters.add("resolution", RESOLUTION)
-    parameters.add("fiber_angle_epi", 50)
-    parameters.add("fiber_angle_endo", 40)
-    parameters.add("mesh_type", "lv", ["lv", "biv"])
+    params.add("patient_type", "test")
+    params.add("weight_rule", DEFAULT_WEIGHT_RULE, WEIGHT_RULES)
+    params.add("weight_direction", DEFAULT_WEIGHT_DIRECTION, WEIGHT_DIRECTIONS)
+    # parameters.add("resolution", RESOLUTION)
+    params.add("resolution", "med_res")
+    params.add("fiber_angle_epi", 50)
+    params.add("fiber_angle_endo", 40)
+    params.add("mesh_type", "lv", ["lv", "biv"])
 
-    return parameters
+    return params
 
 def setup_application_parameters():
 
-    parameters = Parameters("Application_parmeteres")
-    # parameters.add("sim_file", DFEAULT_SIMULATION_FILE)
-    parameters.add("sim_file", "test/test.h5")
-    parameters.add("outdir", "test")
-    # parameters.add("outdir", os.path.dirname(DFEAULT_SIMULATION_FILE))
-    parameters.add("alpha", ALPHA)
-    parameters.add("base_spring_k", BASE_K)
-    parameters.add("reg_par", REG_PAR)
-    parameters.add("gamma_space", "CG_1", ["CG_1", "R_0"])
-    parameters.add("use_deintegrated_strains", False)
-    parameters.add("store", True)
-    parameters.add("mode", "optimize", MODES)
-    parameters.add("optimize_matparams", True)
+    params = Parameters("Application_parmeteres")
+    params.add("sim_file", DEFAULT_SIMULATION_FILE)
+    
+    # parameters.add("sim_file", "test/test.h5")
+    # parameters.add("outdir", "test")
+    params.add("outdir", os.path.dirname(DEFAULT_SIMULATION_FILE))
+    params.add("alpha", ALPHA)
+    params.add("base_spring_k", BASE_K)
+    params.add("reg_par", REG_PAR)
+    params.add("gamma_space", "CG_1", ["CG_1", "R_0"])
+    params.add("use_deintegrated_strains", False)
+    params.add("store", True)
+    # parameters.add("mode", "optimize", MODES)
+    params.add("optimize_matparams", True)
     
 
-    parameters.add("synth_data", False)
-    parameters.add("noise", False)
+    params.add("synth_data", False)
+    params.add("noise", False)
     
     # Set material parameter estimation as default
-    parameters.add("phase", PHASES[0], PHASES)
-    parameters.add("alpha_matparams", ALPHA_MATPARAMS)
-    parameters.add("active_contraction_iteration_number", 0)
+    params.add("phase", PHASES[0], PHASES)
+    params.add("alpha_matparams", ALPHA_MATPARAMS)
+    params.add("active_contraction_iteration_number", 0)
 
     material_parameters = Parameters("Material_parameters")
     material_parameters.add("a", INITIAL_MATPARAMS[0])
     material_parameters.add("b", INITIAL_MATPARAMS[1])
     material_parameters.add("a_f", INITIAL_MATPARAMS[2])
     material_parameters.add("b_f", INITIAL_MATPARAMS[3])
-    parameters.add(material_parameters)
+    params.add(material_parameters)
 
 
 
-    return parameters
+    return params
 
 def setup_optimization_parameters():
     # Parameters for the Scipy Optimization
-    parameters = Parameters("Optimization_parmeteres")
-    parameters.add("method", OPTIMIZATION_METHOD)
-    parameters.add("active_opt_tol", OPTIMIZATION_TOLERANCE_GAMMA)
-    parameters.add("active_maxiter", OPTIMIZATION_MAXITER_GAMMA)
-    parameters.add("passive_opt_tol", OPTIMIZATION_TOLERANCE_MATPARAMS)
-    parameters.add("passive_maxiter", OPTIMIZATION_MAXITER_MATPARAMS)
-    parameters.add("scale", SCALE)
-    parameters.add("gamma_max", MAX_GAMMA)
-    parameters.add("disp", False)
+    params = Parameters("Optimization_parmeteres")
+    params.add("method", OPTIMIZATION_METHOD)
+    params.add("active_opt_tol", OPTIMIZATION_TOLERANCE_GAMMA)
+    params.add("active_maxiter", OPTIMIZATION_MAXITER_GAMMA)
+    params.add("passive_opt_tol", OPTIMIZATION_TOLERANCE_MATPARAMS)
+    params.add("passive_maxiter", OPTIMIZATION_MAXITER_MATPARAMS)
+    params.add("scale", SCALE)
+    params.add("gamma_max", MAX_GAMMA)
+    params.add("disp", False)
 
-    return parameters
+    return params
 
+
+def initialize_patient_data(patient_parameters, synth_data):
+
+    logger.info(Text.blue("Initialize patient data"))
+    from patient_data import Patient
+    
+    patient = Patient(**patient_parameters)
+
+    # if args_full.use_deintegrated_strains:
+        # patient.load_deintegrated_strains(STRAIN_FIELDS_PATH)
+
+    if synth_data:
+        patient.passive_filling_duration = SYNTH_PASSIVE_FILLING
+        patient.num_contract_points =  NSYNTH_POINTS + 1
+        patient.num_points = SYNTH_PASSIVE_FILLING + NSYNTH_POINTS + 1
+
+    return patient
 
 def load_synth_data(mesh, synth_output, num_points, use_deintegrated_strains = False):
     pressure = []
@@ -235,7 +256,7 @@ def make_solver_params(params, patient, measurements):
         no_base_x_tran_bc = DirichletBC(W.sub(0).sub(0), 0, patient.BASE)
         return [no_base_x_tran_bc]
 	
-    
+        
     solver_parameters = {"mesh": patient.mesh,
                          "facet_function": patient.facets_markers,
                          "facet_normal": N,
@@ -252,7 +273,8 @@ def make_solver_params(params, patient, measurements):
                                       "lambda": 0.0},
                          "bc":{"dirichlet": make_dirichlet_bcs,
                                "Pressure":[[p_lv, patient.ENDO]],
-                               "Robin":[[-Constant(params["base_spring_k"], name ="base_spring_constant"), patient.BASE]]},
+                               "Robin":[[-Constant(params["base_spring_k"], 
+                                                   name ="base_spring_constant"), patient.BASE]]},
                          "solve":setup_solver_parameters()}
 
 
@@ -369,10 +391,10 @@ def setup_simulation(params, patient):
     # Load measurements
     measurements = get_measurements(params, patient)
 
-    solver_parameters, p_lv, control = make_solver_params(params, patient, measurements)
+    solver_parameters, p_lv, controls = make_solver_params(params, patient, measurements)
     
 
-    return measurements, solver_parameters, p_lv, control
+    return measurements, solver_parameters, p_lv, controls
 
 
     
