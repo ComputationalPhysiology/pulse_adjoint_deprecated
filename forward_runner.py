@@ -442,8 +442,8 @@ class PassiveForwardRunner(BasicForwardRunner):
         paramvec = split(self.paramvec)
         
         self.solver_parameters["material"]["a"] = paramvec[0]
-        self.solver_parameters["material"]["b"] = paramvec[1]
-        self.solver_parameters["material"]["a_f"] = paramvec[2]
+        self.solver_parameters["material"]["a_f"] = paramvec[1]
+        self.solver_parameters["material"]["b"] = paramvec[2]
         self.solver_parameters["material"]["b_f"] = paramvec[3]
        
      

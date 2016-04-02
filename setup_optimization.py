@@ -224,7 +224,7 @@ def make_solver_params(params, patient, measurements):
     
 
         
-    a,b,a_f,b_f = split(paramvec)
+    a,a_f,b,b_f = split(paramvec)
 
     # Contraction parameter
     gamma_family, gamma_degree = params["gamma_space"].split("_")
