@@ -11,30 +11,43 @@ import sys, os,  matplotlib, h5py
 # Dummy object
 class Object(object):pass
 
-def print_optimization_report(params, opt_controls, ini_for_res, for_result_opt, opt_result = None):
+def print_optimization_report(params, opt_controls, init_controls, 
+                              ini_for_res, opt_for_res, opt_result = None):
 
     if opt_result:
-        logger.info("Optimization terminated...")
+        logger.info("\nOptimization terminated...")
         logger.info("\tExit status {}".format(opt_result["status"]))
         logger.info("\tSuccess: {}".format(opt_result["success"]))
         logger.info("\tMessage: {}".format(opt_result["message"]))
         logger.info("\tFunction Evaluations: {}".format(opt_result["nfev"]))
         logger.info("\tGradient Evaluations: {}".format(opt_result["njev"]))
         logger.info("\tNumber of iterations: {}".format(opt_result["nit"]))
+        logger.info("\tNumber of crashes: {}".format(opt_result["ncrash"]))
+        logger.info("\tRun time: {:.2f} seconds".format(opt_result["run_time"]))
 
     logger.info("\nFunctional Values")
-    logger.info(" "*8 + "Strain" + " "*5 + "Volume")
-    logger.info("initial " + "{:.5f}".format(ini_for_res.func_value_strain) \
-                + " "*5 + "{:.5f}".format(ini_for_res.func_value_volume))
-    logger.info("optimal " + "{:.5f}".format(for_result_opt.func_value_strain) \
-                + " "*5 + "{:.5f}".format(for_result_opt.func_value_volume))
+    logger.info("\tTotal\t\tStrain\t\tVolume")
+    logger.info("Initial\t{:.2e}\t{:.2e}\t{:.2e}".format(ini_for_res.func_value, 
+                                                         ini_for_res.func_value_strain,
+                                                         ini_for_res.func_value_volume))
+    logger.info("Optimal\t{:.2e}\t{:.2e}\t{:.2e}".format(opt_for_res.func_value, 
+                                                         opt_for_res.func_value_strain,
+                                                         opt_for_res.func_value_volume))
 
     if params["phase"] == PHASES[0]:
         logger.info("\nMaterial Parameters")
-        logger.info("Initial {}".format(params["Material_parameters"].values()))
+        logger.info("Initial {}".format(init_controls))
         logger.info("Optimal {}".format(gather_broadcast(opt_controls.vector().array())))
     else:
-        pass
+        logger.info("\nContraction Parameter")
+        logger.info("\tMin\tMean\tMax")
+        logger.info("Initial\t{:.5f}\t{:.5f}\t{:.5f}".format(init_controls.min(), 
+                                                             init_controls.mean(), 
+                                                             init_controls.max()))
+        opt_controls_arr = gather_broadcast(opt_controls.vector().array())
+        logger.info("Optimal\t{:.5f}\t{:.5f}\t{:.5f}".format(opt_controls_arr.min(), 
+                                                             opt_controls_arr.mean(), 
+                                                             opt_controls_arr.max()))
 
 def passive_inflation_exists(params):
 
@@ -140,6 +153,42 @@ def get_spaces(mesh):
     spaces.strain_weight_space = TensorFunctionSpace(mesh, "R", 0)
     
     return spaces
+
+
+class TablePrint(object):
+    """
+    Print output in nice table format.
+    Example of use:
+
+      fldmap = (
+         'LVP',  '0.5f',
+         'LV_Volume', '0.5f',
+         'Target_Volume', '0.5f',
+         'I_strain', '0.2e',
+         'I_volume', '0.2e',
+         'I_reg', '0.2e',
+         )
+
+      my_print = TablePrint(fldmap)
+      print my_print.print_head()
+      print my_print.print_line(LVP=1, LV_Volume=1, Target_Volume=1, 
+                                I_strain=1, I_volume=1, I_reg=1)
+
+    """
+
+    def __init__(self, fldmap):
+
+        self.head = '\n'+'\t'.join(fldmap[0:len(fldmap):2]) 
+        self.fmt  = '\t'.join(['{' + '{0}:{1}'.format(col,fmt) + '}' \
+                          for col, fmt in zip(
+                              fldmap[0:len(fldmap):2], \
+                              fldmap[1:len(fldmap):2] \
+                              )])
+    def print_head(self):
+        return self.head
+
+    def print_line(self, **kwargs):
+        return  self.fmt.format(**kwargs)
 
 class Text:
     """

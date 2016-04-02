@@ -3,7 +3,7 @@ from patient_data.scripts.data import STRAIN_REGIONS, STRAIN_DIRECTIONS
 import os, logging
 import dolfin
 
-log_level = logging.DEBUG
+log_level = logging.INFO
 
 # Setup logger
 def make_logger(name, level = logging.INFO):
@@ -168,9 +168,9 @@ SYNTH_OUTDIR_CONTINUOUS_GAMMA =  SYNTH_OUTDIR + "/data_continuous_gamma"
 # Folders and path for which the data is stored in .h5 format
 path_to_data = "/".join(os.path.dirname(__file__).split("/")[:-1])
 SIMULATION_FILE = os.path.join(path_to_data,
-                               'adjoint_contraction/numerical_results/{}/{}/{}/results.h5')  #.format(args.patient,alpha, casename)
+                               'adjoint_contraction/numerical_results/{}/{}/{}_new/results.h5')  #.format(args.patient,alpha, casename)
 DEFAULT_SIMULATION_FILE = os.path.join(path_to_data,
-                                       'adjoint_contraction/numerical_results/{}/results.h5'.format(DEFAULT_PATIENT))  
+                                       'adjoint_contraction/numerical_results/{}_new/results.h5'.format(DEFAULT_PATIENT))  
 
 ########## DOLFIN PARAMETERS ############################
 

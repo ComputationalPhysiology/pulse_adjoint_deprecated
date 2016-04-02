@@ -53,18 +53,15 @@ def setup_general_parameters():
     # dolfin.parameters["num_threads"] = 8
     
     dolfin.set_log_active(True)
-    dolfin.set_log_level(INFO)
+    dolfin.set_log_level(WARNING)
 
 
 def setup_patient_parameters():
     params = Parameters("Patient_parameters")
-    # parameters.add("patient", DEFAULT_PATIENT)
-    params.add("patient", "test")
-    # parameters.add("patient_type", DEFAULT_PATIENT_TYPE)
-    params.add("patient_type", "test")
+    params.add("patient", DEFAULT_PATIENT)
+    params.add("patient_type", DEFAULT_PATIENT_TYPE)
     params.add("weight_rule", DEFAULT_WEIGHT_RULE, WEIGHT_RULES)
-    params.add("weight_direction", DEFAULT_WEIGHT_DIRECTION, WEIGHT_DIRECTIONS)
-    # parameters.add("resolution", RESOLUTION)
+    params.add("weight_direction", DEFAULT_WEIGHT_DIRECTION, WEIGHT_DIRECTIONS) 
     params.add("resolution", "med_res")
     params.add("fiber_angle_epi", 50)
     params.add("fiber_angle_endo", 40)
@@ -77,16 +74,12 @@ def setup_application_parameters():
     params = Parameters("Application_parmeteres")
     params.add("sim_file", DEFAULT_SIMULATION_FILE)
     
-    # parameters.add("sim_file", "test/test.h5")
-    # parameters.add("outdir", "test")
     params.add("outdir", os.path.dirname(DEFAULT_SIMULATION_FILE))
     params.add("alpha", ALPHA)
     params.add("base_spring_k", BASE_K)
     params.add("reg_par", REG_PAR)
     params.add("gamma_space", "CG_1", ["CG_1", "R_0"])
     params.add("use_deintegrated_strains", False)
-    params.add("store", True)
-    # parameters.add("mode", "optimize", MODES)
     params.add("optimize_matparams", True)
     
 
@@ -114,11 +107,13 @@ def setup_optimization_parameters():
     params = Parameters("Optimization_parmeteres")
     params.add("method", OPTIMIZATION_METHOD)
     params.add("active_opt_tol", OPTIMIZATION_TOLERANCE_GAMMA)
-    params.add("active_maxiter", OPTIMIZATION_MAXITER_GAMMA)
+    params.add("active_maxiter", 1)#OPTIMIZATION_MAXITER_GAMMA)
     params.add("passive_opt_tol", OPTIMIZATION_TOLERANCE_MATPARAMS)
-    params.add("passive_maxiter", OPTIMIZATION_MAXITER_MATPARAMS)
+    params.add("passive_maxiter", 1)#OPTIMIZATION_MAXITER_MATPARAMS)
     params.add("scale", SCALE)
     params.add("gamma_max", MAX_GAMMA)
+    params.add("matparams_min", 0.1)
+    params.add("matparams_max", 50.0)
     params.add("disp", False)
 
     return params
@@ -126,7 +121,7 @@ def setup_optimization_parameters():
 
 def initialize_patient_data(patient_parameters, synth_data):
 
-    logger.info(Text.blue("Initialize patient data"))
+    logger.info("Initialize patient data")
     from patient_data import Patient
     
     patient = Patient(**patient_parameters)
@@ -397,42 +392,54 @@ def setup_simulation(params, patient):
     return measurements, solver_parameters, p_lv, controls
 
 
-    
-class ActiveReducedFunctional(ReducedFunctional):
-    def __init__(self, for_run, gamma, scale = 1.0):
+class MyReducedFunctional(ReducedFunctional):
+    def __init__(self, for_run, paramvec, scale = 1.0):
         self.for_run = for_run
-        self.gamma = gamma
+        self.paramvec = paramvec
         self.first_call = True
         self.scale = scale
         self.big_value = 100
-
+        self.nr_crashes = 0
+        self.iter = 0
+        self.nr_der_calls = 0
+        self.initial_paramvec = gather_broadcast(paramvec.vector().array())
 
     def __call__(self, value):
         adj_reset()
+        self.iter += 1
 
-        gamma_new = Function(self.gamma.function_space(), name = "new gamma")
-        assign_to_vector(gamma_new.vector(), value)
+
+        paramvec_new = Function(self.paramvec.function_space(), name = "new control")
+
+        if isinstance(value, Function):
+            paramvec_new.assign(value)
+        else:
+            assign_to_vector(paramvec_new.vector(), value)
     
         logger.debug(Text.yellow("Start annotating"))
         parameters["adjoint"]["stop_annotating"] = False
 
-        self.for_res, crash = self.for_run(gamma_new, True)
+        logger.setLevel(WARNING)
+        self.for_res, crash= self.for_run(paramvec_new, True)
+        logger.setLevel(INFO)
 
         if self.first_call:
             # Store initial results 
             self.ini_for_res = self.for_res
             self.first_call = False
+            logger.info("Iter\tI_tot\t\tI_vol\t\tI_strain\tI_reg")
 	 
-        ReducedFunctional.__init__(self, Functional(self.for_res.total_functional), Control(self.gamma))
+        ReducedFunctional.__init__(self, Functional(self.for_res.total_functional), Control(self.paramvec))
 
         if crash:
             # This exection is thrown if the solver uses more than x times.
             # The solver is stuck, return a large value so it does not get stuck again
-            logger.warning("Iteration limit exceeded. Return a large value of the functional")
+            logger.warning(Text.red("Iteration limit exceeded. Return a large value of the functional"))
             # Return a big value, and make sure to increment the big value so the 
             # the next big value is different from the current one. 
             func_value = self.big_value
             self.big_value += 100
+            self.nr_crashes += 1
     
         else:
             func_value = self.for_res.func_value
@@ -440,11 +447,16 @@ class ActiveReducedFunctional(ReducedFunctional):
         logger.debug(Text.yellow("Stop annotating"))
         parameters["adjoint"]["stop_annotating"] = True
 
-        logger.info("f = {:.3e}".format(func_value))
+        logger.info("{}\t{:.3e}\t{:.3e}\t{:.3e}\t{:.3e}".format(self.iter, 
+                                                               func_value, 
+                                                               self.for_res.func_value_volume, 
+                                                               self.for_res.func_value_strain, 
+                                                               self.for_res.gamma_gradient))
 
         return self.scale*func_value
-    
+
     def derivative(self, *args, **kwargs):
+        self.nr_der_calls += 1
         import math
         out = ReducedFunctional.derivative(self, forget = False)
         for num in out[0].vector().array():
@@ -452,8 +464,7 @@ class ActiveReducedFunctional(ReducedFunctional):
                 raise Exception("NaN in adjoint gradient calculation.")
 
         gathered_out = gather_broadcast(out[0].vector().array())
-        logger.info("Evaluated derivative max df = {:.3e}".format(max(gathered_out)))
-	
+        
         return self.scale*gathered_out
 
 
@@ -467,20 +478,26 @@ class RealValueProjector(object):
         self.u_trial = u
         self.v_test = v
         self.mesh_vol = mesh_vol
-        
-    def project(self, expr, measure, real_function):
-        solve((self.u_trial*self.v_test/self.mesh_vol)*dx == self.v_test*expr*measure,
-               real_function)
-        return real_function
     
+        
+    def project(self, expr, measure, real_function, mesh_vol_divide = True):
 
+        if mesh_vol_divide:
+            solve((self.u_trial*self.v_test/self.mesh_vol)*dx == \
+                  self.v_test*expr*measure,real_function)
+            
+        else:
+            solve((self.u_trial*self.v_test)*dx == \
+              self.v_test*expr*measure,real_function)
 
-if __name__ == "__main__":
+        return real_function
 
-    from impact.scripts.patient_data import ImpactPatient
-    patient = ImpactPatient("Impact_p12_i45", "high_res")
-    gamma_values = np.zeros(18)
-    gamma_values[3] = 1.0
-    RG = RegionalGamma(patient.strain_markers, gamma_values)
+    # def project_volume_diff(self, expr, measure, real_function):
+        
+    #     solve((self.u_trial*self.v_test)*dx == \
+    #           self.v_test*expr*measure,real_function)
 
-    gamma_coeffs, ind_func = RG.get()
+    #     return real_function
+
+        
+    

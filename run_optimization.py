@@ -1,6 +1,6 @@
 from dolfin import *
 from dolfin_adjoint import *
-from setup_optimization import setup_simulation, ActiveReducedFunctional, logger
+from setup_optimization import setup_simulation, logger, MyReducedFunctional
 from utils import Text, Object, pformat, print_optimization_report, contract_point_exists, get_spaces
 from forward_runner import ActiveForwardRunner, PassiveForwardRunner
 from heart_problem import PassiveHeartProblem
@@ -16,14 +16,14 @@ def run_passive_optimization(params, patient):
     #Load patient data, and set up the simulation
     measurements, solver_parameters, p_lv, paramvec = setup_simulation(params, patient)
 
-    controls, rd, for_run, forward_result = \
-      run_passive_optimization_step(params, 
-                                    patient, 
-                                    solver_parameters, 
-                                    measurements, 
-                                    p_lv, paramvec)
+    rd, paramvec = run_passive_optimization_step(params, 
+                                                 patient, 
+                                                 solver_parameters, 
+                                                 measurements, 
+                                                 p_lv, paramvec)
 
-    solve_passive_oc_problem(rd, params, paramvec, for_run, forward_result)
+    logger.info("\nSolve optimization problem.......")
+    solve_oc_problem(params, rd, paramvec)
 
 
 def run_passive_optimization_step(params, patient, solver_parameters, measurements, p_lv, paramvec):
@@ -39,24 +39,16 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     #Solve calls are not registred by libajoint
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
-
-    #Initialize variables used in the simulation
-    phm = PassiveHeartProblem(measurements.pressure, 
-                              solver_parameters, 
-                              p_lv, patient.ENDO, 
-                              crl_basis, spaces)
-
     
     # Load target data
     target_data = load_target_data(measurements, params, spaces)
 
-    adj_reset()
+    
     # Start recording for dolfin adjoint 
     logger.debug(Text.yellow("Start annotating"))
     parameters["adjoint"]["stop_annotating"] = False
 
        
-    logger.debug(Text.blue("\nCreating Recording for Dolfin-adjoint"))
     #Initialize the solver for the Forward problem
     for_run = PassiveForwardRunner(solver_parameters, 
                                    p_lv, 
@@ -64,47 +56,23 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
                                    patient.ENDO,
                                    crl_basis,
                                    params, 
-                                   spaces)
+                                   spaces, 
+                                   paramvec)
 
-    #Assign guess parameters
-    paramvec.assign(Constant(params["Material_parameters"].values()))
+    #Solve the forward problem with guess results (just for printing)
+    logger.info(Text.blue("\nForward solution at guess parameters"))
+    forward_result, _ = for_run(paramvec, True)
     
-    
-    #Solve the forward problem
-    forward_result = for_run(paramvec, True)
-    
-    
-    # Define functional that we want to minimize
-    I = Functional(forward_result.total_functional)
-    # Set parameters that you want to minimize the functional with respect to
-    controls = Control(paramvec)
 
     # Stop recording
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
-    # Compute functional as a function of the control parameters only
-    rd = ReducedFunctional(I, controls)
+    # Initialize MyReducedFuctional
+    rd = MyReducedFunctional(for_run, paramvec)
 
-
-    return controls, rd, for_run, forward_result
     
-    
-    # if params["mode"] == MODES[0]:
-    #     # Test that the functional has the correct value
-    #     test_functional(rd, paramvec, for_run, args)
-    
-    # elif params["mode"] == MODES[1]: 
-    #     # Test that the gradient is computed correctly
-    #     run_taylor_test(rd, controls, forward_res.func_value)
+    return rd, paramvec
 
-
-        
-        
-        
-    # elif params["mode"] == MODES[3]:
-    #     tol = 1e-12
-    #     assert replay_dolfin(tol=tol), "replay test fail with tolerance {}".format(tol)
-    #     #mpi_print(replay_dolfin(tol=1e-12))
 
 def run_active_optimization(params, patient):
     
@@ -125,7 +93,7 @@ def run_active_optimization(params, patient):
 
 
             logger.info("\nSolve optimization problem.......")
-            solve_active_oc_problem(params, rd, gamma)
+            solve_oc_problem(params, rd, gamma)
 
 def run_active_optimization_step(params, patient, solver_parameters, measurements, p_lv, gamma):
 
@@ -164,94 +132,81 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
                                   patient, 
                                   spaces)
 
+    #Solve the forward problem with guess results (just for printing)
+    logger.info(Text.blue("\nForward solution at guess parameters"))
+    forward_result, _ = for_run(gamma, True)
 
     # Stop recording
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
 
     # Compute the functional as a pure function of gamma
-    rd = ActiveReducedFunctional(for_run, gamma)
+    rd = MyReducedFunctional(for_run, gamma)
             
     return rd, gamma
 
  
     
-def solve_active_oc_problem(params, rd, gamma):
-    
-    paramvec_arr = gather_broadcast(gamma.vector().array())
-    
-    kwargs = {"method": params["Optimization_parmeteres"]["method"],
-              "jac": rd.derivative,
-              "tol": params["Optimization_parmeteres"]["active_opt_tol"],
-              "bounds": [(0.0, params["Optimization_parmeteres"]["gamma_max"])]*len(paramvec_arr),
-              "options": {"disp": params["Optimization_parmeteres"]["disp"], 
-                          "maxiter":params["Optimization_parmeteres"]["active_maxiter"]}}
 
-    # Solve the optimization problem
-    opt_result = scipy_minimize(rd,paramvec_arr, **kwargs)
-    assign_to_vector(gamma.vector(), opt_result.x)
 
-    print_optimization_report(params, rd.gamma, rd.ini_for_res, rd.for_res, opt_result)
+def store(params, rd, opt_controls, opt_result=None):
 
-    if params["store"]:
-        # Store results in .h5 format
-        h5group =  ACTIVE_CONTRACTION_GROUP.format(params["alpha"], params["active_contraction_iteration_number"])
-        
-        # Write results
+    if params["phase"] == PHASES[0]:
+
+        h5group =  PASSIVE_INFLATION_GROUP.format(params["alpha_matparams"])
         write_opt_results_to_h5(h5group, params, rd.ini_for_res, rd.for_res, 
-                                opt_gamma = gamma, opt_result = opt_result)
+                                opt_matparams = opt_controls, 
+                                opt_result = opt_result)
+    else:
+        
+        h5group =  ACTIVE_CONTRACTION_GROUP.format(params["alpha"], params["active_contraction_iteration_number"])
+        write_opt_results_to_h5(h5group, params, rd.ini_for_res, rd.for_res, 
+                                opt_gamma = opt_controls, opt_result = opt_result)
 
-def solve_passive_oc_problem(rd, params, paramvec, forward_runner, ini_for_res):
-    if params["optimize_matparams"]:
-        # Set upper bound on the parameters
-        max_params = Function(paramvec)
-        max_params.assign(Constant([50.0]*4))
-        # Set lower bound on the parameters
-        min_params = Function(paramvec)
-        min_params.assign(Constant([0.01]*4))
 
-        # Solve the optimization problem
-        opt_controls = minimize(rd,
-                                method = OPTIMIZATION_METHOD,
-                                options= {"maxiter": params["Optimization_parmeteres"]["passive_maxiter"], 
-                                          "disp": True},#params["Optimization_parmeteres"]["disp"]},  
-                                bounds = [[min_params], [max_params]],
-                                tol =  params["Optimization_parmeteres"]["passive_opt_tol"],
-                                scale = params["Optimization_parmeteres"]["scale"])
+def solve_oc_problem(params, rd, paramvec):
 
-        # paramvec_arr = gather_broadcast(paramvec.vector().array())
-    
-        # kwargs = {"method": params["Optimization_parmeteres"]["method"],
-        #           "jac": rd.derivative,
-        #           "tol": params["Optimization_parmeteres"]["passive_opt_tol"],
-        #           "bounds": [(0.1, 50.0)]*len(paramvec_arr),
-        #           "options": {"disp": params["Optimization_parmeteres"]["disp"], 
-        #                       "maxiter":params["Optimization_parmeteres"]["passive_maxiter"]}}
-
-        # # Solve the optimization problem
-        # opt_result = scipy_minimize(rd, paramvec_arr, **kwargs)
-        # assign_to_vector(parmvec.vector(), opt_result.x)
-
+    if params["phase"] == PHASES[0] and not params["optimize_matparams"]:
+        store(params, rd, paramvec)
 
     else:
-        opt_controls = paramvec
         
-    opt_result = None
+        paramvec_arr = gather_broadcast(paramvec.vector().array())
+
+        opt_params = params["Optimization_parmeteres"]
+        kwargs = {"method": opt_params["method"],
+                  "jac": rd.derivative,
+                  "options": {"disp": opt_params["disp"]}
+                  }
+
+        if params["phase"] == PHASES[0]:
+
+            kwargs["tol"] = opt_params["passive_opt_tol"]
+            kwargs["bounds"] = [(opt_params["matparams_min"], 
+                                 opt_params["matparams_max"])]*len(paramvec_arr)
+            kwargs["options"]["maxiter"] = opt_params["passive_maxiter"]
+        else:
+
+            kwargs["tol"] = opt_params["active_opt_tol"]
+            kwargs["bounds"] = [(0, opt_params["gamma_max"])]*len(paramvec_arr)
+            kwargs["options"]["maxiter"] = opt_params["active_maxiter"]
+
+        # Start a timer to measure duration of the optimization
+        t = Timer()
+        t.start()
+        # Solve the optimization problem
+        opt_result = scipy_minimize(rd,paramvec_arr, **kwargs)
+        run_time = t.stop()
+        opt_result["ncrash"] = rd.nr_crashes
+        opt_result["run_time"] = run_time
+        assign_to_vector(paramvec.vector(), opt_result.x)
+
         
-
-    # Solve the forward problem with optimal parameters
-    for_result_opt = forward_runner(opt_controls)
-    print_optimization_report(params, opt_controls, ini_for_res, for_result_opt, opt_result)
-    
-    if params["store"]:
-        
-        h5group =  PASSIVE_INFLATION_GROUP.format(params["alpha_matparams"])
-        
-        write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt, 
-                                opt_matparams = opt_controls)
-
-
-
+        print_optimization_report(params, rd.paramvec, rd.initial_paramvec,
+                                  rd.ini_for_res, rd.for_res, opt_result)
+        logger.info(Text.blue("\nForward solution at optimal parameters"))
+        val = rd.for_run(paramvec, False)
+        store(params, rd, paramvec, opt_result)
 
 
 

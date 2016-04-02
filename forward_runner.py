@@ -5,7 +5,8 @@ from dolfin_adjoint import *
 from adjoint_contraction_args import *
 import numpy as np
 from numpy_mpi import *
-from utils import Text, list_sum, Object
+from utils import Text, list_sum, Object, TablePrint
+
 
 
 class BasicForwardRunner(object):
@@ -13,7 +14,16 @@ class BasicForwardRunner(object):
     Runs a simulation using a HeartProblem object
     and compares simulated observations to target data.
     """
-    OUTPUT_STR = "{:.5f}\t\t{:.5f}\t  {:.5f}    {:.5f}   {:.5f}  {:.5f}"
+    output_str = TablePrint((
+        'LVP',  '0.5f',
+        'LV_Volume', '0.5f',
+        'Target_Volume', '0.5f',
+        'I_strain', '0.2e',
+        'I_volume', '0.2e',
+        'I_reg', '0.2e',
+        ))
+    
+    
     def __init__(self, solver_parameters,
                  p_lv,
                  target_data,
@@ -142,7 +152,7 @@ class BasicForwardRunner(object):
 
         
         logger.debug("Volume - Strain interpolation {}".format(self.alpha))
-        logger.info("\nLVP (cPa)  LV Volume(ml)  Target Volume(ml)  I_strain  I_volume  I_reg")
+        logger.info(self.output_str.print_head())
 	
         strain_diff = list_sum(self.strain_diffs)
 	    
@@ -186,7 +196,8 @@ class BasicForwardRunner(object):
             
             #Volume Projections to get dolfin-adjoint to record.            
             self.projector.project(phm.vol, phm.ds, self.V_sim)
-            self.projector.project(((self.V_sim - self.V_meas)/self.V_meas)**2, dx, self.V_diff)
+            self.projector.project(((self.V_sim - self.V_meas)/self.V_meas)**2, 
+                                   dx, self.V_diff, False)
             
             #Strain projections to get dolfin-adjoint to record.
             if self.use_deintegrated_strains:
@@ -197,7 +208,7 @@ class BasicForwardRunner(object):
                 
             
             # Gathering the vector if running in parallell
-            v_diff = gather_broadcast(self.V_diff.vector().array())[0]#/float(self.mesh_vol)
+            v_diff = gather_broadcast(self.V_diff.vector().array())[0]
             
             self.print_solve_line(phm, strain_error, v_diff, reg_term)
 
@@ -247,8 +258,15 @@ class BasicForwardRunner(object):
 		# 			 self._get_exprval(phm.p_rv, phm.mesh),
 		# 			 v_sim, v_meas, strain_error, v_diff))
 
-        logger.info(self.OUTPUT_STR.format(self._get_exprval(phm.p_lv, phm.mesh),
-					 v_sim, v_meas, strain_error, v_diff, reg_term))
+        
+        logger.info(self.output_str.print_line(LVP=self._get_exprval(phm.p_lv, phm.mesh), 
+                                               LV_Volume=v_sim, 
+                                               Target_Volume=v_meas, 
+                                               I_strain=strain_error, 
+                                               I_volume=v_diff, 
+                                               I_reg=reg_term))
+
+
 
     def _make_forward_result(self, functional_values_strain, functional_values_volume, functionals_time, phm):
         fr = Object()
@@ -327,10 +345,7 @@ class ActiveForwardRunner(BasicForwardRunner):
 
     def __call__(self, m,  annotate = False):
 	    
-        
-        logger.info("\nEvaluating Model")
-        
-
+        logger.info("Evaluating model")
         # Take small steps with gamma until we have only one point left
         # We do not want to record this as we only want to optimize the final value
         logger.debug(Text.yellow("Stop annotating"))
@@ -412,20 +427,23 @@ class ActiveForwardRunner(BasicForwardRunner):
 class PassiveForwardRunner(BasicForwardRunner):
     def __init__(self, solver_parameters, p_lv, 
                  target_data, endo_lv_marker,
-                 crl_basis, params, spaces):
+                 crl_basis, params, spaces, paramvec):
 
         self.alpha = params["alpha_matparams"]
-
+        self.paramvec = paramvec
         BasicForwardRunner.__init__(self, solver_parameters, p_lv, 
                                     target_data, endo_lv_marker,
                                     crl_basis, params, spaces)
 
     def __call__(self, m, annotate = False, phm=None):
-        m = split(m)
-        self.solver_parameters["material"]["a"] = m[0]
-        self.solver_parameters["material"]["b"] = m[1]
-        self.solver_parameters["material"]["a_f"] = m[2]
-        self.solver_parameters["material"]["b_f"] = m[3]
+
+        self.paramvec.assign(m)
+        paramvec = split(self.paramvec)
+        
+        self.solver_parameters["material"]["a"] = paramvec[0]
+        self.solver_parameters["material"]["b"] = paramvec[1]
+        self.solver_parameters["material"]["a_f"] = paramvec[2]
+        self.solver_parameters["material"]["b_f"] = paramvec[3]
        
      
         phm = PassiveHeartProblem(self.pressures, 
@@ -438,4 +456,4 @@ class PassiveForwardRunner(BasicForwardRunner):
         forward_result = BasicForwardRunner.solve_the_forward_problem(self, annotate, phm, "passive")
 
 
-        return forward_result
+        return forward_result, False
