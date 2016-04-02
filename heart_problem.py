@@ -55,8 +55,8 @@ class BasicHeartProblem(collections.Iterator):
 
                 converged = True
             except RuntimeError:
-                self.logger.warning(Text.red("Solver chrashed when increasing pressure from {} to {}".format(p_prev, p_next)))
-                self.logger.warning("Take smaller steps")
+                logger.warning(Text.red("Solver chrashed when increasing pressure from {} to {}".format(p_prev, p_next)))
+                logger.warning("Take smaller steps")
                 nsteps += 2
                 pressures = np.linspace(p_prev, p_next, nsteps)
                 
