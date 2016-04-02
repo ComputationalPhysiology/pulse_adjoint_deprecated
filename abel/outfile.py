@@ -4,4 +4,4 @@ inputfile = sys.argv[1]
 
 d = yaml.load(open(inputfile, "rb"))
 
-sys.stdout.write(d["sim_file"])
+sys.stdout.write(d["outdir"])

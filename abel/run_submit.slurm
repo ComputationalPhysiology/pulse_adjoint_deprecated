@@ -25,6 +25,12 @@ module purge   # clear any inherited modules
 module load gcc/5.1.0
 module load openmpi.gnu/1.8.8
 module load cmake/3.1.0
+export CC=gcc
+export CXX=g++
+export FC=gfortran
+export F77=gfortran
+export F90=gfortran
+
 #module load gcc/4.9.2
 #module load openmpi.gnu/1.8.4
 #module load cmake/2.8.9

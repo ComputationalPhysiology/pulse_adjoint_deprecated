@@ -1,7 +1,7 @@
 import os
 from itertools import product
 import yaml
-from campass.setup_optimization import setup_adjoint_contraction_parameters
+#from campass.setup_optimization import setup_adjoint_contraction_parameters
 
 filepath= os.path.dirname(os.path.abspath(__file__))
 OUTPATH_REAL = filepath+"/results/real/patient_{}/alpha_{}/regpar{}/rule_{}_dir_{}/{}"
@@ -14,12 +14,13 @@ def main():
     # Patient parameters
 
     # Which patients
-    patients = ["Impact_p16_i43"]
+    #patients = ["Impact_p16_i43"]
+    patients = ["CRID-pas_ESC"]
     # How to apply the weights on the strain (direction, rule, custom weights)
     # Not custom weights not implemented yet
     weights = [("all", "equal", None)]
     # Resolution of mesh
-    resolutions = ["low_res"]
+    resolutions = ["med_res"]
     # Fiber angles (endo, epi)
     fiber_angles = [(40,50)]
 
@@ -27,7 +28,7 @@ def main():
     # Optimization parameters
     
     # Weighting of strain and volume
-    alphas = [0.5]
+    alphas = [0.2]
     # Regularization
     reg_pars = [0.1]
     # Weighting of strain and volume for passive phase
@@ -50,7 +51,7 @@ def main():
     # Optimize material parameters or use initial ones
     optimize_matparams = True
     # Spring constant at base
-    base_spring_k = 10.0
+    base_spring_k = 1.0
 
 
     ### Run combinations ###
@@ -74,8 +75,8 @@ def main():
 
     for c in comb:
 
-        params = setup_adjoint_contraction_parameters()
-
+        #params = setup_adjoint_contraction_parameters()
+        params = {"Patient_parameters":{}}
         params["Patient_parameters"]["patient"] = c[0]
         params["Patient_parameters"]["resolution"] = c[1]
         params["Patient_parameters"]["fiber_angle_endo"] = c[2][0]
@@ -91,7 +92,7 @@ def main():
         params["optimize_matparams"] = optimize_matparams
         params["use_deintegrated_strains"] = use_deintegrated_strains
         params["gamma_space"] = gamma_space
-        params["Material_parameters"].update(material_parameters)
+        params["Material_parameters"] = material_parameters
         params["synth_data"] = synth_data
         params["noise"] = noise
         params["Patient_parameters"]["patient_type"] = "full"
@@ -114,7 +115,7 @@ def main():
 
         # Dump paramters to yaml
         with open(fname.format(t), 'wb') as parfile:
-            yaml.dump(params.to_dict(), parfile, default_flow_style=False)
+            yaml.dump(params, parfile, default_flow_style=False)
         t += 1
 
     os.system("sbatch run_submit.slurm {} {}".format(t0, t-1))

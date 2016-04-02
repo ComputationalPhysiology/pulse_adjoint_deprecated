@@ -31,20 +31,19 @@ export SUBMITDIR="."
 # Input file
 INPUT=$SUBMITDIR"/input/file_"$TASK_ID".yml"
 # Output directory
-OUTPUT=$(python outfile.py $INPUT)
-echo $OUTPUT
+OUTDIR=$(python outfile.py $INPUT)
+OUTPUT=$OUTDIR"/result.h5"
 # Create output directory if not exists
 
 # Output file
+module load gcc/5.1.0
+module load openmpi.gnu/1.8.8
+module load cmake/3.1.0
+export CC=gcc
+export CXX=g++
+export FC=gfortran
+export F77=gfortran
+export F90=gfortran
 
-
-## Copy input files to the work directory:
-# cp run.py $SCRATCH 
-# cp $INPUT $SCRATCH
-## Make sure the results are copied back to the submit directory (see Work Directory below):
-# chkfile $OUTPUT
-## Do some work:
-# cd $SCRATCH
-# mpirun -n 4 
-python run.py $INPUT $OUTPUT
+mpirun -n 8 python run.py $INPUT $OUTPUT
 
