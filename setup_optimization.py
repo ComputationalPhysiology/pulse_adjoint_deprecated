@@ -53,7 +53,7 @@ def setup_general_parameters():
     # dolfin.parameters["num_threads"] = 8
     
     dolfin.set_log_active(True)
-    dolfin.set_log_level(WARNING)
+    dolfin.set_log_level(ERROR)
 
 
 def setup_patient_parameters():
