@@ -14,7 +14,7 @@ def main(params):
     
 
     logger.info(Text.blue("Start Adjoint Contraction"))
-    logger.debug(pformat(params.to_dict()))
+    logger.info(pformat(params.to_dict()))
     
 
     ############# GET PATIENT DATA ##################
