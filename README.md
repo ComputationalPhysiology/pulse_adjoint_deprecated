@@ -12,9 +12,13 @@ In order to simply run the code you need
   -- http://fenicsproject.org
 * Dolfin-Adjoint version >= 1.6
   -- http://www.dolfin-adjoint.org/en/latest/download/index.html
-* hao_solver
+* hao_solver (Should perhaps make this (at least what is needed) as a part of the repo)
   -- Solver for the Holzapfel and Odgen material
   -- git clone git@bitbucket.org:Gabrielbalaban/haosolver.git
+  -- Ask Gabriel for access
+* numpy_mpi (Should perhaps make this as a part of the repo)
+  -- Scripts to make in run in parallell
+  -- git clone git@bitbucket.org:Gabrielbalaban/numpy_mpi.git
   -- Ask Gabriel for access
 ```
 Optional
