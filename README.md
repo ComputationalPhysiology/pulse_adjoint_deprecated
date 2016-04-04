@@ -38,7 +38,7 @@ To get the most out of it you also need
 ## Structure of the repo ##
 
 To setup the optimization you want to change the parameters 
-in setup_optimization.py. Here you shold specify the paths to the data
+in setup_optimization.py. Here you should specify the paths to the data
 you are using and what type of parameters/setups you want to use. 
 
 The main script to run is run_full_optimization.py which optimizes both
