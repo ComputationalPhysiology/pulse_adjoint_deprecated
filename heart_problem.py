@@ -15,12 +15,13 @@ class BasicHeartProblem(collections.Iterator):
     Runs a biventricular simulation of the diastolic phase of the cardiac
     cycle. The simulation is driven by LV and RV pressures and is quasi-static.
     """
-    def __init__(self, pressure, solverparams, p_lv, endo_lv_marker, 
-                 crl_basis, spaces):
+    def __init__(self, pressure, solver_parameters, p_lv, 
+                 endo_lv_marker, crl_basis, spaces):
 
         self._init_pressures(pressure, p_lv)
         
-        self._init_measures_and_markers(endo_lv_marker, solverparams)
+        self._init_measures_and_markers(endo_lv_marker, 
+                                        solver_parameters)
 
         #Objects needed for Volume calculation
         self._init_strain_functions(spaces)
@@ -28,7 +29,7 @@ class BasicHeartProblem(collections.Iterator):
         self.crl_basis = crl_basis
 
         # Mechanical solver Active strain Holzapfel and Ogden
-        self.solver = ActiveHaoSolver(solverparams)
+        self.solver = ActiveHaoSolver(solver_parameters)
         
         self.p_lv.t = self.pressure[0]
      
@@ -112,18 +113,18 @@ class BasicHeartProblem(collections.Iterator):
         self.strainfield_v = TestFunction(self.strainfieldspace)
         
        
-    def _init_measures_and_markers(self, endo_lv_marker, solverparams):
+    def _init_measures_and_markers(self, endo_lv_marker, solver_parameters):
         # Boundary markers
-        ffun = solverparams["facet_function"]
+        ffun = solver_parameters["facet_function"]
         # Mesh
-        self.mesh = solverparams["mesh"]
+        self.mesh = solver_parameters["mesh"]
         # Surface measure
         self.ds = Measure("exterior_facet", subdomain_data = ffun, domain = self.mesh)(endo_lv_marker)
         # Volume measure
-        self.dx = Measure("dx", subdomain_data = solverparams["mesh_function"],
-                                domain = solverparams["mesh"])
+        self.dx = Measure("dx", subdomain_data = solver_parameters["mesh_function"],
+                                domain = solver_parameters["mesh"])
         
-        self.strain_markers = solverparams["mesh_function"]
+        self.strain_markers = solver_parameters["mesh_function"]
         
 
     def _init_volume_forms(self):
