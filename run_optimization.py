@@ -67,9 +67,9 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     # Stop recording
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
+
     # Initialize MyReducedFuctional
     rd = MyReducedFunctional(for_run, paramvec)
-
     
     return rd, paramvec
 
@@ -94,6 +94,7 @@ def run_active_optimization(params, patient):
 
             logger.info("\nSolve optimization problem.......")
             solve_oc_problem(params, rd, gamma)
+            adj_reset()
 
 def run_active_optimization_step(params, patient, solver_parameters, measurements, p_lv, gamma):
 
@@ -134,7 +135,7 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
 
     #Solve the forward problem with guess results (just for printing)
     logger.info(Text.blue("\nForward solution at guess parameters"))
-    forward_result, _ = for_run(gamma, True)
+    forward_result, _ = for_run(gamma, False)
 
     # Stop recording
     logger.debug(Text.yellow("Stop annotating"))
