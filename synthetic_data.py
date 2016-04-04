@@ -262,7 +262,7 @@ def generate_active_synth_data(params, gamma_expr, X0, patient):
         scalar_func = Function(FunctionSpace(phm.solver.parameters["mesh"], "R", 0))
         mpi_print("Store the noisy volumes")
         with HDF5File(mpi_comm_world(), synth_output, "a") as h5file:
-            for point in range(len(phm.P)):
+            for point in range(len(phm.pressure)):
                 scalar_func.assign(Constant(vols_noisy_lst[point]))
                 h5file.write(scalar_func.vector(), "/point_{}/volume_w_noise".format(point))
                 h5file.write(scalar_func.vector(), "/point_{}/volume".format(point))
@@ -275,7 +275,7 @@ def generate_active_synth_data(params, gamma_expr, X0, patient):
         s = Function(phm.strainspace)
         mpi_print("Store the corrected strains")
         with HDF5File(mpi_comm_world(), synth_output, "a") as h5file:
-            for point in range(len(phm.P)):
+            for point in range(len(phm.pressure)):
                 for i in STRAIN_REGION_NUMS:
                     # Corrected
                     assign_to_vector(s.vector(),strains_corrected_lst[i-1][point])
@@ -312,7 +312,7 @@ def run_active_synth_data(params):
         
     # if not passive_inflation_exists(args_synth):
     mpi_print('\nGenerate synthetic data:')
-    # generate_active_synth_data(params, gamma_expr, X0, patient)
+    generate_active_synth_data(params, gamma_expr, X0, patient)
     mpi_print('\nDone generating synthetic data... run optimization')
   
     params["phase"] = PHASES[1]  
@@ -366,4 +366,5 @@ if __name__ == "__main__":
 
     setup_general_parameters()
     params = setup_adjoint_contraction_parameters()
+    params["noise"] = True
     run_active_synth_data(params)
