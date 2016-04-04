@@ -10,7 +10,7 @@ from adjoint_contraction_args import *
 from store_opt_results import write_opt_results_to_h5
 
 from numpy_mpi import *
-from utils import contract_point_exists, passive_inflation_exists, Object, get_spaces
+from utils import contract_point_exists, passive_inflation_exists, Object, get_spaces, Text, pformat
 
 CASES = ["matparams", "scalar_gamma", "continuous_gamma"]
 def store_passive_inflation(phm, states, strains, strainfields, params):
@@ -291,17 +291,15 @@ def generate_active_synth_data(params, gamma_expr, X0, patient):
 
 def run_active_synth_data(params):
 
-    # assert args_synth.noise in ["random", "drift", None]
+    setup_general_parameters()
+    
 
     params["phase"] = "all"
     params["synth_data"] = True
     patient = initialize_patient_data(params["Patient_parameters"], synth_data = True)
   
-    # gamma_family, gamma_degree = params["gamma_space"].split("_")
-    # gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
-    # gamma_zero =  Function(gamma_space)
-    # gamma_list = [gamma_zero]*SYNTH_PASSIVE_FILLING
-     
+    logger.info(pformat(params.to_dict()))
+
     # Define gamma as a gaussian function
     gamma_expr = '0.1*exp(-((x[0]-x0)*(x[0]-x0))/10)*(1- exp( -10*x[0]*x[0]))'
     
@@ -364,7 +362,7 @@ def test_matparms_synth_data():
 
 if __name__ == "__main__":
 
-    setup_general_parameters()
+    
     params = setup_adjoint_contraction_parameters()
     params["noise"] = True
     run_active_synth_data(params)
