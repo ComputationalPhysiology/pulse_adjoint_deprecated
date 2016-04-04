@@ -12,7 +12,7 @@ In order to simply run the code you need
   -- http://fenicsproject.org
 * Dolfin-Adjoint version >= 1.6
   -- http://www.dolfin-adjoint.org/en/latest/download/index.html
-* hao_solver (Should perhaps make this (at least what is needed) as a part of the repo)
+* hao_solver (Should perhaps make this (at least a basic version) as a part of the repo)
   -- Solver for the Holzapfel and Odgen material
   -- git clone git@bitbucket.org:Gabrielbalaban/haosolver.git
   -- Ask Gabriel for access
@@ -27,7 +27,7 @@ To get the most out of it you also need
 * yaml
   -- Used for storing parameters
   -- pip install pyyaml
-* patient_data
+* patient_data (should make a basic version part of the repo)
   -- Used for loading patient data in the correct format
   -- This repo also contains some test data
   -- git clone git@bitbucket.org:finsberg/patient_data.git
