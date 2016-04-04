@@ -196,7 +196,7 @@ class BasicForwardRunner(object):
             
             #Volume Projections to get dolfin-adjoint to record.            
             self.projector.project(phm.vol, phm.ds, self.V_sim)
-            self.projector.project(((self.V_sim - self.V_meas)/self.V_meas)**2, 
+            self.projector.project(sqrt(((self.V_sim - self.V_meas)/self.V_meas)**2), 
                                    dx, self.V_diff, False)
             
             #Strain projections to get dolfin-adjoint to record.
