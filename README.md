@@ -9,9 +9,9 @@ A cardiac computational model is constrained using clinical measurements such as
 In order to simply run the code you need
 ```
 * FEniCS version >= 1.6
-  -- [fenicsproject.org](http://fenicsproject.org)
+  -- http://fenicsproject.org
 * Dolfin-Adjoint version >= 1.6
-  -- [dolfin-adjoint.org](http://www.dolfin-adjoint.org/en/latest/download/index.html)
+  -- http://www.dolfin-adjoint.org/en/latest/download/index.html
 * hao_solver
   -- Solver for the Holzapfel and Odgen material
   -- git clone git@bitbucket.org:Gabrielbalaban/haosolver.git
