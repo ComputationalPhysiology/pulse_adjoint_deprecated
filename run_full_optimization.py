@@ -1,4 +1,4 @@
-from setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, initialize_patient_data
+from setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, initialize_patient_data, save_patient_data_to_simfile
 from run_optimization import run_passive_optimization, run_active_optimization
 from adjoint_contraction_args import *
 from numpy_mpi import *
@@ -20,6 +20,9 @@ def main(params):
     ############# GET PATIENT DATA ##################
     patient = initialize_patient_data(params["Patient_parameters"], 
                                       params["synth_data"])
+
+    # Save mesh and fibers to result file
+    save_patient_data_to_simfile(patient, params["sim_file"])
 
 
     ############# RUN MATPARAMS OPTIMIZATION ##################

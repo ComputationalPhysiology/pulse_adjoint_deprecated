@@ -2,9 +2,9 @@ from dolfin import *
 from dolfin_adjoint import *
 
 import numpy as np
-from run_full_optimization import initialize_patient_data
+
 from run_optimization import run_active_optimization, run_passive_optimization
-from setup_optimization import make_solver_params, setup_adjoint_contraction_parameters, setup_general_parameters
+from setup_optimization import make_solver_params, setup_adjoint_contraction_parameters, setup_general_parameters, initialize_patient_data, save_patient_data_to_simfile
 from heart_problem import SyntheticHeartProblem
 from adjoint_contraction_args import *
 from store_opt_results import write_opt_results_to_h5
@@ -297,7 +297,7 @@ def run_active_synth_data(params):
     params["phase"] = "all"
     params["synth_data"] = True
     patient = initialize_patient_data(params["Patient_parameters"], synth_data = True)
-  
+    save_patient_data_to_simfile(patient, params["sim_file"])
     logger.info(pformat(params.to_dict()))
 
     # Define gamma as a gaussian function

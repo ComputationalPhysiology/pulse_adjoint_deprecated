@@ -6,15 +6,13 @@
 #SBATCH --account=NN9249K
 #
 # Wall clock limit:
-#SBATCH --time=96:00:00
+#SBATCH --time=01:00:00
 #
-# Max memory usage:
-#SBATCH --mem-per-cpu=4G
+
 
 #Send emails for start, stop, fail, etc...
-#SBATCH --mail-type=END
-#SBATCH --output=slurmfiles/impact-%j.out
-#SBATCH --mail-user=henriknf@simula.no
+#SBATCH --output=slurmfiles/save_patient_data-%j.out
+
 
 ## Set up job environment:
 source /cluster/bin/jobsetup
@@ -33,4 +31,4 @@ export F90=gfortran
 
 ulimit -S -s unlimited
 
-arrayrun $1-$2 run.slurm
+arrayrun $1-$2 save_patient_data.slurm

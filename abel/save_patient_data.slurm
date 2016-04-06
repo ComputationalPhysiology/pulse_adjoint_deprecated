@@ -1,23 +1,16 @@
 #!/bin/bash
 
-
-#SBATCH --job-name=AdjointContractionRun"$TASK_ID"
+#SBATCH --job-name=SavePatientDataRun-%j
 #
 # Project:
 #SBATCH --account=NN9249K
 #
 # Wall clock limit:
-#SBATCH --time=96:00:00
-#
-# Max memory usage:
-#SBATCH --mem-per-cpu=4G
-#SBATCH --nodes=1
-#SBATCH --ntasks-per-node=8
+#SBATCH --time=00:15:00
+
 
 #Send emails for start, stop, fail, etc...
-#SBATCH --mail-type=END
-#SBATCH --output=slurmfiles/impact-%j.out
-#SBATCH --mail-user=henriknf@simula.no
+#SBATCH --output=slurmfiles/save_patient_datarun-%j.out
 
 
 ## Set up job environment:
@@ -44,7 +37,6 @@ INPUT=$SUBMITDIR"/input/file_"$TASK_ID".yml"
 # Output file
 OUTDIR=$(python outfile.py $INPUT)
 OUTPUT=$OUTDIR"/result.h5"
-GAMMACRASH=$OUTDIR"/gamma_crash.h5"
 
 ## Copy input files to the work directory:
 cp run.py $SCRATCH 
@@ -56,4 +48,4 @@ chkfile $GAMMACRASH
 cd $SCRATCH
 
 
-mpirun python run.py $INPUT $OUTPUT
+python save_patient_data.py $INPUT $OUTPUT
