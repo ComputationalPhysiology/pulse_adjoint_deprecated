@@ -6,7 +6,7 @@ import h5py, os
 import numpy as np
 
 
-def collect_data(main_dir, file_str, alphas, reg_pars):
+def collect_data(main_dir, res_dir, alphas, reg_pars):
     
     all_results_fname = "/".join([main_dir, "all_results.h5"])
     file_format = "a" if os.path.isfile(all_results_fname) else "w"
@@ -19,10 +19,14 @@ def collect_data(main_dir, file_str, alphas, reg_pars):
             all_results.create_group("alpha_{}".format(a))
 
         for l in reg_pars:
-            print file_str.format(a,l)
             
+            res_file = "/".join([res_dir.format(a,l), "result.h5"])
+            if not os.path.isfile(res_file):
+                continue
 
-            result = h5py.File(file_str.format(a,l), "r")
+            print res_file
+            result = h5py.File(res_file, "r")
+                
 
             # If it allready exist
             if "reg_par_{}".format(l) in all_results["alpha_{}".format(a)].keys():
@@ -32,7 +36,25 @@ def collect_data(main_dir, file_str, alphas, reg_pars):
             # Copy over the new one
             h5py.h5o.copy(result.id, "alpha_{}".format(a), 
                           all_results.id, "alpha_{}/reg_par_{}".format(a, l))
-            
+
+            # Save crashes
+            crash_file = "/".join([res_dir.format(a,l), "gamma_crash.h5"])
+            if os.path.isfile(crash_file):
+                # If it allreade exists
+                if "crash" in all_results["alpha_{}/reg_par_{}".format(a, l)].keys():
+                    # Delete it
+                    del all_results["alpha_{}/reg_par_{}/crash".format(a, l)]
+
+                # Open the crash file
+                crash = h5py.File(crash_file, "r")
+                all_results.create_group("alpha_{}/reg_par_{}/crash".format(a, l))
+
+                # For each crash point
+                for c in crash.keys():
+                    # Copy 
+                    h5py.h5o.copy(crash.id, c, all_results.id, 
+                                  "alpha_{}/reg_par_{}/crash/{}".format(a, l, c))
+                    
 
             result.close()
     all_results.close()
@@ -44,13 +66,13 @@ def collect_real_data():
     patient = "Impact_p16_i43"
     
 
-    sim_file_str_main_dir = "results/patient_{}".format(patient)
-    sim_file_str = "/".join([sim_file_str_main_dir, 
-                             "/alpha_{}/regpar_{}/med_res/result.h5"])
+    sim_file_str_main_dir = "results/real/patient_{}".format(patient)
+    sim_file_dir = "/".join([sim_file_str_main_dir, 
+                             "/alpha_{}/regpar_{}/med_res"])
 
     alphas = [i/100.0 for i in range(10)] + [i/10.0 for i in range(1,11)]
-    reg_pars = [0.0]
-    collect_data(sim_file_str_main_dir, sim_file_str, alphas, reg_pars)
+    reg_pars = [0.0] + np.logspace(-4,-2, 11).tolist()
+    collect_data(sim_file_str_main_dir, sim_file_dir, alphas, reg_pars)
     
 def collect_synthetic_data():
     
@@ -62,13 +84,12 @@ def collect_synthetic_data():
                          "/alpha_{}/regpar_{}/med_res/result.h5"])
 
 
-    alphas = [i/100.0 for i in range(10)] + [i/10.0 for i in range(1,11)]
-    reg_pars = [0.0]
-    collect_data(synth_file_str_main_dir, synth_file_str, alphas, reg_pars)
-
-    alphas = [0.03, 0.4]
-    reg_pars = np.logspace(-10,-1, 10).tolist() + np.multiply(5, np.logspace(-10, -1, 10)).tolist()
-    collect_data(synth_file_str_main_dir, synth_file_str, alphas, reg_pars)
+    alphas = [i/100.0 for i in range(10)] + \
+      [i/10.0 for i in range(1,11)]
+    
+    reg_pars = np.logspace(-10,-1, 10).tolist() + \
+      np.multiply(5, np.logspace(-10, -1, 10)).tolist() + \
+      np.logspace(-4,-2, 11).tolist() + [0.0]
     
 
 
