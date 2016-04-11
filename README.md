@@ -36,6 +36,10 @@ To get the most out of it you also need
   -- Used for loading the meshes in patient_data
   -- git clone git@bitbucket.org:finsberg/mesh_generation.git
   -- Ask Henrik for access
+* seaborn
+  -- Python visualization library based on matplotlib
+  -- Used for plotting and postprocessing
+  -- https://stanford.edu/~mwaskom/software/seaborn/
 
 ```
 
