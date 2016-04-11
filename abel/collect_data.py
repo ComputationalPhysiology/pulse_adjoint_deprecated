@@ -27,7 +27,15 @@ def collect_data(main_dir, res_dir, alphas, reg_pars):
 
             print res_file
             result = h5py.File(res_file, "r")
-                
+
+
+            # If this alpha is not in the results file, skip it
+            if not "alpha_{}".format(a) in result.keys():
+                continue
+
+            # If the regularization parameter is not in the result file, skip it
+            if not "reg_par_{}".format(l) in result["alpha_{}".format(a)].keys():
+                continue
 
             # If it allready exist
             if "reg_par_{}".format(l) in all_results["alpha_{}".format(a)].keys():
@@ -106,23 +114,59 @@ def collect_data(main_dir, res_dir, alphas, reg_pars):
 
 def collect_real_data():
 
+    
+    # patients = ["Impact_p8_i56", 
+    #             "Impact_p9_i49", 
+    #             "Impact_p10_i45", 
+    #             "Impact_p12_i45", 
+    #             "Impact_p14_i43", 
+    #             "Impact_p15_i38",    
+    #             "Impact_p16_i43", 
+    #             "CRID-pas_ESC"]
+    
+    patients = ["Impact_p10_i45", 
+                "Impact_p12_i45", 
+                "Impact_p14_i43", 
+                "Impact_p15_i38",    
+                "Impact_p16_i43", 
+                "CRID-pas_ESC"]
+
+
+    for patient in patients:
+        sim_file_main_dir = "results/real/patient_{}".format(patient)
+        sim_file_dir = "/".join([sim_file_main_dir, 
+                                 "/alpha_{}/regpar_{}/med_res"])
+
+        alphas = [i/100.0 for i in range(10)] + [i/10.0 for i in range(1,11)]
+        reg_pars = np.logspace(-10,-1, 10).tolist() + \
+        np.multiply(5, np.logspace(-10, -1, 10)).tolist() + \
+        np.logspace(-4,-2, 11).tolist() + [0.0] + np.linspace(0.005, 0.02, 10).tolist()
+    
+        collect_data(sim_file_main_dir, sim_file_dir, alphas, reg_pars)
+
+def collect_real_scalar_data():
+
     patient = "Impact_p16_i43"
     
 
-    sim_file_main_dir = "results/real/patient_{}".format(patient)
+    sim_file_main_dir = "results/real_scalar/patient_{}".format(patient)
     sim_file_dir = "/".join([sim_file_main_dir, 
                              "/alpha_{}/regpar_{}/med_res"])
 
     alphas = [i/100.0 for i in range(10)] + [i/10.0 for i in range(1,11)]
-    reg_pars = [0.0] + np.logspace(-4,-2, 11).tolist()
+    reg_pars = np.logspace(-10,-1, 10).tolist() + \
+      np.multiply(5, np.logspace(-10, -1, 10)).tolist() + \
+      np.logspace(-4,-2, 11).tolist() + [0.0] + np.linspace(0.005, 0.02, 10).tolist()
+    
     collect_data(sim_file_main_dir, sim_file_dir, alphas, reg_pars)
+
     
 def collect_synthetic_data():
     
     patient = "Impact_p16_i43"
     noise = True
 
-    synth_file_main_dir = "/mnt/hgfs/ubuntu/campass/results/synthetic_noise_{}/patient_{}".format(noise, patient)
+    synth_file_main_dir = "results/synthetic_noise_{}/patient_{}".format(noise, patient)
     synth_file_dir = "/".join([synth_file_main_dir, 
                          "/alpha_{}/regpar_{}/med_res"])
 
@@ -132,12 +176,14 @@ def collect_synthetic_data():
     
     reg_pars = np.logspace(-10,-1, 10).tolist() + \
       np.multiply(5, np.logspace(-10, -1, 10)).tolist() + \
-      np.logspace(-4,-2, 11).tolist() + [0.0]
+      np.logspace(-4,-2, 11).tolist() + [0.0] + np.linspace(0.005, 0.02, 10).tolist()
     
     collect_data(synth_file_main_dir, synth_file_dir, alphas, reg_pars)
 
 
 
 if __name__ == "__main__":
+    #collect_real_scalar_data()
     collect_synthetic_data()
-    collect_real_data()
+    #collect_real_data()
+    
