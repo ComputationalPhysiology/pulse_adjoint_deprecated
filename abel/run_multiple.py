@@ -5,15 +5,14 @@ import yaml
 #from campass.setup_optimization import setup_adjoint_contraction_parameters
 
 filepath= os.path.dirname(os.path.abspath(__file__))
-OUTPATH_REAL = filepath+"/results/real/patient_{}/alpha_{}/regpar_{}/{}"
+OUTPATH_REAL = filepath+"/results/real{}/patient_{}/alpha_{}/regpar_{}/{}"
 OUTPATH_SYNTH = filepath+"/results/synthetic_noise_{}/patient_{}/alpha_{}/regpar_{}/{}"
 
 def main():
 
     # Synthetic data or not
-    synth_data = True
-    noise = True # if synthetic data is chosen
-
+    synth_data = False
+    noise = False # if synthetic data is chosen
 
     ### Combinations ###
 
@@ -29,15 +28,6 @@ def main():
 # #   
     patients = ["Impact_p16_i43"]
     #patients = ["CRID-pas_ESC"]
-    # How to apply the weights on the strain (direction, rule, custom weights)
-    # Not custom weights not implemented yet
-    weights = [("all", "equal", None)]
-    # Resolution of mesh
-    resolutions = ["med_res"]
-    # Fiber angles (endo, epi)
-    fiber_angles = [(40,50)]
-
-
     # Optimization parameters
     
     # Weighting of strain and volume
@@ -45,30 +35,38 @@ def main():
     #alphas = [i/10.0 for i in range(11)]
     #alphas = [i/100.0 for i in range(11)] + [i/10.0 for i in range(1,11)]
     # Regularization
-    reg_pars = logspace(-10,-1, 10).tolist() + multiply(5, logspace(-10, -1, 10)).tolist()
-    #reg_pars = [0.0]
+    #reg_pars = logspace(-10,-1, 10).tolist() + multiply(5, logspace(-10, -1, 10)).tolist()
+    reg_pars = [0.0]
     # Weighting of strain and volume for passive phase
     alpha_matparams = [1.0]
 
 
     ### Fixed for all runs ###
     
-    patient_type = "full"
+    # Space for contraction parameter
+    gamma_space = "CG_1"
+    # Use gamma from previous iteration as intial guess
+    nonzero_initial_guess = False
+    # Optimize material parameters or use initial ones
+    optimize_matparams = True
 
+    # Use spatial strain fields
+    use_deintegrated_strains = False
+    # Spring constant at base
+    base_spring_k = 1.0
     # Initial material parameters
     #material_parameters = {"a":0.795, "b":6.855, "a_f":21.207, "b_f":40.545}
     material_parameters = {"a":0.291, "a_f":2.582, "b":5.0, "b_f":5.0}
-    # Space for contraction parameter
-    gamma_space = "CG_1"
-    # Use spatial strain fields
-    use_deintegrated_strains = False
-    # Optimize material parameters or use initial ones
-    optimize_matparams = True
-    # Spring constant at base
-    base_spring_k = 1.0
-
+    patient_type = "full"
 
     ### Run combinations ###
+    # How to apply the weights on the strain (direction, rule, custom weights)
+    # Not custom weights not implemented yet
+    weights = [("all", "equal", None)]
+    # Resolution of mesh
+    resolutions = ["med_res"]
+    # Fiber angles (endo, epi)
+    fiber_angles = [(40,50)]
 
     # Find all the combinations
     comb = list(product(patients, resolutions, fiber_angles, weights, alphas, reg_pars, alpha_matparams))
@@ -104,6 +102,7 @@ def main():
 
         params["base_spring_k"] = base_spring_k
         params["optimize_matparams"] = optimize_matparams
+        params["nonzero_initial_guess"] = nonzero_initial_guess
         params["use_deintegrated_strains"] = use_deintegrated_strains
         params["gamma_space"] = gamma_space
         params["Material_parameters"] = material_parameters
@@ -116,7 +115,8 @@ def main():
             outdir = OUTPATH_SYNTH.format(synth_data, c[0], c[4], c[5], c[1])
 
         else:
-            outdir = OUTPATH_REAL.format(c[0], c[4], c[5], c[1])
+            scalar_str = "_scalar" if gamma_space == "R_0" else ""
+            outdir = OUTPATH_REAL.format(scalar_str, c[0], c[4], c[5], c[1])
 
         # Make directory if it does not allready exist
         if not os.path.exists(outdir):

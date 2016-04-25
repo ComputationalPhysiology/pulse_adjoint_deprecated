@@ -85,7 +85,7 @@ def run_active_optimization(params, patient):
     for i in range(patient.num_contract_points):
         params["active_contraction_iteration_number"] = i
         if not contract_point_exists(params):
-
+            
             rd, gamma = run_active_optimization_step(params, patient, 
                                                      solver_parameters, 
                                                      measurements, p_lv, 
@@ -107,14 +107,16 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     spaces = get_spaces(mesh)
     
 
-    #Get previous gamma
-    if params["active_contraction_iteration_number"] == 0:
-        # Start with 0
+    #Get initial guess for gamma
+    if not params["nonzero_initial_guess"] or params["active_contraction_iteration_number"] == 0:
+        # Use zero initial guess
         gamma.assign(Constant(0.0))
     else:
+        # Use gamma from the previous point as initial guess
         # Load gamma from previous point
         with HDF5File(mpi_comm_world(), params["sim_file"], "r") as h5file:
             h5file.read(gamma, "alpha_{}/active_contraction/contract_point_{}/parameters/activation_parameter_function/".format(params["alpha"], params["active_contraction_iteration_number"]-1))
+  
         
 
     logger.debug(Text.yellow("Stop annotating"))
@@ -167,12 +169,14 @@ def store(params, rd, opt_controls, opt_result=None):
 
 def solve_oc_problem(params, rd, paramvec):
 
+    paramvec_arr = gather_broadcast(paramvec.vector().array())
+
     if params["phase"] == PHASES[0] and not params["optimize_matparams"]:
+        rd(paramvec_arr)
         store(params, rd, paramvec)
 
     else:
         
-        paramvec_arr = gather_broadcast(paramvec.vector().array())
 
         opt_params = params["Optimization_parmeteres"]
         kwargs = {"method": opt_params["method"],

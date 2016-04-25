@@ -36,6 +36,10 @@ To get the most out of it you also need
   -- Used for loading the meshes in patient_data
   -- git clone git@bitbucket.org:finsberg/mesh_generation.git
   -- Ask Henrik for access
+* seaborn
+  -- Python visualization library based on matplotlib
+  -- Used for plotting and postprocessing
+  -- https://stanford.edu/~mwaskom/software/seaborn/
 
 ```
 
@@ -62,6 +66,8 @@ and is located in forward_runner.py
 which is used to tests that the adjoint calculations are correct.
 * One can generate synthetic data and test the optimization using this data
 as input. To do so run the script synthetic_data.py
+* One can postprocess the results with the scripts in postprocessing/.
+There are one script for synthetic data and one for real patient data.
 
 ## Contributors ##
 

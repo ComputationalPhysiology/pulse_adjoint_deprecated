@@ -1,18 +1,24 @@
 #!/usr/bin/env python
-
-from dolfin import mpi_comm_world
+from adjoint_contraction_args import  logger, PHASES
 from pprint import pformat
-from adjoint_contraction_args import ALPHA_STR, ACTIVE_CONTRACTION, CONTRACTION_POINT, PASSIVE_INFLATION, logger, PHASES
-from numpy_mpi import *
-import sys, os,  matplotlib, h5py
 
 
+class AutoVivification(dict):
+    """Implementation of perl's autovivification feature."""
+    def __getitem__(self, item):
+        try:
+            return dict.__getitem__(self, item)
+        except KeyError:
+            value = self[item] = type(self)()
+            return value
 
 # Dummy object
 class Object(object):pass
 
 def print_optimization_report(params, opt_controls, init_controls, 
                               ini_for_res, opt_for_res, opt_result = None):
+
+    from numpy_mpi import gather_broadcast
 
     if opt_result:
         logger.info("\nOptimization terminated...")
@@ -50,6 +56,8 @@ def print_optimization_report(params, opt_controls, init_controls,
                                                              opt_controls_arr.max()))
 
 def passive_inflation_exists(params):
+    import h5py, os
+    from adjoint_contraction_args import ALPHA_STR, PASSIVE_INFLATION
 
     if not os.path.exists(params["sim_file"]):
         return False
@@ -68,9 +76,12 @@ def passive_inflation_exists(params):
     return False
 
 def contract_point_exists(params):
+    import h5py, os
+    import numpy as np
+    from adjoint_contraction_args import ALPHA_STR, ACTIVE_CONTRACTION, CONTRACTION_POINT, PASSIVE_INFLATION, PHASES
     
     if not os.path.exists(params["sim_file"]):
-        mpi_print(Text.red("Run passive inflation before systole"))
+        logger.info(Text.red("Run passive inflation before systole"))
         raise IOError("Need state from passive inflation")
         return False
 
@@ -82,7 +93,7 @@ def contract_point_exists(params):
     key5 = ALPHA_STR.format(params["alpha_matparams"])
 	
     if not key5 in h5file.keys() or key4 not in h5file[key5].keys():
-        mpi_print(Text.red("Run passive inflation before systole"))
+        logger.info(Text.red("Run passive inflation before systole"))
         raise IOError("Need state from passive inflation")
 
     
@@ -100,11 +111,11 @@ def contract_point_exists(params):
         # Check if pv point is already computed
         if key2 in h5file[key1].keys() and key3 in h5file[key1][key2].keys():
             pressure = np.array(h5file[key1][key2][key3]["lv_pressures"])[0]
-            mpi_print(Text.green("Contract point {}, alpha = {} pressure = {:.3f} {}".format(params["active_contraction_iteration_number"],
+            logger.info(Text.green("Contract point {}, alpha = {} pressure = {:.3f} {}".format(params["active_contraction_iteration_number"],
                                                                            params["alpha"], pressure, "fetched from database")))
             h5file.close()
             return True
-        mpi_print(Text.blue("Contract point {}, alpha = {} {}".format(params["active_contraction_iteration_number"], params["alpha"], "Run Optimization")))
+        logger.info(Text.blue("Contract point {}, alpha = {} {}".format(params["active_contraction_iteration_number"], params["alpha"], "Run Optimization")))
         h5file.close()
         return False
     except:
@@ -120,17 +131,6 @@ def list_sum(l):
     return out
 
         
-
-def setup_matplotlib():
-    matplotlib.rcParams.update({'figure.autolayout': True})
-    font = {'family' : 'normal',
-            'weight' : 'bold',
-            'size'   : 26} 
-
-    matplotlib.rc('font', **font)
-    matplotlib.pyplot.rc('text', usetex=True)
-    matplotlib.rcParams['text.usetex']=True
-    matplotlib.rcParams['text.latex.unicode']=True
 
 
 
