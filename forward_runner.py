@@ -76,9 +76,9 @@ class BasicForwardRunner(object):
            
             for i in STRAIN_REGION_NUMS:
                 strain_weight = np.zeros(9)
-                strain_weight[0] = self.solver_parameters["strain_weights"][i-1][0]/51.0
-                strain_weight[4] = self.solver_parameters["strain_weights"][i-1][1]/51.0
-                strain_weight[8] = self.solver_parameters["strain_weights"][i-1][2]/51.0
+                strain_weight[0] = self.solver_parameters["strain_weights"][i-1][0]#/51.0
+                strain_weight[4] = self.solver_parameters["strain_weights"][i-1][1]#/51.0
+                strain_weight[8] = self.solver_parameters["strain_weights"][i-1][2]#/51.0
                 assign_to_vector(self.strain_weights[i-1].vector(), strain_weight)
 
             
