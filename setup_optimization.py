@@ -80,8 +80,8 @@ def setup_application_parameters():
     params.add("reg_par", REG_PAR)
     params.add("gamma_space", "CG_1", ["CG_1", "R_0"])
     params.add("use_deintegrated_strains", False)
-    params.add("optimize_matparams", True)
-    
+    params.add("optimize_matparams", False)
+    params.add("nonzero_initial_guess", True)
 
     params.add("synth_data", False)
     params.add("noise", False)
@@ -93,8 +93,8 @@ def setup_application_parameters():
 
     material_parameters = Parameters("Material_parameters")
     material_parameters.add("a", INITIAL_MATPARAMS[0])
-    material_parameters.add("b", INITIAL_MATPARAMS[1])
-    material_parameters.add("a_f", INITIAL_MATPARAMS[2])
+    material_parameters.add("a_f", INITIAL_MATPARAMS[1])
+    material_parameters.add("b", INITIAL_MATPARAMS[2])
     material_parameters.add("b_f", INITIAL_MATPARAMS[3])
     params.add(material_parameters)
 

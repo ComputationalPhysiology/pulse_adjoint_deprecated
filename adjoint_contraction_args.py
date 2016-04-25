@@ -1,4 +1,3 @@
-
 from patient_data.scripts.data import STRAIN_REGIONS, STRAIN_DIRECTIONS
 import os, logging
 import dolfin
@@ -57,7 +56,7 @@ logger = make_logger("Adjoint_Contraction", log_level)
 DEFAULT_PATIENT = "Impact_p16_i43"
 
 # Resulution of the mesh
-RESOLUTION = "low_res"
+RESOLUTION = "med_res"
 
 
 #Centipascals for our centimeter mesh.
@@ -79,7 +78,7 @@ DEFAULT_WEIGHT_DIRECTION = "all"
 BASE_K = 1.0
 
 # Regularization patameter
-REG_PAR = 0.0
+REG_PAR = 0.001
 
 # Weighting of strain and volume (0=Strain only, 1=Volume only)
 ALPHA = 0.5
@@ -90,9 +89,6 @@ ALPHA_MATPARAMS = 1.0
 # if USE_DEINTEGRATED_STRAINS:
     # from strain_projection.project_strains import STRAIN_FIELDS_PATH
 
-# The different modes for the adjoint optimization
-MODES = ["test_functional", "test_gradient", "optimize", "replay_test"]
-DEFAULT_MODE = MODES[2]
 
 # The different phases we can optimize
 PHASES = ['passive_inflation', 'active_contraction', "all"]
@@ -133,8 +129,6 @@ OPTIMIZATION_MAXITER_MATPARAMS = 30
 NSYNTH_POINTS = 7
 SYNTH_PASSIVE_FILLING = 3
 
-
-
 ############### LABELS AND NAMES #####################
 
 # Strain regions
@@ -153,24 +147,12 @@ ALPHA_STR = "alpha_{}"
 ACTIVE_CONTRACTION = "active_contraction"
 PASSIVE_INFLATION = "passive_inflation"
 
-
-
 ############## DIRECTORIES AND PATHS #################3
-
-# Path to synthetic data
-path_to_synth_data = "/".join(os.path.dirname(__file__).split("/")[:-1])
-SYNTH_OUTDIR = os.path.join(path_to_synth_data,"adjoint_contraction/synthetic_data")
-SYNTH_OUTDIR_MATPARAMS = SYNTH_OUTDIR + "/data_matparams"
-SYNTH_OUTDIR_SCALAR_GAMMA = SYNTH_OUTDIR +  "/data_scalar_gamma"
-SYNTH_OUTDIR_CONTINUOUS_GAMMA =  SYNTH_OUTDIR + "/data_continuous_gamma"
 
 
 # Folders and path for which the data is stored in .h5 format
-path_to_data = "/".join(os.path.dirname(__file__).split("/")[:-1])
-SIMULATION_FILE = os.path.join(path_to_data,
-                               'adjoint_contraction/numerical_results/{}/{}/{}_new/results.h5')  #.format(args.patient,alpha, casename)
-DEFAULT_SIMULATION_FILE = os.path.join(path_to_data,
-                                       'adjoint_contraction/numerical_results/{}_new/results.h5'.format(DEFAULT_PATIENT))  
+curdir = os.path.abspath(os.path.dirname(__file__))
+DEFAULT_SIMULATION_FILE = os.path.join(curdir,'local_results/{}/results.h5'.format(DEFAULT_PATIENT))  
 
 ########## DOLFIN PARAMETERS ############################
 
@@ -186,7 +168,7 @@ SNES_SOLVER_METHOD = "newtontr"
 SNES_SOLVER_MAXITR = 50
 
 # Absolute Tolerance
-SNES_SOLVER_ABSTOL = 1.0e-5
+SNES_SOLVER_ABSTOL = 1.0e-8
 
 # Linear solver "
 SNES_SOLVER_LINSOLVER = "lu"
