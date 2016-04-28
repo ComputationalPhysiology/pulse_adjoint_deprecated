@@ -1,7 +1,6 @@
 from dolfin import *
 from dolfin_adjoint import *
 import numpy as np
-from haosolver import Compressibility
 from utils import Object, Text
 from adjoint_contraction_args import *
 from numpy_mpi import *
@@ -272,21 +271,20 @@ def make_solver_params(params, patient, measurements):
         no_base_x_tran_bc = DirichletBC(W.sub(0).sub(0), 0, patient.BASE)
         return [no_base_x_tran_bc]
 	
-        
+    from lvsolver import HolzapfelOgden
+
+    matparams = {"a":a, "a_f":a_f, "b":b, "b_f":b_f}
+    material = HolzapfelOgden(patient.e_f, gamma, matparams)
+    
     solver_parameters = {"mesh": patient.mesh,
                          "facet_function": patient.facets_markers,
                          "facet_normal": N,
                          "mesh_function": patient.strain_markers,
                          "strain_weights": strain_weights, 
                          "strain_weights_deintegrated": strain_weights_deintegrated,
-                         "compressibility" : Compressibility.StabalizedIncompressible,
-                         "material": {"a": a,
-                                      "b": b,
-                                      "a_f": a_f,
-                                      "b_f": b_f,
-                                      "e_f": patient.e_f,
-                                      "gamma": gamma,
-                                      "lambda": 0.0},
+                         "state_space": "P_2:P_1",
+                         
+                         "material": material,
                          "bc":{"dirichlet": make_dirichlet_bcs,
                                "Pressure":[[p_lv, patient.ENDO]],
                                "Robin":[[-Constant(params["base_spring_k"], 

@@ -441,10 +441,10 @@ class PassiveForwardRunner(BasicForwardRunner):
         self.paramvec.assign(m)
         paramvec = split(self.paramvec)
         
-        self.solver_parameters["material"]["a"] = paramvec[0]
-        self.solver_parameters["material"]["a_f"] = paramvec[1]
-        self.solver_parameters["material"]["b"] = paramvec[2]
-        self.solver_parameters["material"]["b_f"] = paramvec[3]
+        self.solver_parameters["material"].a = paramvec[0]
+        self.solver_parameters["material"].a_f = paramvec[1]
+        self.solver_parameters["material"].b = paramvec[2]
+        self.solver_parameters["material"].b_f = paramvec[3]
        
      
         phm = PassiveHeartProblem(self.pressures, 

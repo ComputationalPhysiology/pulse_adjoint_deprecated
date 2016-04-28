@@ -6,7 +6,7 @@ import numpy as np
 from numpy_mpi import *
 from utils import Text
 import collections
-from haosolver import ActiveHaoSolver
+from lvsolver import LVSolver
 
 
 
@@ -29,7 +29,7 @@ class BasicHeartProblem(collections.Iterator):
         self.crl_basis = crl_basis
 
         # Mechanical solver Active strain Holzapfel and Ogden
-        self.solver = ActiveHaoSolver(solver_parameters)
+        self.solver = LVSolver(solver_parameters)
         
         self.p_lv.t = self.pressure[0]
      
