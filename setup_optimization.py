@@ -32,8 +32,8 @@ def setup_solver_parameters():
     solver_parameters["snes_solver"]["maximum_iterations"] = SNES_SOLVER_MAXITR
     solver_parameters["snes_solver"]["absolute_tolerance"] = SNES_SOLVER_ABSTOL 
     solver_parameters["snes_solver"]["linear_solver"] = SNES_SOLVER_LINSOLVER
-    # solver_parameters["snes_solver"]["preconditioner"] = SNES_SOLVER_PRECONDITIONER
-    solver_parameters["snes_solver"]["report"] = VIEW_NLS_CONVERGENCE
+    
+    
 
     return solver_parameters
     
@@ -78,6 +78,11 @@ def setup_application_parameters():
     params.add("base_spring_k", BASE_K)
     params.add("reg_par", REG_PAR)
     params.add("gamma_space", "CG_1", ["CG_1", "R_0"])
+    params.add("state_space", "P_2:P_1")
+    params.add("compressibility", "hu_washizu", ["incompressible", 
+                                                                "stabalized_incompressible", 
+                                                                "penalty", "hu_washizu"])
+    params.add("incompressibility_penalty", 1.0)
     params.add("use_deintegrated_strains", False)
     params.add("optimize_matparams", False)
     params.add("nonzero_initial_guess", True)
@@ -124,7 +129,7 @@ def initialize_patient_data(patient_parameters, synth_data):
     from patient_data import Patient
     
     patient = Patient(**patient_parameters)
-
+    
     # if args_full.use_deintegrated_strains:
         # patient.load_deintegrated_strains(STRAIN_FIELDS_PATH)
 
@@ -268,13 +273,16 @@ def make_solver_params(params, patient, measurements):
 	'''Make Dirichlet boundary conditions where the base is allowed to slide
         in the x = 0 plane.
         '''
-        no_base_x_tran_bc = DirichletBC(W.sub(0).sub(0), 0, patient.BASE)
+        
+        
+        V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
+        no_base_x_tran_bc = DirichletBC(V.sub(0), 0, patient.BASE)
         return [no_base_x_tran_bc]
 	
     from lvsolver import HolzapfelOgden
 
     matparams = {"a":a, "a_f":a_f, "b":b, "b_f":b_f}
-    material = HolzapfelOgden(patient.e_f, gamma, matparams)
+    material = HolzapfelOgden(patient.e_f, gamma, matparams, "active_strain")
     
     solver_parameters = {"mesh": patient.mesh,
                          "facet_function": patient.facets_markers,
@@ -283,11 +291,12 @@ def make_solver_params(params, patient, measurements):
                          "strain_weights": strain_weights, 
                          "strain_weights_deintegrated": strain_weights_deintegrated,
                          "state_space": "P_2:P_1",
-                         
+                         "compressibility":{"type": params["compressibility"],
+                                            "lambda": params["incompressibility_penalty"]},
                          "material": material,
                          "bc":{"dirichlet": make_dirichlet_bcs,
-                               "Pressure":[[p_lv, patient.ENDO]],
-                               "Robin":[[-Constant(params["base_spring_k"], 
+                               "neumann":[[p_lv, patient.ENDO]],
+                               "robin":[[-Constant(params["base_spring_k"], 
                                                    name ="base_spring_constant"), patient.BASE]]},
                          "solve":setup_solver_parameters()}
 

@@ -66,7 +66,8 @@ def write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt,
             h5file.write(opt_matparams.vector(), h5group + "/parameters/optimal_material_parameters")
             save_data(params["Material_parameters"].values(), "/parameters/initial_material_parameters")
 
-            h5file.write(Function(FunctionSpace(for_result_opt.phm.mesh, 'R', 0)), h5group + "/parameters/activation_parameter_function")
+            h5file.write(Function(FunctionSpace(for_result_opt.phm.mesh, 'R', 0)), 
+                         h5group + "/parameters/activation_parameter_function")
             save_data(0.0, "/parameters/activation_parameter")
             
 
@@ -80,8 +81,10 @@ def write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt,
 
 
         # Input parameters
-        h5file.attributes(h5group + "/parameters")["material parameters"] = "a, b, a_f, b_f in transversely isotropic Holzapfel and Ogden model"
-        h5file.attributes(h5group + "/parameters")["activation parameter"] = "Active contraction in fiber direction. Value between 0 and 1 where 0 (starting value) is no contraction and 1 (infeasable) is full contraction"
+        h5file.attributes(h5group + "/parameters")["material parameters"] = \
+          "a, b, a_f, b_f in transversely isotropic Holzapfel and Ogden model"
+        h5file.attributes(h5group + "/parameters")["activation parameter"] = \
+          "Active contraction in fiber direction. Value between 0 and 1 where 0 (starting value) is no contraction and 1 (infeasable) is full contraction"
         dump_parameters_to_attributes(params, h5group)
         # Dump parameters to yaml file as well
         with open(filedir+"/parameters.yml", 'w') as parfile:
@@ -98,8 +101,8 @@ def write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt,
 
         # States
         for i, w in enumerate(for_result_opt.states):
-            assign_to_vector(for_result_opt.phm.solver.w.vector(), gather_broadcast(w.array()))
-            h5file.write(for_result_opt.phm.solver.w, h5group + "/states/{}".format(i))
+            assign_to_vector(for_result_opt.phm.solver.get_state().vector(), gather_broadcast(w.array()))
+            h5file.write(for_result_opt.phm.solver.get_state(), h5group + "/states/{}".format(i))
 
 
         # Strain traces

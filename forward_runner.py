@@ -147,7 +147,7 @@ class BasicForwardRunner(object):
                     target.assign(strain, annotate = annotate)
 
             # And we save it for later reference
-            self._save_state(Vector(phm.solver.w.vector()), self._get_exprval(phm.p_lv, phm.mesh),
+            self._save_state(Vector(phm.solver.get_state().vector()), self._get_exprval(phm.p_lv, phm.mesh),
                              float(phm.get_inner_cavity_volume()), phm.strains, phm.strainfield)
 
         
@@ -163,7 +163,7 @@ class BasicForwardRunner(object):
         
         if phase == "active":
             # Add regulatization term to the functional
-            m = phm.solver.parameters['material']['gamma']
+            m = phm.solver.parameters['material'].gamma
             if m.ufl_element().family == "Real":
                 reg_term = 0.0
             else:
@@ -228,7 +228,7 @@ class BasicForwardRunner(object):
             functional_values_volume.append(v_diff)
             
             # Save the state
-            self._save_state(Vector(phm.solver.w.vector()), self._get_exprval(phm.p_lv, phm.mesh),
+            self._save_state(Vector(phm.solver.get_state().vector()), self._get_exprval(phm.p_lv, phm.mesh),
                              float(phm.get_inner_cavity_volume()), phm.strains, phm.strainfield)
             
             
@@ -328,7 +328,7 @@ class ActiveForwardRunner(BasicForwardRunner):
         
         
 
-        self.solver_parameters['material']['gamma'].assign(gamma_previous, annotate = True)
+        self.solver_parameters['material'].gamma.assign(gamma_previous, annotate = True)
 
         self.cphm = ActiveHeartProblem(self.pressures,
                                              self.solver_parameters,
@@ -356,7 +356,7 @@ class ActiveForwardRunner(BasicForwardRunner):
             logger.debug("Try to step up gamma")
             w_old = self.cphm.get_state()
             gamma_old = self.gamma_previous.copy(True)
-            self.cphm.next_active(m, self.gamma_previous)
+            self.cphm.next_active(m, self.gamma_previous.copy())
 	    
         except StopIteration:
             logger.debug("Stepping up gamma failed")
@@ -386,11 +386,11 @@ class ActiveForwardRunner(BasicForwardRunner):
 
             logger.debug("Assign the old state and old gamma")
             # Assign the old state
-            self.cphm.solver.w.assign(w_old, annotate=annotate)
+            self.cphm.solver.get_state().assign(w_old, annotate=annotate)
             # Assign the old gamma
             m.assign(gamma_old)
-            self.cphm.solver.parameters['material']['gamma'].assign(gamma_old)
-            self.solver_parameters['material']['gamma'].assign(gamma_old)
+            self.cphm.solver.parameters['material'].gamma.assign(gamma_old)
+            self.solver_parameters['material'].gamma.assign(gamma_old)
             self.gamma_previous.assign(gamma_old)
 
             # Solve the forward problem with the old gamma
@@ -410,11 +410,11 @@ class ActiveForwardRunner(BasicForwardRunner):
             # Assign the state where we have only one step with gamma left, and make sure
             # that dolfin adjoint record this.
             logger.debug("Assign the new state and gamma")
-            self.cphm.solver.w.assign(w, annotate=annotate)
+            self.cphm.solver.get_state().assign(w, annotate=annotate)
 
             # Now we make the final solve
-            self.cphm.solver.parameters['material']['gamma'].assign(m)
-            self.solver_parameters['material']['gamma'].assign(m)
+            self.cphm.solver.parameters['material'].gamma.assign(m)
+            self.solver_parameters['material'].gamma.assign(m)
             self.gamma_previous.assign(m)
 
             logger.debug("Solve the forward problem with the new gamma")

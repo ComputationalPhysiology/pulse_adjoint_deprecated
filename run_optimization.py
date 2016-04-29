@@ -3,7 +3,7 @@ from dolfin_adjoint import *
 from setup_optimization import setup_simulation, logger, MyReducedFunctional
 from utils import Text, Object, pformat, print_optimization_report, contract_point_exists, get_spaces
 from forward_runner import ActiveForwardRunner, PassiveForwardRunner
-from heart_problem import PassiveHeartProblem
+
 from numpy_mpi import *
 from adjoint_contraction_args import *
 from scipy.optimize import minimize as scipy_minimize

@@ -36,42 +36,55 @@ class BasicHeartProblem(collections.Iterator):
 	
     
     def next(self):
-        p_next = self.pressure_gen.next()
-        p_prev = self.p_lv.t
-        p_diff = abs(p_next - p_prev)
 
-        converged = False
-        nsteps = max(2, int(math.ceil(p_diff/PRESSURE_INC_LIMIT)))
-        n_max = 60
-        pressures = np.linspace(p_prev, p_next, nsteps)
-        
-        while not converged and nsteps < n_max:
-            try:
-                for p in pressures[1:]:
-                    
-                    self.p_lv.t = p
-                    
-                    out = self.solver.solve()
-                    p_prev = p
-
-                converged = True
-            except RuntimeError:
-                logger.warning(Text.red("Solver chrashed when increasing pressure from {} to {}".format(p_prev, p_next)))
-                logger.warning("Take smaller steps")
-                nsteps += 2
-                pressures = np.linspace(p_prev, p_next, nsteps)
-                
-
-        if nsteps == n_max:
-            raise RuntimeError("Unable to increase pressure")
-
+        out = self.increase_pressure()
         strains = self.project_to_strains(self.u)
         
         return out, strains
 
+    def increase_pressure(self):
+        p_next = self.pressure_gen.next()
+        p_prev = self.p_lv.t 
+        p_diff = abs(p_next - p_prev)
+        
+        logger.debug("Increase pressure:  previous   next")
+        logger.debug("\t            {:.3f}     {:.3f}".format(p_prev, p_next))
+
+        converged = False
+        nsteps = max(2, int(math.ceil(p_diff/PRESSURE_INC_LIMIT)))
+        n_max = 100
+        pressures = np.linspace(p_prev, p_next, nsteps)
+        
+
+        while not converged and nsteps < n_max:
+
+            crash = False
+            for p in pressures[1:]:
+                self.p_lv.t = p
+
+                out, crash = self.solver.solve()
+                
+                if crash:
+                    logger.warning("Solver chrashed when increasing pressure from {} to {}".format(p_prev, p))
+                    logger.warning("Take smaller steps")
+                    nsteps *= 2
+                    pressures = np.linspace(p_prev, p_next, nsteps)
+                    break
+                else:
+                    p_prev = p
+
+            
+            converged = False if crash else True
+                
+
+        if nsteps >= n_max:
+            raise RuntimeError("Unable to increase pressure")
+
+        
+        return out
     
     def get_state(self):
-        return self.solver.w.copy(True)
+        return self.solver.get_state().copy(True)
 
     def project_to_strains(self, u):
         gradu = grad(u)
@@ -135,7 +148,7 @@ class BasicHeartProblem(collections.Iterator):
         N = self.solver.parameters["facet_normal"]
 
         # Collect displacement u
-        self.u, p = split(self.solver.w)
+        self.u = self.solver.get_u() 
 
         # Deformation gradient
         F = grad(self.u) + Identity(3)
@@ -210,7 +223,7 @@ class SyntheticHeartProblem(BasicHeartProblem):
      
                 g.vector()[:] +=  dg.vector()[:]
 
-                self.solver.parameters['material']['gamma'].assign(g)
+                self.solver.parameters['material'].gamma.assign(g)
 
                 try:
                     # mpi_print("try1: mean gamma = {}".format(gather_broadcast(g.vector().array()).mean()))
@@ -263,7 +276,7 @@ class ActiveHeartProblem(BasicHeartProblem):
                                     endo_lv_marker, crl_basis, spaces)
 
 
-        w_temp = Function(self.solver.W, name = "w_temp")
+        w_temp = Function(self.solver.get_state_space(), name = "w_temp")
         with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
         
             # Get previous regional gamma and state
@@ -276,7 +289,7 @@ class ActiveHeartProblem(BasicHeartProblem):
                                    params["active_contraction_iteration_number"] - 1) + "/states/0")
 
 
-        self.solver.w.assign(w_temp, annotate = annotate)
+        self.solver.get_state().assign(w_temp, annotate = annotate)
         BasicHeartProblem._init_volume_forms(self)
        
     def next(self):
@@ -285,43 +298,6 @@ class ActiveHeartProblem(BasicHeartProblem):
         strains = self.project_to_strains(self.u)
         return out, strains
 
-    
-    def increase_pressure(self):
-        
-        
-        p_next = self.pressure_gen.next()
-        p_prev = self.p_lv.t 
-        p_diff = abs(p_next - p_prev)
-        
-        logger.debug("Increase pressure:  previous   next")
-        logger.debug("\t            {:.3f}     {:.3f}".format(p_prev, p_next))
-
-        converged = False
-        nsteps = max(2, int(math.ceil(p_diff/PRESSURE_INC_LIMIT)))
-        n_max = 100
-        pressures = np.linspace(p_prev, p_next, nsteps)
-        
-
-        while not converged and nsteps < n_max:
-            try:
-                for p in pressures[1:]:
-                    self.p_lv.t = p
-                   
-                    out = self.solver.solve()
-                    p_prev = p
-                converged = True
-            except RuntimeError:
-                logger.warning("Solver chrashed when increasing pressure from {} to {}".format(p_prev, p))
-                logger.warning("Take smaller steps")
-                nsteps += 4
-                pressures = np.linspace(p_prev, p_next, nsteps)
-                
-
-        if nsteps >= n_max:
-            raise RuntimeError("Unable to increase pressure")
-
-        
-        return out
     
    
     
@@ -343,12 +319,19 @@ class ActiveHeartProblem(BasicHeartProblem):
         dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] - g_prev.vector()[:])
 
 
+        # from IPython import embed; embed()
+        
+        # V = FunctionSpace(self.mesh, "CG", 1)
+        #
+        # g = Function(V, name = "g")
         g = Function(g_prev.function_space(), name = "g")
-        g.assign(g_prev)
+        # g.assign(g_prev)
+        g.vector()[:] = g_prev.vector()[:]
 
         # Store the old stuff
         w_old = self.get_state()
         g_old = g_prev.copy()
+        
 
         idx = 1
         done = False
@@ -357,15 +340,16 @@ class ActiveHeartProblem(BasicHeartProblem):
         # If the solver crashes n times it is possibly stuck
         MAX_NR_CRASH = 5
         nr_crashes = 0
-
+        
+        
         logger.debug("\n\tIncrement gamma...")
         logger.debug("\tMean \tMax")
         while not done:
             while not finished_stepping:
 
                 if nr_crashes > MAX_NR_CRASH:
-                    self.solver.parameters['material']['gamma'].assign(g_old)
-                    self.solver.w.assign(w_old)
+                    self.solver.parameters['material'].gamma.assign(g_old)
+                    # self.solver.get_state().assign(w_old)
                     raise StopIteration("Iteration have chrashed too many times")
 
                 
@@ -375,27 +359,31 @@ class ActiveHeartProblem(BasicHeartProblem):
                     # Increment gamma
                     g.vector()[:] +=  dg.vector()[:]
                     # Assing the new gamma
-                    self.solver.parameters['material']['gamma'].assign(g)
+                    self.solver.parameters['material'].gamma.assign(g)
                         
-                    try:
-                        # Try to solve
-                        logger.debug("\t{:.3f} \t{:.3f}".format(get_mean(g), get_max(g)))
-                        out = self.solver.solve()
+                    # try:
+                    # Try to solve
+                    logger.debug("\t{:.3f} \t{:.3f}".format(get_mean(g), get_max(g)))
+                    out, crash = self.solver.solve()
 
-                    except RuntimeError as ex:
+                    # except RuntimeError as ex:
+                    if crash:
                         # If that does not work increase the number of steps
                         logger.warning("Solver crashed. Reduce gamma step")
-                        nr_steps += 4
+                        nr_steps *=2
                         
                         # Assign the previous gamma
                         g.assign(g_prev)
-                        dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] - g_prev.vector()[:]) 
+                        
+                        dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] 
+                                                        - g_prev.vector()[:]) 
                         nr_crashes += 1
 
                         break
 
                     else:
-                        g_prev.assign(g)
+                        g_prev.assign(g.copy(True))
+                        
                         idx += 1
                         
                 if i == nr_steps-1:
@@ -407,13 +395,14 @@ class ActiveHeartProblem(BasicHeartProblem):
             # Store the current solution
             w = self.get_state()
 
-            self.solver.parameters['material']['gamma'].assign(gamma_current)
+            self.solver.parameters['material'].gamma.assign(gamma_current)
             
-            try:
-                logger.debug("\t{:.3f} \t{:.3f}".format(get_mean(gamma_current), 
+            # try:
+            logger.debug("\t{:.3f} \t{:.3f}".format(get_mean(gamma_current), 
                                                        get_max(gamma_current)))
-                out = self.solver.solve()
-            except RuntimeError:
+            out, crash = self.solver.solve()
+            # except RuntimeError:
+            if crash:
                 nr_steps *= 2
                 logger.warning("\tFinal solve-step crashed. Reduce gamma step")
                 g.assign(g_prev)
@@ -422,8 +411,9 @@ class ActiveHeartProblem(BasicHeartProblem):
                 finished_stepping = False
             else:
                 # Assign the previous state
-                self.solver.w.assign(w, annotate = False)
-                self.solver.parameters['material']['gamma'].assign(g_prev)
+                self.solver.get_state().assign(w, annotate = False)
+                self.solver.reinit(w)
+                self.solver.parameters['material'].gamma.assign(g_prev)
               
                 done = True
                 
@@ -431,6 +421,8 @@ class ActiveHeartProblem(BasicHeartProblem):
 
 
         return out
+
+
 
 
 class PassiveHeartProblem(BasicHeartProblem):

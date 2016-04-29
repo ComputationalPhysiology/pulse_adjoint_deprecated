@@ -162,16 +162,17 @@ NONLINSOLVER = "snes"
 
 # Nonlinear method 
 #(Dolfin Adjoint version < 1.6 newtontr is the only one working)
-SNES_SOLVER_METHOD = "newtontr"
+SNES_SOLVER_METHOD = "newtonls"#"newtontr"
 
 # Maximum number of iterations
 SNES_SOLVER_MAXITR = 50
 
 # Absolute Tolerance
-SNES_SOLVER_ABSTOL = 1.0e-8
+SNES_SOLVER_ABSTOL = 1.0e-5
 
 # Linear solver "
-SNES_SOLVER_LINSOLVER = "lu"
+# SNES_SOLVER_LINSOLVER = "lu"
+SNES_SOLVER_LINSOLVER = "mumps"
 SNES_SOLVER_PRECONDITIONER = "default"
 
 OPTIMIZATION_METHOD = "SLSQP"

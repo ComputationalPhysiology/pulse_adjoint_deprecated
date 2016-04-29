@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 from dolfin import *
 from dolfin_adjoint import *
-from compressibility import Compressibility
+from compressibility import get_compressibility
+from adjoint_contraction_args import logger
 
 import collections, math, numpy as np
 
@@ -16,6 +17,7 @@ def heaviside(x):
 class HolzapfelOgden(object):
     def __init__(self, f0, gamma = None, params = None, active_model = "active_strain"):
 
+        assert active_model in ["active_strain", "active_stress"]
         self.f0 = f0
         self.gamma = Constant(0, name="gamma") if gamma is None else gamma
 
@@ -26,7 +28,7 @@ class HolzapfelOgden(object):
         for k,v in params.iteritems():
             setattr(self, k, v)
 
-        self._active_model = 'active_strain'
+        self._active_model = active_model
     
     def default_parameters(self):
         return {"a":0.291, "a_f":2.582, 
@@ -88,28 +90,38 @@ class HolzapfelOgden(object):
                      * (1 + 2.0 * b * pow(I_4 - 1, 2)) \
                      * exp(b * pow(I_4 - 1, 2))
 
-
-    def strain_energy(self, F, p=None, gamma=None):
+    def I1(self, F):
         """
-        Total strain-energy density function.
+        First Isotropic invariant
         """
-
         C = F.T * F
         J = det(F)
         Jm23 = pow(J, -float(2)/3)
+        return  Jm23 * tr(C)
 
-        # Usage of fibers or sheets
-        f0 = self.f0
-        
+    def I4f(self, F):
+        """
+        Quasi invariant in fiber direction
+        """
+        C = F.T * F
+        J = det(F)
+        Jm23 = pow(J, -float(2)/3)
+        return Jm23 * inner(C*self.f0, self.f0) 
+
+
+    def strain_energy(self, F, p=None, gamma=None):
+        """
+        Strain-energy density function.
+        """
+
         # Activation
         gamma = self.gamma
 
         # Invariants
-        I1  = Jm23 * tr(C)
-        I4f =  Jm23 * inner(C*f0, f0) 
+        I1  = self.I1(F)
+        I4f =  self.I4f(F)
 
         
-
         # Active stress model
         if self._active_model == 'active_stress':
             W1   = self.W_1(I1)
@@ -137,156 +149,203 @@ class HolzapfelOgden(object):
         return W
 
 
-
-
-
-def set_ffc_params():
-    #Fast math does not confirm to floating point standard.
-    #It is on now but should be removed if there is any doubt about it's effects.
-
-    flags = ["-O3", "-ffast-math", "-march=native"]
+class LVSolver(object):
     
-    parameters["form_compiler"]["quadrature_degree"] = 4
-    parameters["form_compiler"]["representation"] = "uflacs"
-    parameters["form_compiler"]["cpp_optimize"] = True
-    parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
+    def __init__(self, params):        
 
-class LVSolver(collections.Iterator):
-    """
-    A solver that solves the quasi-static Holzapfel and Ogden Elasticity
-    equations. Can be used with a time loop by calling .next().
-    Or can be used directly by calling .solve().
-    """
-    
-    def __init__(self, parameters):        
+        for k in ["mesh", "facet_function", "material", "bc"]:
+            assert params.has_key(k), \
+              "{} need to be in solver_parameters".format(k)
 
-        self.compressibility = Compressibility.Incompressible(parameters)
-            
-        self.W = self.compressibility.W
-        self.w = self.compressibility.w
-        self.w_test = self.compressibility.w_test
         
-        if hasattr(parameters["bc"]["dirichlet"], '__call__'):
-            self.bcs = parameters["bc"]["dirichlet"](self.W)
-        else:
-            self.bcs = self.make_dirichlet_bcs(parameters)
+        self.parameters = params
+        prm = self.default_solver_parameters(use_snes=True, iterative_solver=False)
+        prm.update(self.parameters["solve"])
+        self.parameters["solve"] = prm
         
-        
-        self.parameters = parameters
-        
+        self._init_spaces()
+        self._init_forms()
 
-        self.R, self.P = self.make_variational_form(parameters)
-        self.J = derivative(self.R, self.w)
-       
-        self.initial_step = True        
+    def default_solver_parameters(self, use_snes=True, iterative_solver=False):
+
+        nsolver = "snes_solver" if use_snes else "newton_solver"
+
+        prm = {"nonlinear_solver": "snes", "snes_solver":{}} if use_snes else {"nonlinear_solver": "newton", "newton_solver":{}}
+
+        prm[nsolver]['absolute_tolerance'] = 1E-5
+        prm[nsolver]['relative_tolerance'] = 1E-5
+        prm[nsolver]['maximum_iterations'] = 8
+        # prm[nsolver]['relaxation_parameter'] = 1.0
+        prm[nsolver]['linear_solver'] = 'lu'
+        prm[nsolver]['error_on_nonconvergence'] = True
+        prm[nsolver]['report'] = True if logger.level < INFO else False
+        if iterative_solver:
+            prm[nsolver]['linear_solver'] = 'gmres'
+            prm[nsolver]['preconditioner'] = 'ilu'
+
+            prm[nsolver]['krylov_solver'] = {}
+            prm[nsolver]['krylov_solver']['absolute_tolerance'] = 1E-9
+            prm[nsolver]['krylov_solver']['relative_tolerance'] = 1E-7
+            prm[nsolver]['krylov_solver']['maximum_iterations'] = 1000
+            prm[nsolver]['krylov_solver']['monitor_convergence'] = False
+            prm[nsolver]['krylov_solver']['nonzero_initial_guess'] = False
+
+            prm[nsolver]['krylov_solver']['gmres'] = {}
+            prm[nsolver]['krylov_solver']['gmres']['restart'] = 40
+
+            prm[nsolver]['krylov_solver']['preconditioner'] = {}
+            prm[nsolver]['krylov_solver']['preconditioner']['structure'] = 'same_nonzero_pattern'
+
+            prm[nsolver]['krylov_solver']['preconditioner']['ilu'] = {}
+            prm[nsolver]['krylov_solver']['preconditioner']['ilu']['fill_level'] = 0
+
+        return prm
+           
         
     def get_displacement(self, name = "displacement", annotate = True):
-        return self.compressibility.get_displacement(name, annotate)
+        return self._compressibility.get_displacement(name, annotate)
+    def get_u(self):
+        if self._W.sub(0).num_sub_spaces() == 0:
+            return self._w
+        else:
+            return split(self._w)[0]
+
+    def get_state(self):
+        return self._w
+
+    def get_state_space(self):
+        return self._W
     
+    def reinit(self, w):
+        self.get_state().assign(w, annotate=False)
+        self._init_forms()
     
+
+    def solve(self):
+       
+        # Get old state in case of non-convergence
+        w_old = self.get_state().copy(True)
+        try:
+            # Try to solve the system
+             solve(self._G == 0,
+                   self._w,
+                   self._bcs,
+                   J = self._dG,
+                   solver_parameters = self.parameters["solve"],
+                   annotate = False)
+
+        except RuntimeError:
+            # Solver did not converge
+            logger.warning("Solver did not converge")
+            # Retrun the old state, and a flag crash = True
+            self.reinit(w_old)
+            return w_old, True
+
+        else:
+            # The solver converged
+
+            # If we are annotating we need to annotate the solve as well
+            if not parameters["adjoint"]["stop_annotating"]:
+                
+                # Solve the system with annotation
+                solve(self._G == 0,
+                      self._w,
+                      self._bcs,
+                      J = self._dG,
+                      solver_parameters = self.parameters["solve"],
+                      annotate = True)
+
+            # Return the new state, crash = False
+            return self._w, False
+
+    def internal_energy(self):
+        return self._pi_int
+
+    def P(self):
+        """First Piola Stress Tensor
+        """
+        return diff(self._pi_int, self._F)
+
+    def S(self):
+        """Second Piola Stress Tensor
+        """
+        return inv(F)*self.P
+
+    def Sigma(self):
+        """Chaucy Stress Tensor
+        """
+        return (1.0/det(self._F))*self.P*inv(self._F.T)
+
+    def _init_spaces(self):
+        self._compressibility = get_compressibility(self.parameters)
+            
+        self._W = self._compressibility.W
+        self._w = self._compressibility.w
+        self._w_test = self._compressibility.w_test
+
+
+    def _init_forms(self):
+
+        material = self.parameters["material"]
+        N =  self.parameters["facet_normal"]
+        ds = Measure("exterior_facet", subdomain_data \
+                     = self.parameters["facet_function"])
+
+        # Displacement
+        u = self._compressibility.get_displacement_variable()
+        # Deformation gradient
+        F = grad(u) + Identity(3)
+        self._F = variable(F)
+        J = det(self._F)
+
+        # Isochoric Right Cauchy Green tensor
+        Cbar = J**(-2.0/3.0)*self._F.T*self._F
         
-    def make_dirichlet_bcs(self, p):
+        # Internal energy
+        self._pi_int = material.strain_energy(F) + self._compressibility(J)      
+        # Internal virtual work
+        self._G = derivative(self._pi_int*dx, self._w, self._w_test)
+
+        # External work
+        v = self._compressibility.u_test
+
+        # Neumann BC
+        if self.parameters["bc"].has_key("neumann"):
+            for neumann_bc in self.parameters["bc"]["neumann"]:
+                p, marker = neumann_bc
+                self._G += inner(J*p*dot(inv(F).T, N), v)*ds(marker)
+        
+        # Robin BC
+        if self.parameters["bc"].has_key("robin"):
+            for robin_bc in self.parameters["bc"]["robin"]:
+                val, marker = robin_bc
+                self._G += -inner(val*u, v)*ds(marker)
+        
+        # Other body forces
+        if self.parameters.has_key("body_force"):
+            self._G += -inner(self.parameters["body_force"], v)*dx
+
+        # Dirichlet BC
+        if self.parameters["bc"].has_key("dirichlet"):
+            if hasattr(self.parameters["bc"]["dirichlet"], '__call__'):
+                self._bcs = self.parameters["bc"]["dirichlet"](self._W)
+            else:
+                self._bcs = self._make_dirichlet_bcs()
+
+        
+        self._dG = derivative(self._G, self._w)
+
+    def _make_dirichlet_bcs(self):
         bcs = []
-        D = self.compressibility.get_displacement_space()
-        for bc_spec in p["bc"]["dirichlet"]:
+        D = self._compressibility.get_displacement_space()
+        for bc_spec in self.parameters["bc"]["dirichlet"]:
             val, marker = bc_spec
             if type(marker) == int:
-                args = [D, val, p["facet_function"], marker]
+                args = [D, val, self.parameters["facet_function"], marker]
             else:
                 args = [D, val, marker]
             bcs.append(DirichletBC(*args))
-        return bcs            
-    
-    def next(self):
-        if self.initial_step:
-            self.initial_step = False
-            return self.w
-        
-        elif self.t < self.parameters["time"]["end"]:
-            should_return = False
-            crashed = False    
-
-            while (not should_return) or crashed:
-                next_dt, should_return = self._set_next_dt(self.dt)
-                self.w, crashed = self._solve_with_step_shortening(next_dt)
-            logger.debug("{}Returning Solution t = {}{}".format(_OKBLUE, self.t, _ENDC))
-            return self.w
-        else:
-            raise StopIteration
-
-    def _set_next_dt(self, dt):
-        should_return = False
-        in_interval = self.solution_times[(self.solution_times > self.t + 1.0e-16) & (self.solution_times <= self.t + dt)]            
-        if in_interval.any():
-            in_interval.sort()
-            dt = in_interval[0] - self.t
-            should_return = True
-
-        if self.t + dt > self.parameters["time"]["end"] and self.t < self.parameters["time"]["end"]:
-            dt = self.parameters["time"]["end"] - self.t
-            should_return = True
-        return dt, should_return
-
-    def solve(self):
-        
-        
-        solve(self.R == 0,
-                self.w,
-                self.bcs,
-                J = self.J,
-                solver_parameters = self.parameters["solve"],
-                annotate = False)
-    
-       
-        if not parameters["adjoint"]["stop_annotating"]:
-            solve(self.R == 0,
-                  self.w,
-                  self.bcs,
-                  J = self.J,
-                  solver_parameters = self.parameters["solve"],
-                  annotate = True)
-        return self.w
-
-    def make_variational_form(self, params):
-
-        material = self.parameters["material"]
-
-        # Displacement
-        u = self.compressibility.get_displacement_variable()
-        # Deformation gradient
-        F = grad(u) + Identity(3)
-        self.F = variable(F)
-        J = det(self.F)
-
-        # Isochoric Right Cauchy Green tensor
-        Cbar = J**(-2.0/3.0)*self.F.T*self.F
-        
-        # Internal energy
-        pi_int = material.strain_energy(F) + self.compressibility(J)
-        
-        Pdx, P = derivative(pi_int*dx, self.w, self.w_test), diff(pi_int, self.F)
-        R = self.add_external_work(Pdx, u, F, J, params)                
-        return R, P
+        return bcs 
 
 
-    def add_external_work(self, pi_int, u, F, J, params):
-        v = self.compressibility.u_test
-        if params.has_key("facet_function"):
-            ds = Measure("exterior_facet", subdomain_data = params["facet_function"])
-        
-        if params["bc"].has_key("Pressure"):
-            N = params["facet_normal"]
-            
-            for pressure_bc in params["bc"]["Pressure"]:
-                p, marker = pressure_bc
-                pi_int += inner(J*p*dot(inv(F).T, N), v)*ds(marker)
-        
-        if params["bc"].has_key("Robin"):
-            for robin_bc in params["bc"]["Robin"]:
-                val, marker = robin_bc
-                pi_int += -inner(val*u, v)*ds(marker)
-        
-        if params.has_key("body_force"):
-            pi_int += -inner(params["body_force"], v)*dx
-        return pi_int
 

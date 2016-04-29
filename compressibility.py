@@ -1,12 +1,37 @@
 from dolfin import *
 from dolfin_adjoint import *
 
+def get_compressibility(parameters):
+
+    if not parameters.has_key("compressibility"):
+        return Compressibility.Incompressible(parameters)
+
+    assert parameters["compressibility"].has_key("type")
+
+    assert parameters["compressibility"]["type"] in \
+      ["incompressible", "stabalized_incompressible", "penalty", "hu_washizu"]
+
+    if parameters["compressibility"]["type"] == "incompressible":
+        return Compressibility.Incompressible(parameters)
+
+    elif parameters["compressibility"]["type"] == "stabalized_incompressible":
+        return Compressibility.StabalizedIncompressible(parameters)
+
+    elif parameters["compressibility"]["type"] == "penalty":
+        return Compressibility.Penalty(parameters)
+    
+    elif parameters["compressibility"]["type"] == "hu_washizu":
+        return Compressibility.HuWashizu(parameters)
+        
+
 class Compressibility(object):
+
     class Incompressible(object):
         def __init__(self, parameters):
             mesh = parameters["mesh"]
-            V_str, Q_str = ("P_2", "P_1") is not parameters.has_key("state_space") \
-              else ["state_space"].split(":")
+            
+            V_str, Q_str = ("P_2", "P_1") if not parameters.has_key("state_space") \
+              else parameters["state_space"].split(":")
 
             # Displacemet Space
             V = VectorFunctionSpace(mesh, V_str.split("_")[0], 
@@ -58,9 +83,13 @@ class Compressibility(object):
         """
         def __init__(self, parameters):
             super(type(self), self).__init__(parameters)
-            self.lamda = Constant(0.0,name = "incomp_penalty")
-            # self.lamda = Constant(parameters["material"]["lambda"],
-                                  # name = "incomp_penalty")
+
+            if parameters["compressibility"].has_key("lambda"):
+                self.lamda = Constant(parameters["compressibility"]["lambda"], name = "incomp_penalty")
+            else:
+                print "Warning: Lambda is not provided. Use Incompressible model"
+                self.lamda = Constant(0.0,name = "incomp_penalty")
+              
                                   
 
         
@@ -72,7 +101,7 @@ class Compressibility(object):
             mesh = parameters["mesh"]
             self.W = VectorFunctionSpace(mesh, "CG", 1)
             self.w = Function(self.W, name = "displacement")    
-            self.lamda = Constant(parameters["material"]["lambda"],
+            self.lamda = Constant(parameters["compressibility"]["lambda"],
                                   name = "incomp_penalty")
             self.w_test = TestFunction(self.W)
             self.u_test = self.w_test
@@ -107,7 +136,7 @@ class Compressibility(object):
             V = VectorFunctionSpace(mesh, "CG", 1)
             self.Q = FunctionSpace(mesh, "DG", 0)
             self.W = MixedFunctionSpace([V, self.Q, self.Q])
-            self.lamda = parameters["material"]["lambda"]
+            self.lamda = parameters["compressibility"]["lambda"]
             self.w_test = TestFunction(self.W)
             self.u_test, self.p_test, self.d_test = split(self.w_test)
             
