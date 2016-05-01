@@ -5,7 +5,7 @@ import yaml
 #from campass.setup_optimization import setup_adjoint_contraction_parameters
 
 filepath= os.path.dirname(os.path.abspath(__file__))
-OUTPATH_REAL = filepath+"/results/real{}/patient_{}/alpha_{}/regpar_{}/{}"
+OUTPATH_REAL = filepath+"/results/real{}/patient_{}/alpha_{}/regpar_{}/{}/{}_{}"
 OUTPATH_SYNTH = filepath+"/results/synthetic_noise_{}/patient_{}/alpha_{}/regpar_{}/{}"
 
 def main():
@@ -31,18 +31,23 @@ def main():
     # Optimization parameters
     
     # Weighting of strain and volume
-    alphas = [0.4]
+    alphas = [0.9]
     #alphas = [i/10.0 for i in range(11)]
     #alphas = [i/100.0 for i in range(11)] + [i/10.0 for i in range(1,11)]
     # Regularization
     #reg_pars = logspace(-10,-1, 10).tolist() + multiply(5, logspace(-10, -1, 10)).tolist()
-    reg_pars = [0.0]
+    reg_pars = [0.01]
     # Weighting of strain and volume for passive phase
     alpha_matparams = [1.0]
 
 
     ### Fixed for all runs ###
     
+    # Compressibility
+    # Possibilities: ["incompressible", "stabalized_incompressible", "penalty", "hu_washizu"]
+    compressibility = "hu_washizu"
+    incompressibility_penalty = 10.0
+
     # Space for contraction parameter
     gamma_space = "CG_1"
     # Use gamma from previous iteration as intial guess
@@ -100,6 +105,8 @@ def main():
         params["alpha_matparams"] = c[6]
 
 
+        params["compressibility"] = compressibility
+        params["incompressibility_penalty"] = incompressibility_penalty
         params["base_spring_k"] = base_spring_k
         params["optimize_matparams"] = optimize_matparams
         params["nonzero_initial_guess"] = nonzero_initial_guess
@@ -116,7 +123,8 @@ def main():
 
         else:
             scalar_str = "_scalar" if gamma_space == "R_0" else ""
-            outdir = OUTPATH_REAL.format(scalar_str, c[0], c[4], c[5], c[1])
+            outdir = OUTPATH_REAL.format(scalar_str, c[0], c[4], c[5], c[1], 
+                                         compressibility, incompressibility_penalty)
 
         # Make directory if it does not allready exist
         if not os.path.exists(outdir):

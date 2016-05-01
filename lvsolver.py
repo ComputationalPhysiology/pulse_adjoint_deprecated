@@ -159,9 +159,20 @@ class LVSolver(object):
 
         
         self.parameters = params
+
+        # Update solver parameters
         prm = self.default_solver_parameters(use_snes=True, iterative_solver=False)
-        prm.update(self.parameters["solve"])
+        
+        for k, v in params["solve"].iteritems():
+            if isinstance(params["solve"][k], dict):
+                for k_sub, v_sub in params["solve"][k].iteritems():
+                    prm[k][k_sub]= v_sub
+
+            else:
+                prm[k] = v
+            
         self.parameters["solve"] = prm
+        
         
         self._init_spaces()
         self._init_forms()

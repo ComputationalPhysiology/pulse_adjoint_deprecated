@@ -79,10 +79,10 @@ def setup_application_parameters():
     params.add("reg_par", REG_PAR)
     params.add("gamma_space", "CG_1", ["CG_1", "R_0"])
     params.add("state_space", "P_2:P_1")
-    params.add("compressibility", "hu_washizu", ["incompressible", 
-                                                                "stabalized_incompressible", 
-                                                                "penalty", "hu_washizu"])
-    params.add("incompressibility_penalty", 1.0)
+    params.add("compressibility", "penalty", ["incompressible", 
+                                                "stabalized_incompressible", 
+                                                "penalty", "hu_washizu"])
+    params.add("incompressibility_penalty", 10.0)
     params.add("use_deintegrated_strains", False)
     params.add("optimize_matparams", False)
     params.add("nonzero_initial_guess", True)
