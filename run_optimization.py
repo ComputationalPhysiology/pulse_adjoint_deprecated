@@ -222,7 +222,7 @@ def solve_oc_problem(params, rd, paramvec):
             max_iter = opt_params["active_maxiter"]
 
         
-        if has_pyipopt and opt_params["method"] = "ipopt":
+        if has_pyipopt and opt_params["method"] == "ipopt":
 
             # Bounds
             lb = np.array([opt_params["matparams_min"]]*nvar)
