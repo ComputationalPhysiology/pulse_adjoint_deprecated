@@ -317,7 +317,7 @@ def solve_oc_problem(params, rd, paramvec):
                 method = opt_params["method"]
 
             kwargs = {"method": method,
-                      "bound":zip(lb,ub),
+                      "bounds":zip(lb,ub),
                       "jac": rd.derivative,
                       "tol":tol,
                       "options": {"disp": opt_params["disp"],
