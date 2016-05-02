@@ -1,4 +1,20 @@
-from patient_data.scripts.data import STRAIN_REGIONS, STRAIN_DIRECTIONS
+#!/usr/bin/env python
+# Copyright (C) 2016 Henrik Finsberg
+#
+# This file is part of CAMPASS.
+#
+# CAMPASS is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# CAMPASS is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
 import os, logging
 import dolfin
 
@@ -113,8 +129,8 @@ MAX_GAMMA = 0.9
 PRESSURE_INC_LIMIT = 0.4
 
 # Optimization method
-DEFAULT_OPTIMIZATION_METHOD = "SLSQP"
-OPTIMIZATION_METHODS = ["TNC", "L-BFGS-B", "SLSQP"]
+DEFAULT_OPTIMIZATION_METHOD = "ipopt"
+OPTIMIZATION_METHODS = ["TNC", "L-BFGS-B", "SLSQP", "ipopt"]
 
 # Optimization tolerance 
 OPTIMIZATION_TOLERANCE_GAMMA = 1.0e-6
@@ -131,6 +147,26 @@ SYNTH_PASSIVE_FILLING = 3
 
 ############### LABELS AND NAMES #####################
 
+STRAIN_REGIONS = {"LVBasalAnterior": 1,
+		  "LVBasalAnteroseptal": 2,
+		  "LVBasalSeptum": 3,
+		  "LVBasalInferior": 4,
+		  "LVBasalPosterior": 5,
+		  "LVBasalLateral": 6,
+		  "LVMidAnterior": 7,
+		  "LVMidAnteroseptal": 8,
+		  "LVMidSeptum": 9,
+		  "LVMidInferior": 10,
+		  "LVMidPosterior": 11,
+		  "LVMidLateral": 12,
+		  "LVApicalAnterior": 13,
+		  "LVApicalSeptum": 14,
+		  "LVApicalInferior": 15,
+		  "LVApicalLateral": 16,
+		  "LVApex": 17}
+
+STRAIN_DIRECTIONS = ["RadialStrain", "LongitudinalStrain", 
+                     "CircumferentialStrain", "AreaStrain"]
 # Strain regions
 STRAIN_REGION_NUMS = STRAIN_REGIONS.values()
 STRAIN_REGION_NUMS.sort()

@@ -1,3 +1,21 @@
+#!/usr/bin/env python
+# Copyright (C) 2016 Henrik Finsberg
+#
+# This file is part of CAMPASS.
+#
+# CAMPASS is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# CAMPASS is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
+
 from setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, initialize_patient_data, save_patient_data_to_simfile
 from run_optimization import run_passive_optimization, run_active_optimization
 from adjoint_contraction_args import *

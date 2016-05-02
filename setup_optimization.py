@@ -1,3 +1,20 @@
+#!/usr/bin/env python
+# Copyright (C) 2016 Henrik Finsberg
+#
+# This file is part of CAMPASS.
+#
+# CAMPASS is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# CAMPASS is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
 from dolfin import *
 from dolfin_adjoint import *
 import numpy as np
@@ -273,13 +290,11 @@ def make_solver_params(params, patient, measurements):
 	'''Make Dirichlet boundary conditions where the base is allowed to slide
         in the x = 0 plane.
         '''
-        
-        
         V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
         no_base_x_tran_bc = DirichletBC(V.sub(0), 0, patient.BASE)
         return [no_base_x_tran_bc]
 	
-    from lvsolver import HolzapfelOgden
+    from material import HolzapfelOgden
 
     matparams = {"a":a, "a_f":a_f, "b":b, "b_f":b_f}
     material = HolzapfelOgden(patient.e_f, gamma, matparams, "active_strain")
