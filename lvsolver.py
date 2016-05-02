@@ -254,9 +254,11 @@ class LVSolver(object):
 
         else:
             # The solver converged
-
+            
             # If we are annotating we need to annotate the solve as well
             if not parameters["adjoint"]["stop_annotating"]:
+
+                self._w.assign(w_old)
                 
                 # Solve the system with annotation
                 solve(self._G == 0,
