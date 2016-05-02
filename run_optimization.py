@@ -313,7 +313,7 @@ def solve_oc_problem(params, rd, paramvec):
             if opt_params["method"] == "ipopt":
                 logger.Warning("Warning: Ipopt is not installed. Use SLSQP")
                 method = "SLSQP"
-            else
+            else:
                 method = opt_params["method"]
 
             kwargs = {"method": method,
