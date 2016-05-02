@@ -9,6 +9,12 @@ from adjoint_contraction_args import *
 from scipy.optimize import minimize as scipy_minimize
 from store_opt_results import write_opt_results_to_h5
 
+try:
+    import pyipopt
+    has_pyipopt = True
+except:
+    has_pyipopt = False
+
 def run_passive_optimization(params, patient):
 
     logger.info(Text.blue("\nRun Passive Optimization"))
@@ -170,41 +176,142 @@ def store(params, rd, opt_controls, opt_result=None):
 def solve_oc_problem(params, rd, paramvec):
 
     paramvec_arr = gather_broadcast(paramvec.vector().array())
+    opt_params = params["Optimization_parmeteres"]
 
     if params["phase"] == PHASES[0] and not params["optimize_matparams"]:
         rd(paramvec_arr)
         store(params, rd, paramvec)
 
     else:
-        
 
-        opt_params = params["Optimization_parmeteres"]
-        kwargs = {"method": opt_params["method"],
-                  "jac": rd.derivative,
-                  "options": {"disp": opt_params["disp"]}
-                  }
+        # Number of control variables
+        nvar = len(paramvec_arr)
 
         if params["phase"] == PHASES[0]:
 
-            kwargs["tol"] = opt_params["passive_opt_tol"]
-            kwargs["bounds"] = [(opt_params["matparams_min"], 
-                                 opt_params["matparams_max"])]*len(paramvec_arr)
-            kwargs["options"]["maxiter"] = opt_params["passive_maxiter"]
+            lb = np.array([opt_params["matparams_min"]]*nvar)
+            ub = np.array([opt_params["matparams_max"]]*nvar)
+
+            tol = opt_params["passive_opt_tol"]
+            max_iter = opt_params["passive_maxiter"]
+
         else:
+                
+            lb = np.array([0.0]*nvar)
+            ub = np.array([opt_params["gamma_max"]]*nvar)
 
-            kwargs["tol"] = opt_params["active_opt_tol"]
-            kwargs["bounds"] = [(0, opt_params["gamma_max"])]*len(paramvec_arr)
-            kwargs["options"]["maxiter"] = opt_params["active_maxiter"]
+            tol= opt_params["active_opt_tol"]
+            max_iter = opt_params["active_maxiter"]
 
-        # Start a timer to measure duration of the optimization
-        t = Timer()
-        t.start()
-        # Solve the optimization problem
-        opt_result = scipy_minimize(rd,paramvec_arr, **kwargs)
-        run_time = t.stop()
-        opt_result["ncrash"] = rd.nr_crashes
-        opt_result["run_time"] = run_time
-        assign_to_vector(paramvec.vector(), opt_result.x)
+        
+        if has_pyipopt:
+
+            # Bounds
+            lb = np.array([opt_params["matparams_min"]]*nvar)
+            ub = np.array([opt_params["matparams_max"]]*nvar)
+ 
+            # No constraits 
+            nconstraints = 0
+            constraints_nnz = nconstraints * nvar
+            empty = np.array([], dtype=float)
+            clb = empty
+            cub = empty
+
+            # The constraint function, should do nothing
+            def fun_g(x, user_data=None):
+                return empty
+
+            # The constraint Jacobian
+            def jac_g(x, flag, user_data=None):
+                if flag:
+                    rows = np.array([], dtype=int)
+                    cols = np.array([], dtype=int)
+                    return (rows, cols)
+                else:
+                    return empty
+
+            J  = rd.__call__
+            dJ = rd.derivative
+
+            
+            nlp = pyipopt.create(nvar,              # number of control variables
+                                 lb,                # lower bounds on control vector
+                                 ub,                # upper bounds on control vector
+                                 nconstraints,      # number of constraints
+                                 clb,               # lower bounds on constraints,
+                                 cub,               # upper bounds on constraints,
+                                 constraints_nnz,   # number of nonzeros in the constraint Jacobian
+                                 0,                 # number of nonzeros in the Hessian
+                                 J,                 # to evaluate the functional
+                                 dJ,                # to evaluate the gradient
+                                 fun_g,             # to evaluate the constraints
+                                 jac_g)             # to evaluate the constraint Jacobian
+
+                                 
+            
+            nlp.num_option('tol', tol)
+            nlp.int_option('max_iter', max_iter)
+            pyipopt.set_loglevel(1)                 # turn off annoying pyipopt logging
+
+            nlp.str_option("print_timing_statistics", "yes")
+            nlp.str_option("warm_start_init_point", "yes")
+
+            print_level = 6 if logger.level < INFO else 4
+
+            if mpi_comm_world().rank > 0:
+                nlp.int_option('print_level', 0)    # disable redundant IPOPT output in parallel
+            else:
+                nlp.int_option('print_level', print_level)    # very useful IPOPT output
+
+            # Do an initial solve to put something in the cache
+            rd(paramvec_arr)
+
+            # Start a timer to measure duration of the optimization
+            t = Timer()
+            t.start()
+
+            # Solve optimization problem with initial guess
+            x, zl, zu, constraint_multipliers, obj, status = nlp.solve(paramvec_arr)
+            
+            run_time = t.stop()
+
+            message_exit_status = {0:"Optimization terminated successfully", 
+                                   -1:"Iteration limit exceeded"}
+            
+            opt_result= {"ncrash":rd.nr_crashes, 
+                         "run_time": run_time, 
+                         "nfev":rd.iter,
+                         "nit":rd.iter,
+                         "njev":rd.nr_der_calls,
+                         "status":status,
+                         "message": message_exit_status[status],
+                         "obj":obj}
+            
+            nlp.close()
+            
+
+        else:
+            
+            kwargs = {"method": opt_params["method"],
+                      "bound":zip(lb,ub),
+                      "jac": rd.derivative,
+                      "tol":tol,
+                      "options": {"disp": opt_params["disp"],
+                                  "maxiter":max_iter}
+                      }
+
+
+            # Start a timer to measure duration of the optimization
+            t = Timer()
+            t.start()
+            # Solve the optimization problem
+            opt_result = scipy_minimize(rd,paramvec_arr, **kwargs)
+            run_time = t.stop()
+            opt_result["ncrash"] = rd.nr_crashes
+            opt_result["run_time"] = run_time
+            x = opt_result.x
+
+        assign_to_vector(paramvec.vector(), x)
 
         
         print_optimization_report(params, rd.paramvec, rd.initial_paramvec,

@@ -23,7 +23,7 @@ def print_optimization_report(params, opt_controls, init_controls,
     if opt_result:
         logger.info("\nOptimization terminated...")
         logger.info("\tExit status {}".format(opt_result["status"]))
-        logger.info("\tSuccess: {}".format(opt_result["success"]))
+        # logger.info("\tSuccess: {}".format(opt_result["success"]))
         logger.info("\tMessage: {}".format(opt_result["message"]))
         logger.info("\tFunction Evaluations: {}".format(opt_result["nfev"]))
         logger.info("\tGradient Evaluations: {}".format(opt_result["njev"]))

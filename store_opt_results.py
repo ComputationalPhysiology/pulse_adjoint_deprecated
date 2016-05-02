@@ -56,9 +56,10 @@ def write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt,
 
                 else:
                     if isinstance(v, np.bool_): v = bool(v)
+                    if isinstance(v, int): v = abs(v)
+
                     h5file.attributes(group)[k] = v
                     
-
 
         # Parameters
         if opt_matparams:
@@ -93,10 +94,6 @@ def write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt,
         # Optimization results
         if opt_result and isinstance(opt_result, dict):
             dump_parameters_to_attributes(opt_result, h5group)
-
-        # Pressure and volume
-        save_data(for_result_opt.lv_pressures, "/lv_pressures")
-        save_data(for_result_opt.volumes, "/volume")
         
 
         # States
@@ -137,6 +134,10 @@ def write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt,
         save_data(ini_for_res.weighted_func_value_volume, "/misfit/weighted_misfit_functional/initial/volume")
         save_data(for_result_opt.weighted_func_value_strain, "/misfit/weighted_misfit_functional/optimal/strain")
         save_data(for_result_opt.weighted_func_value_volume, "/misfit/weighted_misfit_functional/optimal/volume")
+
+        # Pressure and volume
+        save_data(for_result_opt.lv_pressures, "/lv_pressures")
+        save_data(for_result_opt.volumes, "/volume")
 
 
 
