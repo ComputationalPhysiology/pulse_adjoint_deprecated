@@ -126,7 +126,7 @@ def setup_application_parameters():
 def setup_optimization_parameters():
     # Parameters for the Scipy Optimization
     params = Parameters("Optimization_parmeteres")
-    params.add("method", OPTIMIZATION_METHOD)
+    params.add("method", DEFAULT_OPTIMIZATION_METHOD)
     params.add("active_opt_tol", OPTIMIZATION_TOLERANCE_GAMMA)
     params.add("active_maxiter", OPTIMIZATION_MAXITER_GAMMA)
     params.add("passive_opt_tol", OPTIMIZATION_TOLERANCE_MATPARAMS)
