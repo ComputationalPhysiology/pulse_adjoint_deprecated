@@ -12,10 +12,6 @@ In order to simply run the code you need
   -- http://fenicsproject.org
 * Dolfin-Adjoint version >= 1.6
   -- http://www.dolfin-adjoint.org/en/latest/download/index.html
-* hao_solver (Should perhaps make this (at least a basic version) as a part of the repo)
-  -- Solver for the Holzapfel and Odgen material
-  -- git clone git@bitbucket.org:Gabrielbalaban/haosolver.git
-  -- Ask Gabriel for access
 * numpy_mpi (Should perhaps make this as a part of the repo)
   -- Scripts to make in run in parallell
   -- git clone git@bitbucket.org:Gabrielbalaban/numpy_mpi.git
@@ -40,6 +36,10 @@ To get the most out of it you also need
   -- Python visualization library based on matplotlib
   -- Used for plotting and postprocessing
   -- https://stanford.edu/~mwaskom/software/seaborn/
+* IPOPT and pyipot
+  -- Interior Point Optimization algorithm
+  -- This is the best available open-source optimisation algorithm
+  -- see http://www.dolfin-adjoint.org/en/latest/download/index.html#optional-dependencies
 
 ```
 
@@ -59,6 +59,9 @@ There are two important classes to be aware of. One is the HeartProblem class
 located in heart_problem.py which is used as a communicator with the solver.
 The other is the ForwardRunner class which is used to run the forward problem
 and is located in forward_runner.py
+
+The solver in lvsolver.py together with the material and compressibility scripts
+works independently. For an easy demo se tests/test_solver.py
 
 ### Other features ###
 
