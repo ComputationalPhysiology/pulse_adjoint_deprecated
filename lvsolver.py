@@ -20,11 +20,12 @@ from dolfin import *
 from dolfin_adjoint import *
 from compressibility import get_compressibility
 from adjoint_contraction_args import logger
+from copy import deepcopy
 
 
 class LVSolver(object):
     
-    def __init__(self, params):        
+    def __init__(self, params, use_snes = True, iterative_solver = False):        
 
         for k in ["mesh", "facet_function", "material", "bc"]:
             assert params.has_key(k), \
@@ -32,9 +33,11 @@ class LVSolver(object):
 
         
         self.parameters = params
-
+        self.use_snes = use_snes
+        self.iterative_solver = iterative_solver
+        
         # Update solver parameters
-        prm = self.default_solver_parameters(use_snes=True, iterative_solver=False)
+        prm = self.default_solver_parameters()
         
         for k, v in params["solve"].iteritems():
             if isinstance(params["solve"][k], dict):
@@ -50,11 +53,11 @@ class LVSolver(object):
         self._init_spaces()
         self._init_forms()
 
-    def default_solver_parameters(self, use_snes=True, iterative_solver=False):
+    def default_solver_parameters(self):
 
-        nsolver = "snes_solver" if use_snes else "newton_solver"
+        nsolver = "snes_solver" if self.use_snes else "newton_solver"
 
-        prm = {"nonlinear_solver": "snes", "snes_solver":{}} if use_snes else {"nonlinear_solver": "newton", "newton_solver":{}}
+        prm = {"nonlinear_solver": "snes", "snes_solver":{}} if self.use_snes else {"nonlinear_solver": "newton", "newton_solver":{}}
 
         prm[nsolver]['absolute_tolerance'] = 1E-5
         prm[nsolver]['relative_tolerance'] = 1E-5
@@ -63,7 +66,7 @@ class LVSolver(object):
         prm[nsolver]['linear_solver'] = 'lu'
         prm[nsolver]['error_on_nonconvergence'] = True
         prm[nsolver]['report'] = True if logger.level < INFO else False
-        if iterative_solver:
+        if self.iterative_solver:
             prm[nsolver]['linear_solver'] = 'gmres'
             prm[nsolver]['preconditioner'] = 'ilu'
 
@@ -131,14 +134,14 @@ class LVSolver(object):
             # If we are annotating we need to annotate the solve as well
             if not parameters["adjoint"]["stop_annotating"]:
 
+                # Assign the old state
                 self._w.assign(w_old)
-                
                 # Solve the system with annotation
                 solve(self._G == 0,
                       self._w,
                       self._bcs,
                       J = self._dG,
-                      solver_parameters = self.parameters["solve"],
+                      solver_parameters = self.parameters["solve"], 
                       annotate = True)
 
             # Return the new state, crash = False
