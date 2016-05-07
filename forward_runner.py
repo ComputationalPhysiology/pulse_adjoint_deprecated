@@ -182,8 +182,16 @@ class BasicForwardRunner(object):
             # Add regulatization term to the functional
             m = phm.solver.parameters['material'].gamma
 
+            
             if m.ufl_element().family == "Real":
-                reg_term = 0.0
+
+                if m.value_size() > 1:
+                    m_arr = gather_broadcast(m.vector().array())
+                    m_mean = Constant([m_arr.mean()]*17)
+                    reg_term = assemble(inner(m-m_mean, m-m_mean)*dx)
+                    functional += self.reg_par*inner(m-m_mean, m-m_mean))/self.mesh_vol*dx
+                else:    
+                    reg_term = 0.0
             else:
                 reg_term = assemble(self.reg_par*inner(grad(m), grad(m))*dx)
                 functional += self.reg_par*inner(grad(m), grad(m))/self.mesh_vol*dx
