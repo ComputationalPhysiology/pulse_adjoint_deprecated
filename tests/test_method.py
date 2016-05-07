@@ -20,7 +20,7 @@ from campass.run_optimization import run_passive_optimization_step, run_active_o
 from campass.setup_optimization import initialize_patient_data, setup_simulation
 from campass.adjoint_contraction_args import *
 from campass.utils import Text, pformat, passive_inflation_exists
-from test_utils import setup_params, my_taylor_test
+from test_utils import setup_params, my_taylor_test, store_results
 from dolfin_adjoint import replay_dolfin, adj_reset, adj_html
 
 alphas = [0.0, 0.5, 1.0]
@@ -90,6 +90,9 @@ def test_active():
                                              measurements, p_lv, 
                                              gamma)
 
+    # Test that we can store the results
+    store_results(params, rd, gamma)
+
     # Dump html visualization of the forward and adjoint system
     adj_html("active_forward.html", "forward")
     adj_html("active_adjoint.html", "adjoint")
@@ -100,6 +103,7 @@ def test_active():
     # Test that the gradient is correct
     my_taylor_test(rd, gamma)
 
+    
 
     
 

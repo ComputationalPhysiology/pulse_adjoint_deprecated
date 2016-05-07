@@ -129,7 +129,7 @@ MAX_GAMMA = 0.9
 PRESSURE_INC_LIMIT = 0.4
 
 # Optimization method
-DEFAULT_OPTIMIZATION_METHOD = "ipopt"
+DEFAULT_OPTIMIZATION_METHOD = "SLSQP"
 OPTIMIZATION_METHODS = ["TNC", "L-BFGS-B", "SLSQP", "ipopt"]
 
 # Optimization tolerance 

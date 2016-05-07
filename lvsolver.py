@@ -15,17 +15,17 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
-
-from dolfin import *
-from dolfin_adjoint import *
+from dolfinimport import *
 from compressibility import get_compressibility
 from adjoint_contraction_args import logger
 from copy import deepcopy
 
-
 class LVSolver(object):
+    """
+    A Cardiac Mechanics Solver
+    """
     
-    def __init__(self, params, use_snes = True, iterative_solver = False):        
+    def __init__(self, params):        
 
         for k in ["mesh", "facet_function", "material", "bc"]:
             assert params.has_key(k), \
@@ -33,19 +33,29 @@ class LVSolver(object):
 
         
         self.parameters = params
-        self.use_snes = use_snes
-        self.iterative_solver = iterative_solver
-        
-        # Update solver parameters
-        prm = self.default_solver_parameters()
-        
-        for k, v in params["solve"].iteritems():
-            if isinstance(params["solve"][k], dict):
-                for k_sub, v_sub in params["solve"][k].iteritems():
-                    prm[k][k_sub]= v_sub
 
+        # Krylov solvers does not work
+        self.iterative_solver = False
+
+        # Update solver parameters
+        if params.has_key("solve"):
+            if params["solve"].has_key("nonlinear_solver") \
+              and params["solve"]["nonlinear_solver"] == "newton":
+                self.use_snes == False
             else:
-                prm[k] = v
+                self.use_snes = True
+              
+            prm = self.default_solver_parameters()
+
+            for k, v in params["solve"].iteritems():
+                if isinstance(params["solve"][k], dict):
+                    for k_sub, v_sub in params["solve"][k].iteritems():
+                        prm[k][k_sub]= v_sub
+
+                else:
+                    prm[k] = v
+        else:
+            prm = self.default_solver_parameters()
             
         self.parameters["solve"] = prm
         
@@ -97,6 +107,12 @@ class LVSolver(object):
         else:
             return split(self._w)[0]
 
+    def get_gamma(self):
+        return self.parameters["material"].gamma
+
+    def is_incompressible(self):
+        return self._compressibility.is_incompressible()
+
     def get_state(self):
         return self._w
 
@@ -104,12 +120,26 @@ class LVSolver(object):
         return self._W
     
     def reinit(self, w):
+        """
+        *Arguments*
+          w (:py:class:`dolfin.GenericFunction`)
+            The state you want to assign
+
+        Assign given state, and reinitialize variaional form.
+        """
         self.get_state().assign(w, annotate=False)
         self._init_forms()
     
 
     def solve(self):
-       
+        r"""
+        Solve the variational problem
+
+        .. math::
+
+           \delta W = 0
+
+        """
         # Get old state in case of non-convergence
         w_old = self.get_state().copy(True)
         try:
@@ -148,24 +178,151 @@ class LVSolver(object):
             return self._w, False
 
     def internal_energy(self):
+        """
+        Return the total internal energy
+        """
         return self._pi_int
 
-    def P(self):
-        """First Piola Stress Tensor
-        """
-        return diff(self._pi_int, self._F)
+    def first_piola_stress(self):
+        r"""
+        First Piola Stress Tensor
 
-    def S(self):
-        """Second Piola Stress Tensor
-        """
-        return inv(F)*self.P
+        Incompressible:
 
-    def Sigma(self):
-        """Chaucy Stress Tensor
+        .. math::
+
+           \mathbf{P} =  \frac{\partial \psi}{\partial \mathbf{F}} - p\mathbf{F}^T
+
+        Compressible:
+
+        .. math::
+
+           \mathbf{P} = \frac{\partial \psi}{\partial \mathbf{F}}
+        
         """
-        return (1.0/det(self._F))*self.P*inv(self._F.T)
+
+        if self.is_incompressible():
+            p = self._compressibility.p
+            return diff(self._strain_energy, self._F) - p*self._F.T
+        else:
+            return diff(self._strain_energy, self._F)
+
+    def second_piola_stress(self):
+        r"""
+        Second Piola Stress Tensor
+
+        .. math::
+
+           \mathbf{S} =  \mathbf{F}^{-1} \mathbf{P}
+
+        """
+        return inv(self._F)*self.first_piola_stress()
+
+    def chaucy_stress(self):
+        r"""
+        Chaucy Stress Tensor
+
+        Incompressible:
+
+        .. math::
+
+           \sigma = \mathbf{F} \frac{\partial \psi}{\partial \mathbf{F}} - pI
+
+        Compressible:
+
+        .. math::
+
+           \sigma = \mathbf{F} \frac{\partial \psi}{\partial \mathbf{F}}
+        
+        """
+        if self.is_incompressible():
+            p = self._compressibility.p
+            return self._F*diff(self._strain_energy, self._F) - p*self._I 
+        else:
+            J = det(self._F)
+            return J**(-1)*self._F*diff(self._strain_energy, self._F)
+
+    def fiber_stress(self):
+        r"""Compute Fiber stress
+
+        .. math::
+
+           \sigma_{f} = f \cdot \sigma f,
+
+        with :math:`\sigma` being the Chauchy stress tensor
+        and :math:`f` the fiber field on the current configuration
+
+        """
+        # Fibers
+        f0 = self.parameters["material"].f0
+        f = self._F*f0
+
+        return inner(f, self.chaucy_stress()*f)
+
+    def fiber_strain(self):
+        r"""Compute Fiber strain
+
+        .. math::
+
+           \mathbf{E}_{f} = f \cdot \mathbf{E} f,
+
+        with :math:`\mathbf{E}` being the Green-Lagrange strain tensor
+        and :math:`f` the fiber field on the current configuration
+
+        """
+        # Fibers
+        f0 = self.parameters["material"].f0
+        f = self._F*f0
+
+        return inner(f, self._E*f)
+
+    def work(self):
+        r"""
+        Compute Work
+
+        .. math::
+
+           W = \mathbf{S} : \mathbf{E},
+
+        with :math:`\mathbf{E}` being the Green-Lagrange strain tensor
+        and :math:`\mathbf{E}` the second Piola stress tensor
+        """
+        return inner(self._E, self.second_piola_stress())
+        
+    def work_fiber(self):
+        r"""Compute Work in Fiber work
+
+        .. math::
+
+           W = \mathbf{S}_f : \mathbf{E}_f,
+        """
+        
+        # Fibers
+        f0 = self.parameters["material"].f0
+        f = self._F*f0
+
+        Ef = self._E*f
+        Sf = self.second_piola_stress()*f
+        
+        return inner(Ef, Sf)
+
+    def I1(self):
+        """
+        Return first isotropic invariant
+        """
+        return self.parameters["material"].I1(self._F)
+
+    def I4f(self):
+        """
+        Return the quasi-invariant in fiber direction
+        """
+        return self.parameters["material"].I4f(self._F)
 
     def _init_spaces(self):
+        """
+        Initialize function spaces
+        """
+        
         self._compressibility = get_compressibility(self.parameters)
             
         self._W = self._compressibility.W
@@ -174,7 +331,10 @@ class LVSolver(object):
 
 
     def _init_forms(self):
+        r"""
+        Initialize variational form
 
+        """
         material = self.parameters["material"]
         N =  self.parameters["facet_normal"]
         ds = Measure("exterior_facet", subdomain_data \
@@ -182,16 +342,17 @@ class LVSolver(object):
 
         # Displacement
         u = self._compressibility.get_displacement_variable()
+        self._I = Identity(self.parameters["mesh"].topology().dim())
         # Deformation gradient
-        F = grad(u) + Identity(3)
+        F = grad(u) + self._I
         self._F = variable(F)
         J = det(self._F)
-
-        # Isochoric Right Cauchy Green tensor
-        Cbar = J**(-2.0/3.0)*self._F.T*self._F
+        self._C = F.T*F
+        self._E = 0.5*(self._C - self._I)
         
         # Internal energy
-        self._pi_int = material.strain_energy(F) + self._compressibility(J)      
+        self._strain_energy = material.strain_energy(F)
+        self._pi_int = self._strain_energy + self._compressibility(J)      
         # Internal virtual work
         self._G = derivative(self._pi_int*dx, self._w, self._w_test)
 

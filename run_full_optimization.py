@@ -37,7 +37,7 @@ def main(params):
     ############# GET PATIENT DATA ##################
     patient = initialize_patient_data(params["Patient_parameters"], 
                                       params["synth_data"])
-
+      
     # Save mesh and fibers to result file
     save_patient_data_to_simfile(patient, params["sim_file"])
 

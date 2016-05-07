@@ -15,8 +15,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
-from dolfin import *
-from dolfin_adjoint import *
+from dolfinimport import *
 
 def get_compressibility(parameters):
 
@@ -65,6 +64,9 @@ class Compressibility(object):
     
         def __call__(self, J):
             return (J - 1)*self.p
+
+        def is_incompressible(self):
+            return True
         
         def get_displacement_space(self):
             return self.W.sub(0)
@@ -112,6 +114,9 @@ class Compressibility(object):
         
         def __call__(self, J):
             return (J - 1)*self.p + 0.5*self.lamda*(J - 1)**2
+
+        def is_incompressible(self):
+            raise NotImplementedError
        
     class Penalty(object):
         def __init__(self, parameters):
@@ -134,7 +139,10 @@ class Compressibility(object):
         
         def __call__(self, J):
             return self.lamda*(J - 1)**2
-    
+
+        def is_incompressible(self):
+            return False
+
         def calculate_average_volume_ratio(self, w, mesh):
             return assemble(det(grad(w) + Identity(3))*dx)/assemble(1.0*Measure("dx", domain = mesh))
     
@@ -170,6 +178,9 @@ class Compressibility(object):
         def __call__(self, J):
             return (J - self.d)*self.p + self.lamda*ln(self.d)**2
         
+        def is_incompressible(self):
+            raise NotImplementedError
+
         def calculate_average_volume_ratio(self, w, mesh):
             return assemble(det(grad(split(w)[0]) + Identity(3))*dx)/assemble(1.0*Measure("dx", domain = mesh))
         

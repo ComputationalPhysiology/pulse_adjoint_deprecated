@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
 
-from dolfin import *
+from dolfinimport import *
 import numpy as np
 import h5py, yaml, os
 from adjoint_contraction_args import *

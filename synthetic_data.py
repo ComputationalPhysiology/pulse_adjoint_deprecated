@@ -16,9 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
 
-from dolfin import *
-from dolfin_adjoint import *
-
+from dolfinimport import *
 import numpy as np
 
 from run_optimization import run_active_optimization, run_passive_optimization

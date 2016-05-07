@@ -16,8 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
 
-from dolfin import *
-from dolfin_adjoint import *
+from dolfinimport import *
 from setup_optimization import setup_simulation, logger, MyReducedFunctional
 from utils import Text, Object, pformat, print_optimization_report, contract_point_exists, get_spaces
 from forward_runner import ActiveForwardRunner, PassiveForwardRunner
@@ -52,9 +51,6 @@ def run_passive_optimization(params, patient):
 
 def run_passive_optimization_step(params, patient, solver_parameters, measurements, p_lv, paramvec):
     
-
-    
-
     mesh = solver_parameters["mesh"]
     spaces = get_spaces(mesh)
     crl_basis = (patient.e_circ, patient.e_rad, patient.e_long)
@@ -134,7 +130,15 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     #Get initial guess for gamma
     if not params["nonzero_initial_guess"] or params["active_contraction_iteration_number"] == 0:
         # Use zero initial guess
-        gamma.assign(Constant(0.0))
+        # from IPython import embed; embed()
+        # exit()
+        # gamma.assign(Constant(0.0))
+        # from IPython import embed; embed()
+        zero = Constant(0.0) if gamma.value_size() == 1 \
+          else Constant([0.0]*gamma.value_size())
+
+        gamma.assign(zero)
+       
     else:
         # Use gamma from the previous point as initial guess
         # Load gamma from previous point

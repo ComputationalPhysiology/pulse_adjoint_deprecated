@@ -18,8 +18,7 @@
 
 from heart_problem import PassiveHeartProblem, ActiveHeartProblem
 from setup_optimization import RealValueProjector
-from dolfin import *
-from dolfin_adjoint import *
+from dolfinimport import *
 from adjoint_contraction_args import *
 import numpy as np
 from numpy_mpi import *
@@ -182,6 +181,7 @@ class BasicForwardRunner(object):
         if phase == "active":
             # Add regulatization term to the functional
             m = phm.solver.parameters['material'].gamma
+
             if m.ufl_element().family == "Real":
                 reg_term = 0.0
             else:
@@ -373,7 +373,7 @@ class ActiveForwardRunner(BasicForwardRunner):
             # Try to step up gamma to the given one
             logger.debug("Try to step up gamma")
             w_old = self.cphm.get_state()
-            gamma_old = self.gamma_previous.copy(True)
+            gamma_old = self.gamma_previous.copy()
             self.cphm.next_active(m, self.gamma_previous.copy())
 	    
         except StopIteration:
@@ -406,9 +406,7 @@ class ActiveForwardRunner(BasicForwardRunner):
             # Assign the old state
             self.cphm.solver.get_state().assign(w_old, annotate=annotate)
             # Assign the old gamma
-            m.assign(gamma_old)
-            self.cphm.solver.parameters['material'].gamma.assign(gamma_old)
-            self.solver_parameters['material'].gamma.assign(gamma_old)
+            self.cphm.solver.parameters['material'].gamma.assign(m)
             self.gamma_previous.assign(gamma_old)
 
             # Solve the forward problem with the old gamma
@@ -432,7 +430,6 @@ class ActiveForwardRunner(BasicForwardRunner):
 
             # Now we make the final solve
             self.cphm.solver.parameters['material'].gamma.assign(m)
-            self.solver_parameters['material'].gamma.assign(m)
             self.gamma_previous.assign(m)
 
             logger.debug("Solve the forward problem with the new gamma")
@@ -451,8 +448,8 @@ class PassiveForwardRunner(BasicForwardRunner):
         self.alpha = params["alpha_matparams"]
         self.paramvec = paramvec
         BasicForwardRunner.__init__(self, solver_parameters, p_lv, 
-                                    target_data, endo_lv_marker,
-                                    crl_basis, params, spaces)
+                                   target_data, endo_lv_marker,
+                                   crl_basis, params, spaces)
 
     def __call__(self, m, annotate = False, phm=None):
 
@@ -470,7 +467,6 @@ class PassiveForwardRunner(BasicForwardRunner):
                                   self.p_lv, self.endo_lv_marker, 
                                   self.crl_basis, self.spaces)
 
-    
         
         forward_result = BasicForwardRunner.solve_the_forward_problem(self, annotate, phm, "passive")
 

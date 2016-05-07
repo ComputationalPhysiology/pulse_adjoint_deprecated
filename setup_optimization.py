@@ -15,8 +15,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
-from dolfin import *
-from dolfin_adjoint import *
+from dolfinimport import *
 import numpy as np
 from utils import Object, Text
 from adjoint_contraction_args import *
@@ -94,7 +93,7 @@ def setup_application_parameters():
     params.add("alpha", ALPHA)
     params.add("base_spring_k", BASE_K)
     params.add("reg_par", REG_PAR)
-    params.add("gamma_space", "CG_1", ["CG_1", "R_0"])
+    params.add("gamma_space", "regional", ["CG_1", "R_0", "regional"])
     params.add("state_space", "P_2:P_1")
     params.add("compressibility", "incompressible", ["incompressible", 
                                                      "stabalized_incompressible", 
@@ -269,8 +268,13 @@ def make_solver_params(params, patient, measurements):
     a,a_f,b,b_f = split(paramvec)
 
     # Contraction parameter
-    gamma_family, gamma_degree = params["gamma_space"].split("_")
-    gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
+    if params["gamma_space"] == "regional":
+        # gamma = RegionalGamma(patient.strain_markers)
+        gamma_space = VectorFunctionSpace(patient.mesh, "R", 0, dim = 17)
+    else:
+        gamma_family, gamma_degree = params["gamma_space"].split("_")
+        gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
+
     gamma = Function(gamma_space, name = 'activation parameter')
 
 
@@ -297,7 +301,7 @@ def make_solver_params(params, patient, measurements):
     from material import HolzapfelOgden
 
     matparams = {"a":a, "a_f":a_f, "b":b, "b_f":b_f}
-    material = HolzapfelOgden(patient.e_f, gamma, matparams, "active_strain")
+    material = HolzapfelOgden(patient.e_f, gamma, matparams, "active_strain", patient.strain_markers)
     
     solver_parameters = {"mesh": patient.mesh,
                          "facet_function": patient.facets_markers,
@@ -441,7 +445,6 @@ class MyReducedFunctional(ReducedFunctional):
         self.paramvec = paramvec
         self.first_call = True
         self.scale = scale
-        self.big_value = 100
         self.nr_crashes = 0
         self.iter = 0
         self.nr_der_calls = 0
@@ -451,13 +454,15 @@ class MyReducedFunctional(ReducedFunctional):
         adj_reset()
         self.iter += 1
 
-
+        
         paramvec_new = Function(self.paramvec.function_space(), name = "new control")
-
+            
+        
         if isinstance(value, Function):
             paramvec_new.assign(value)
         else:
             assign_to_vector(paramvec_new.vector(), value)
+
     
         logger.debug(Text.yellow("Start annotating"))
         parameters["adjoint"]["stop_annotating"] = False
@@ -472,7 +477,11 @@ class MyReducedFunctional(ReducedFunctional):
             self.first_call = False
             logger.info("Iter\tI_tot\t\tI_vol\t\tI_strain\tI_reg")
 	 
-        ReducedFunctional.__init__(self, Functional(self.for_res.total_functional), Control(self.paramvec))
+        
+        control = Control(self.paramvec)
+            
+
+        ReducedFunctional.__init__(self, Functional(self.for_res.total_functional), control)
 
         if crash:
             # This exection is thrown if the solver uses more than x times.
@@ -480,8 +489,7 @@ class MyReducedFunctional(ReducedFunctional):
             logger.warning(Text.red("Iteration limit exceeded. Return a large value of the functional"))
             # Return a big value, and make sure to increment the big value so the 
             # the next big value is different from the current one. 
-            func_value = self.big_value
-            self.big_value += 100
+            func_value = np.inf
             self.nr_crashes += 1
     
         else:
@@ -535,12 +543,163 @@ class RealValueProjector(object):
 
         return real_function
 
-    # def project_volume_diff(self, expr, measure, real_function):
-        
-    #     solve((self.u_trial*self.v_test)*dx == \
-    #           self.v_test*expr*measure,real_function)
+class RegionalGamma(object):
+    """
+    A class for constructing a regional gamma,
+    with one value per segement
+    """
+    __name__="RegionalGamma"
+    def __init__(self, strain_markers, name = "Regional_gamma_coeffs"):
+        """Make regional gamma
+        *Arguments*
+          strain_markers (dolfin:Meshfunction)
+            Meshfunction with strain regions.
+            There is assumed to be 17, with markers
+            from 1 to 17.
+          
+        """  
+        assert isinstance(strain_markers, MeshFunctionSizet), \
+          "Strain markers must be a dolfin MeshFunction size_t"
+        assert set(strain_markers.array()) == set(range(1,18)), \
+          "Strain markers must be integers starting from 1, and ending at 17, with one increment" 
 
-    #     return real_function
-
         
+        self._meshfunction = strain_markers
+        self._mesh = strain_markers.mesh()
+
+
+        # Functionspace for the indicator functions
+        self._IndSpace = FunctionSpace(strain_markers.mesh(), "DG", 0)
+        # Functionspace for the coefficents
+        self._CoeffSpace = VectorFunctionSpace(self._mesh, "R", 0, dim = 17)
+
+        # The coefficents
+        self._coeffs = Function(self._CoeffSpace, name = name)
+
+        # Make indicator functions
+        self._ind_functions = []
+        for i in range(1,18):
+            self._ind_functions.append(self._make_indicator_function(i))
+
+    def get_coefficients(self):
+        return self._coeffs
+
+    def get_meshfunction(self):
+        return self._meshfunction
+
+    def function_space(self):
+        return self._CoeffSpace
+
+    def vector(self):
+        return self._coeffs.vector()
+
+    def assign(self, vals, annotate = None):
+        """
+        Assign new coefficents. 
+        Note if vals is used as cotrols you
+        should use the function set.
+
+        *Arguments*
+          vals (list or np.array)
+            The value of gamma on all the 17 regions.
+        """
+
+        annotate = annotate if annotate is not None \
+          else not parameters["adjoint"]["stop_annotating"]
+        
+        if isinstance(vals, np.ndarray) or isinstance(vals, list):
+
+            assert len(vals) == 17, \
+              "Number of gamma_values must be 17. Number of given gamma_values are {}".format(len(gamma_values))
+              
+            coeffs = Function(self._CoeffSpace)
+            for i, v in enumerate(vals):
+                coeffs.vector()[i] = v
+
+            self._coeffs.assign(coeffs, annotate = annotate)
+
+        elif isinstance(vals, dolfin.Function):
+            self._coeffs.assign(vals, annotate = annotate)
+
+        elif isinstance(vals, dolfin.Constant):
+            val = float(vals)
+            coeffs = Function(self._CoeffSpace)
+            for i in range(17):
+                coeffs.vector()[i] = val
+
+            self._coeffs.assign(coeffs, annotate = annotate)
+
+        elif isinstance(vals, RegionalGamma):
+            self._coeffs.assign(vals.get_coefficients(), annotate = annotate)
+
+        else:
+            
+            raise ValueError("Unknown type {} for function assignment".format(type(vals)))
+            
+    def set(self, gamma):
+        """
+        Set gamma to the coeffiecients
+        Note, this is not an assignement but
+        rater using the given gamma as coefficients.
+        If given gamma is used by dolfin-adjoint
+        this function must be used to set gamma. 
+        """
+
+        assert isinstance(gamma, dolfin.Function) or \
+          isinstance(gamma, dolfin.Constant)
+
+        self._coeffs = gamma
+
+    def copy(self, *args):
+        
+        return self._coeffs.copy(*args)
+
+    def plot(self, V_str = "DG_0"):
+        """
+        Plot the regional gamma, by
+        first projecting it down to a 
+        suitable space given by V_str
+        """
+        
+        f = self.get_function()
+        family, degree = V_str.split("_")
+        V = FunctionSpace(self._mesh, family, int(degree))
+        fun = project(f, V)
+        plot(fun, interactive = True)
+
+    def get_function(self):
+        """
+        Return linear combination of coefficents
+        and basis functions, and project the 
+        sum to the given functionspace. 
+
+        *Returns*
+           fun (dolfin.Function)
+             A function with gamma values at each segment
+             
+        """
+        return self._sum()
+        
+
+
+                
+
+    def _make_indicator_function(self, marker):
+        dm = self._IndSpace.dofmap()
+        cell_dofs = [dm.cell_dofs(i) for i in
+                     np.where(self._meshfunction.array() == marker)[0]]
+        dofs = np.unique(np.array(cell_dofs))
+        
+        f = Function(self._IndSpace)
+        f.vector()[dofs] = 1.0    
+        return f  
+
+    def _sum(self):
+        coeffs = split(self._coeffs)
+        fun = coeffs[0]*self._ind_functions[0]
+
+        for c,f in zip(coeffs[1:], self._ind_functions[1:]):
+            fun += c*f
+
+        return fun
     

@@ -69,3 +69,13 @@ def my_taylor_test(Jhat, m0_fun):
     logger.info("{}".format(con_ord))
     
     assert (np.array(con_ord) > 1.9).all()
+
+
+def store_results(params, rd, gamma):
+    from campass.store_opt_results import write_opt_results_to_h5
+    h5group =  ACTIVE_CONTRACTION_GROUP.format(0.5, 0)
+
+    rd(gamma)
+    
+    write_opt_results_to_h5(h5group, params, rd.ini_for_res, 
+                            rd.for_res, opt_gamma = gamma)

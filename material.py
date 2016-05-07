@@ -16,9 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
 
-from dolfin import *
-from dolfin_adjoint import *
-
+from dolfinimport import *
 
 def subplus(x):
     return conditional(ge(x, 0.0), x, 0.0)
@@ -28,10 +26,11 @@ def heaviside(x):
 
 
 class HolzapfelOgden(object):
-    def __init__(self, f0, gamma = None, params = None, active_model = "active_strain"):
+    def __init__(self, f0 = None, gamma = None, params = None, active_model = "active_strain", strain_markers = None):
 
         assert active_model in ["active_strain", "active_stress"]
         self.f0 = f0
+        self.strain_markers = strain_markers
         self.gamma = Constant(0, name="gamma") if gamma is None else gamma
 
         
@@ -117,6 +116,9 @@ class HolzapfelOgden(object):
         """
         Quasi invariant in fiber direction
         """
+        if self.f0 is None:
+            return Constant(0.0)
+
         C = F.T * F
         J = det(F)
         Jm23 = pow(J, -float(2)/3)
@@ -128,8 +130,17 @@ class HolzapfelOgden(object):
         Strain-energy density function.
         """
 
+     
         # Activation
-        gamma = self.gamma
+        if self.gamma.value_size() == 17:
+            from setup_optimization import RegionalGamma
+            assert self.strain_markers is not None, \
+              "Provide strain markers is using regional gamma"
+            RG = RegionalGamma(self.strain_markers)
+            RG.set(self.gamma)
+            gamma = RG.get_function()
+        else:
+            gamma = self.gamma
 
         # Invariants
         I1  = self.I1(F)
@@ -162,89 +173,4 @@ class HolzapfelOgden(object):
 
         return W
 
-
-
-
-class Guccione(object):
-    """FIXME:"""
-    def __init__(self, **params):
-        params = params or {}
-        self._parameters = self.default_parameters()
-        self._parameters.update(params)
-
-    @staticmethod
-    def default_parameters():
-        p = { 'C': 2.0,
-              'bf': 8.0,
-              'bt': 2.0,
-              'bfs': 4.0,
-              'e1': None,
-              'e2': None,
-              'e3': None,
-              'Tactive': None }
-        return p
-
-    def is_isotropic(self):
-        """
-        Return True if the material is isotropic.
-        """
-        p = self._parameters
-        return p['bt'] == 1.0 and p['bf'] == 1.0 and p['bfs'] == 1.0
-
-    def is_incompressible(self):
-        """
-        Return True if the material is incompressible.
-        """
-        return self._parameters['kappa'] is None
-
-    def strain_energy(self, F):
-        """
-        UFL form of the strain energy.
-        """
-        params = self._parameters
-
-        I = Identity(3)
-        J = det(F)
-        C = pow(J, -float(2)/3) * F.T*F
-        E = 0.5*(C - I)
-
-        CC  = Constant(params['C'], name='C')
-        if self.is_isotropic():
-            # isotropic case
-            Q = inner(E, E)
-        else:
-            # fully anisotropic
-            bt  = Constant(params['bt'], name='bt')
-            bf  = Constant(params['bf'], name='bf')
-            bfs = Constant(params['bfs'], name='bfs')
-
-            e1 = params['e1']
-            e2 = params['e2']
-            e3 = params['e3']
-
-            E11, E12, E13 = inner(E*e1, e1), inner(E*e1, e2), inner(E*e1, e3)
-            E21, E22, E23 = inner(E*e2, e1), inner(E*e2, e2), inner(E*e2, e3)
-            E31, E32, E33 = inner(E*e3, e1), inner(E*e3, e2), inner(E*e3, e3)
-
-            Q = bf*E11**2 + bt*(E22**2 + E33**2 + E23**2 + E32**2) \
-              + bfs*(E12**2 + E21**2 + E13**2 + E31**2)
-
-        # passive strain energy
-        Wpassive = CC/2.0 * (exp(Q) - 1)
-
-        # active strain energy
-        if params['Tactive'] is not None:
-            self.Tactive = Constant(params['Tactive'], name='Tactive')
-            I4 = inner(C*e1, e1)
-            Wactive = self.Tactive/2.0 * (I4 - 1)
-        else:
-            Wactive = 0.0
-        
-        return Wpassive + Wactive
-
-    def set_active_stress(self, value):
-        self.Tactive.assign(value)
-
-    def get_active_stress(self):
-        return float(self.Tactive)
 

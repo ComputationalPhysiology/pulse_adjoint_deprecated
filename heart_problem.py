@@ -15,9 +15,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
-
-from dolfin import *
-from dolfin_adjoint import *
+from dolfinimport import *
 from adjoint_contraction_args import *
 import math
 import numpy as np
@@ -26,12 +24,9 @@ from utils import Text
 import collections
 from lvsolver import LVSolver
 
-
-
 class BasicHeartProblem(collections.Iterator):
     """
-    Runs a biventricular simulation of the diastolic phase of the cardiac
-    cycle. The simulation is driven by LV and RV pressures and is quasi-static.
+    This is a basic class for the heart problem.
     """
     def __init__(self, pressure, solver_parameters, p_lv, 
                  endo_lv_marker, crl_basis, spaces):
@@ -44,27 +39,29 @@ class BasicHeartProblem(collections.Iterator):
         #Objects needed for Volume calculation
         self._init_strain_functions(spaces)
         
+        # Basis function in the circumferential, 
+        # radial and longitudinal direction
         self.crl_basis = crl_basis
 
         # Mechanical solver Active strain Holzapfel and Ogden
         self.solver = LVSolver(solver_parameters)
         
+        # Start with the first pressure
         self.p_lv.t = self.pressure[0]
-     
-	
-    
-    def next(self):
 
-        out = self.increase_pressure()
-        strains = self.project_to_strains(self.u)
-        
-        return out, strains
 
     def increase_pressure(self):
+        """
+        Step up the pressure to the next given
+        pressure and solve the force-balance equations
+        """
         p_next = self.pressure_gen.next()
-        p_prev = self.p_lv.t 
+        p_prev = self.p_lv.t
+
         p_diff = abs(p_next - p_prev)
-        
+        if p_diff < DOLFIN_EPS:
+            return self.solver.solve()[0]
+
         logger.debug("Increase pressure:  previous   next")
         logger.debug("\t            {:.3f}     {:.3f}".format(p_prev, p_next))
 
@@ -102,23 +99,17 @@ class BasicHeartProblem(collections.Iterator):
         return out
     
     def get_state(self):
+        """
+        Return a copy of the state
+        """
         return self.solver.get_state().copy(True)
 
-    def project_to_strains(self, u):
-        gradu = grad(u)
-        grad_u_diag = as_vector([inner(e,gradu*e) for e in self.crl_basis])
-
-        
-        solve(inner(self.strainfield_u, self.strainfield_v)*self.dx == inner(self.strainfield_v, grad_u_diag)*self.dx,self.strainfield)
     
-        for i in STRAIN_REGION_NUMS:
-            solve(inner(self.strain_u, self.strain_v)*self.dx(i) == \
-                  inner(self.strain_v, grad_u_diag)*self.dx(i), \
-                  self.strains[i - 1])
-
-        return self.strains
 
     def get_inner_cavity_volume(self):
+        """
+        Return the volume of left ventricular chamber
+        """
         return assemble(self.vol_form)
 
     def _init_pressures(self, pressure, p_lv):
@@ -128,6 +119,9 @@ class BasicHeartProblem(collections.Iterator):
         
 
     def _init_strain_functions(self, spaces):
+        """
+        Initialze spaces and functions used for strain calculations
+        """
         
         
         self.strainfieldspace = spaces.strainfieldspace
@@ -145,13 +139,16 @@ class BasicHeartProblem(collections.Iterator):
         
        
     def _init_measures_and_markers(self, endo_lv_marker, solver_parameters):
+        """
+        Load mesh, measures and boundary markers
+        """
         # Boundary markers
         ffun = solver_parameters["facet_function"]
         # Mesh
         self.mesh = solver_parameters["mesh"]
         # Surface measure
         self.ds = Measure("exterior_facet", subdomain_data = ffun, domain = self.mesh)(endo_lv_marker)
-        # Volume measure
+        # Volume measure, with each index corresponding to a strain region
         self.dx = Measure("dx", subdomain_data = solver_parameters["mesh_function"],
                                 domain = solver_parameters["mesh"])
         
@@ -159,6 +156,9 @@ class BasicHeartProblem(collections.Iterator):
         
 
     def _init_volume_forms(self):
+        """
+        UFL form form computing inner cavity volume
+        """
         # Reference coordinates
         X = SpatialCoordinate(self.mesh)
 
@@ -176,6 +176,37 @@ class BasicHeartProblem(collections.Iterator):
         self.vol = (-1.0/3.0)*dot(X + self.u, J*inv(F).T*N)
         self.vol_form = self.vol*self.ds
 
+    def project_to_strains(self, u):
+        """
+        In order for dolfin-adjoint to record that the
+        strain functional changes during the opimization, 
+        we need to solve an eaqation that makes the recording. 
+        """
+
+        # Take of the correct components of the displacement gradient
+        gradu = grad(u)
+        grad_u_diag = as_vector([inner(e,gradu*e) for e in self.crl_basis])
+
+        # Solve for the strain fields
+        solve(inner(self.strainfield_u, self.strainfield_v)*self.dx == inner(self.strainfield_v, grad_u_diag)*self.dx,self.strainfield)
+    
+        # Solve for the regional strains
+        for i in STRAIN_REGION_NUMS:
+            solve(inner(self.strain_u, self.strain_v)*self.dx(i) == \
+                  inner(self.strain_v, grad_u_diag)*self.dx(i), \
+                  self.strains[i - 1])
+
+        return self.strains
+
+    def next(self):
+        """
+        Solve the system as it is
+        """
+        out = self.solver.solve()
+	
+        strains = self.project_to_strains(self.u)
+        return out, strains
+
 
 
 def get_mean(f):
@@ -186,6 +217,7 @@ def get_max(f):
     return gather_broadcast(f.vector().array()).max()
 
 def get_max_diff(f1,f2):
+
     diff = f1.vector() - f2.vector()
     diff.abs()
     return diff.max()
@@ -270,6 +302,9 @@ class SyntheticHeartProblem(BasicHeartProblem):
 
 
 class ActiveHeartProblem(BasicHeartProblem):
+    """
+    A heart problem for the regional contracting gamma.
+    """
     def __init__(self,
                  pressure,
                  solver_parameters,
@@ -280,9 +315,7 @@ class ActiveHeartProblem(BasicHeartProblem):
                  passive_filling_duration, 
                  params,
                  annotate = False):
-        '''
-        A pressure heart model for the regional contracting gamma.
-        '''            
+                   
         
 
         self.alpha = params["alpha"]
@@ -293,7 +326,7 @@ class ActiveHeartProblem(BasicHeartProblem):
         BasicHeartProblem.__init__(self, pressure, solver_parameters, p_lv, 
                                     endo_lv_marker, crl_basis, spaces)
 
-
+        # Load the state from the previous iteration
         w_temp = Function(self.solver.get_state_space(), name = "w_temp")
         with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
         
@@ -310,18 +343,11 @@ class ActiveHeartProblem(BasicHeartProblem):
         self.solver.get_state().assign(w_temp, annotate = annotate)
         BasicHeartProblem._init_volume_forms(self)
        
-    def next(self):
-        out = self.solver.solve()
-	
-        strains = self.project_to_strains(self.u)
-        return out, strains
-
-    
-   
-    
-        
     
     def next_active(self, gamma_current, g_prev):
+        """
+        Step up gamma iteratively.
+        """
 
         max_diff = get_max_diff(gamma_current, g_prev)
         nr_steps = max(2, int(math.ceil(max_diff/GAMMA_INC_LIMIT)))
@@ -333,29 +359,21 @@ class ActiveHeartProblem(BasicHeartProblem):
         logger.debug("\tNext      {:.3f}  {:.3f} ".format(get_mean(gamma_current), 
                                                           get_max(gamma_current)))
 
+        # Step size for gamma
         dg = Function(g_prev.function_space(), name = "dg")
         dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] - g_prev.vector()[:])
 
-
-        # from IPython import embed; embed()
-        
-        # V = FunctionSpace(self.mesh, "CG", 1)
-        #
-        # g = Function(V, name = "g")
+        # Gamma the will be used in the iteration
         g = Function(g_prev.function_space(), name = "g")
-        # g.assign(g_prev)
-        g.vector()[:] = g_prev.vector()[:]
+        g.assign(g_prev)
 
-        # Store the old stuff
-        w_old = self.get_state()
+        # Keep the old gamma
         g_old = g_prev.copy()
         
-
-        idx = 1
         done = False
         finished_stepping = False
              
-        # If the solver crashes n times it is possibly stuck
+        # If the solver crashes n times it is probably stuck
         MAX_NR_CRASH = 5
         nr_crashes = 0
         
@@ -367,7 +385,6 @@ class ActiveHeartProblem(BasicHeartProblem):
 
                 if nr_crashes > MAX_NR_CRASH:
                     self.solver.parameters['material'].gamma.assign(g_old)
-                    # self.solver.get_state().assign(w_old)
                     raise StopIteration("Iteration have chrashed too many times")
 
                 
@@ -379,12 +396,11 @@ class ActiveHeartProblem(BasicHeartProblem):
                     # Assing the new gamma
                     self.solver.parameters['material'].gamma.assign(g)
                         
-                    # try:
+
                     # Try to solve
                     logger.debug("\t{:.3f} \t{:.3f}".format(get_mean(g), get_max(g)))
                     out, crash = self.solver.solve()
 
-                    # except RuntimeError as ex:
                     if crash:
                         # If that does not work increase the number of steps
                         logger.warning("Solver crashed. Reduce gamma step")
@@ -400,9 +416,8 @@ class ActiveHeartProblem(BasicHeartProblem):
                         break
 
                     else:
-                        g_prev.assign(g.copy(True))
+                        g_prev.assign(g.copy())
                         
-                        idx += 1
                         
                 if i == nr_steps-1:
                     finished_stepping = True
@@ -415,11 +430,11 @@ class ActiveHeartProblem(BasicHeartProblem):
 
             self.solver.parameters['material'].gamma.assign(gamma_current)
             
-            # try:
+            
             logger.debug("\t{:.3f} \t{:.3f}".format(get_mean(gamma_current), 
                                                        get_max(gamma_current)))
             out, crash = self.solver.solve()
-            # except RuntimeError:
+            
             if crash:
                 nr_steps *= 2
                 logger.warning("\tFinal solve-step crashed. Reduce gamma step")
@@ -434,9 +449,6 @@ class ActiveHeartProblem(BasicHeartProblem):
                 self.solver.parameters['material'].gamma.assign(g_prev)
               
                 done = True
-                
-        
-
 
         return out
 
@@ -444,6 +456,10 @@ class ActiveHeartProblem(BasicHeartProblem):
 
 
 class PassiveHeartProblem(BasicHeartProblem):
+    """
+    Runs a biventricular simulation of the diastolic phase of the cardiac
+    cycle. The simulation is driven by LV pressures and is quasi-static.
+    """
     def __init__(self, pressure, solver_parameters, p_lv, 
                  endo_lv_marker, crl_basis, spaces):
        
@@ -451,6 +467,15 @@ class PassiveHeartProblem(BasicHeartProblem):
                                     endo_lv_marker, crl_basis, spaces)
 
         BasicHeartProblem._init_volume_forms(self)
+        
+    def next(self):
+        """
+        Increase the pressure and solve the system
+        """
+        out = self.increase_pressure()
+        strains = self.project_to_strains(self.u)
+        
+        return out, strains
 
 
 
