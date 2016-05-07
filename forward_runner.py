@@ -189,7 +189,7 @@ class BasicForwardRunner(object):
                     m_arr = gather_broadcast(m.vector().array())
                     m_mean = Constant([m_arr.mean()]*17)
                     reg_term = assemble(inner(m-m_mean, m-m_mean)*dx)
-                    functional += self.reg_par*inner(m-m_mean, m-m_mean))/self.mesh_vol*dx
+                    functional += self.reg_par*inner(m-m_mean, m-m_mean)/self.mesh_vol*dx
                 else:    
                     reg_term = 0.0
             else:

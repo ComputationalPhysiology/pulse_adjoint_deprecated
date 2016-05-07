@@ -560,7 +560,9 @@ class RegionalGamma(object):
         """  
         assert isinstance(strain_markers, MeshFunctionSizet), \
           "Strain markers must be a dolfin MeshFunction size_t"
-        assert set(strain_markers.array()) == set(range(1,18)), \
+
+        strain_markers_arr = gather_broadcast(strain_markers.array())
+        assert set(strain_markers_arr) == set(range(1,18)), \
           "Strain markers must be integers starting from 1, and ending at 17, with one increment" 
 
         
