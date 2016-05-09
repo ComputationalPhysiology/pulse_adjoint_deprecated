@@ -93,6 +93,7 @@ def setup_application_parameters():
     params.add("alpha", ALPHA)
     params.add("base_spring_k", BASE_K)
     params.add("reg_par", REG_PAR)
+    params.add("active_model", "active_strain")
     params.add("gamma_space", "regional", ["CG_1", "R_0", "regional"])
     params.add("state_space", "P_2:P_1")
     params.add("compressibility", "incompressible", ["incompressible", 
@@ -102,7 +103,7 @@ def setup_application_parameters():
     params.add("use_deintegrated_strains", False)
     params.add("optimize_matparams", True)
     params.add("nonzero_initial_guess", True)
-
+    
     params.add("synth_data", False)
     params.add("noise", False)
     
@@ -301,7 +302,7 @@ def make_solver_params(params, patient, measurements):
     from material import HolzapfelOgden
 
     matparams = {"a":a, "a_f":a_f, "b":b, "b_f":b_f}
-    material = HolzapfelOgden(patient.e_f, gamma, matparams, "active_strain", patient.strain_markers)
+    material = HolzapfelOgden(patient.e_f, gamma, matparams, params["active_model"], patient.strain_markers)
     
     solver_parameters = {"mesh": patient.mesh,
                          "facet_function": patient.facets_markers,
@@ -663,10 +664,7 @@ class RegionalGamma(object):
         suitable space given by V_str
         """
         
-        f = self.get_function()
-        family, degree = V_str.split("_")
-        V = FunctionSpace(self._mesh, family, int(degree))
-        fun = project(f, V)
+        fun = self.project(V_str)
         plot(fun, interactive = True)
 
     def get_function(self):
@@ -681,6 +679,13 @@ class RegionalGamma(object):
              
         """
         return self._sum()
+    
+    def project(self, V_str = "DG_0"):
+        f = self.get_function()
+        family, degree = V_str.split("_")
+        V = FunctionSpace(self._mesh, family, int(degree))
+        fun =  project(f, V)
+        return fun
         
 
 
