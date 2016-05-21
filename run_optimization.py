@@ -81,7 +81,7 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
 
     #Solve the forward problem with guess results (just for printing)
     logger.info(Text.blue("\nForward solution at guess parameters"))
-    forward_result, _ = for_run(paramvec, True)
+    forward_result, _ = for_run(paramvec, False)
     
 
     # Stop recording
@@ -370,8 +370,10 @@ def load_target_data(measurements, params, spaces):
 
     if params["phase"] == PHASES[0]:
         pressures = measurements.pressure
+        seg_verts = measurements.seg_verts
     else:
         pressures = measurements.pressure[acin: 2 + acin]
+        seg_verts = measurements.seg_verts[acin: 2 + acin]
        
 
     logger.info(Text.blue("Load target data"))
@@ -410,6 +412,7 @@ def load_target_data(measurements, params, spaces):
     target_data.target_strains = target_strains
     target_data.target_vols = target_vols
     target_data.target_pressure = pressures
+    target_data.target_seg_verts = seg_verts
 
 
     return target_data

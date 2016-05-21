@@ -72,7 +72,7 @@ logger = make_logger("Adjoint_Contraction", log_level)
 DEFAULT_PATIENT = "Impact_p16_i43"
 
 # Resulution of the mesh
-RESOLUTION = "med_res"
+RESOLUTION = "low_res"
 
 
 #Centipascals for our centimeter mesh.

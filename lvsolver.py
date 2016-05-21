@@ -368,8 +368,9 @@ class LVSolver(object):
         # Robin BC
         if self.parameters["bc"].has_key("robin"):
             for robin_bc in self.parameters["bc"]["robin"]:
-                val, marker = robin_bc
-                self._G += -inner(val*u, v)*ds(marker)
+                if robin_bc is not None:
+                    val, marker = robin_bc
+                    self._G += -inner(val*u, v)*ds(marker)
         
         # Other body forces
         if self.parameters.has_key("body_force"):

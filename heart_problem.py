@@ -49,6 +49,30 @@ class BasicHeartProblem(collections.Iterator):
         # Start with the first pressure
         self.p_lv.t = self.pressure[0]
 
+    def set_direchlet_bc(self):
+        it = self.solver.parameters["base_it"]
+
+        nsteps = 4
+        ts = np.linspace(0,1, nsteps)
+        _i = 0.0
+        done = False
+        while not done and nsteps < 20:
+            for i in ts[1:]:
+           
+                it.t = i
+                print i
+                out, crash = self.solver.solve()
+                if crash:
+                    nsteps += 2
+                    ts = np.linspace(_i, 1, nsteps)
+                    break
+                
+                else:
+                    _i = i
+                    
+                    if i == 1:
+                        done = True
+        
 
     def increase_pressure(self):
         """
@@ -472,6 +496,7 @@ class PassiveHeartProblem(BasicHeartProblem):
         """
         Increase the pressure and solve the system
         """
+        self.set_direchlet_bc()
         out = self.increase_pressure()
         strains = self.project_to_strains(self.u)
         
