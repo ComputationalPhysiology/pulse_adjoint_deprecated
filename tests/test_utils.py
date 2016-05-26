@@ -71,11 +71,42 @@ def my_taylor_test(Jhat, m0_fun):
     assert (np.array(con_ord) > 1.9).all()
 
 
-def store_results(params, rd, gamma):
+def store_results(params, rd, control):
     from campass.store_opt_results import write_opt_results_to_h5
-    h5group =  ACTIVE_CONTRACTION_GROUP.format(0.5, 0)
 
-    rd(gamma)
+    rd(control)
     
-    write_opt_results_to_h5(h5group, params, rd.ini_for_res, 
-                            rd.for_res, opt_gamma = gamma)
+    if params["phase"] == "passive_inflation":
+        h5group =  PASSIVE_INFLATION_GROUP.format(params["alpha_matparams"])
+        write_opt_results_to_h5(h5group, params, rd.ini_for_res, 
+                                    rd.for_res, opt_matparams = control)
+        
+    else:
+        h5group =  ACTIVE_CONTRACTION_GROUP.format(0.5, 0)
+        write_opt_results_to_h5(h5group, params, rd.ini_for_res, 
+                                    rd.for_res, opt_gamma = control)
+
+
+def plot_displacements():
+    params = setup_params()
+    params["base_bc"] =  "dirichlet_bcs_from_seg_base"#"dirichlet_bcs_fix_base_x"
+    from campass.setup_optimization import initialize_patient_data
+    patient = initialize_patient_data(params["Patient_parameters"], 
+                                      params["synth_data"])
+
+    alpha_regpars = [(params["alpha"], params["reg_par"])]
+    # from IPython import embed; embed()
+    # exit()
+    from campass.postprocessing.postprocess_utils import get_all_data
+    data, kwargs = get_all_data(params, patient, alpha_regpars)
+
+    
+    u = Function(kwargs['displacement_space'], name = "displacement")
+    us = data["passive"]["displacements"]
+
+    f = XDMFFile(mpi_comm_world(), "data/displacement.xdmf")
+    for it,u_ in enumerate(us):
+        u.vector()[:] = u_
+        f << u, float(it)
+        
+    

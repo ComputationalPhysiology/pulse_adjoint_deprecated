@@ -20,17 +20,17 @@ from campass.run_optimization import run_passive_optimization_step, run_active_o
 from campass.setup_optimization import initialize_patient_data, setup_simulation
 from campass.adjoint_contraction_args import *
 from campass.utils import Text, pformat, passive_inflation_exists
-from test_utils import setup_params, my_taylor_test, store_results
+from test_utils import setup_params, my_taylor_test, store_results, plot_displacements
 from dolfin_adjoint import replay_dolfin, adj_reset, adj_html
-
+import dolfin
 alphas = [0.0, 0.5, 1.0]
 
 
 
 def test_passive():
-
+    # dolfin.parameters["adjoint"]["fussy_replay"] = True
     params = setup_params()
-
+    params["base_bc"] =  "dirichlet_bcs_from_seg_base"#"dirichlet_bcs_fix_base_x"
     patient = initialize_patient_data(params["Patient_parameters"], 
                                       params["synth_data"])
     
@@ -50,6 +50,8 @@ def test_passive():
                                                  solver_parameters, 
                                                  measurements, 
                                                  p_lv, paramvec)
+    store_results(params, rd, paramvec)
+    
     # Dump html visualization of the forward and adjoint system
     adj_html("passive_forward.html", "forward")
     adj_html("passive_adjoint.html", "adjoint")
@@ -65,7 +67,8 @@ def test_passive():
 def test_active():
 
     params = setup_params()
-
+    params["base_bc"] =  "dirichlet_bcs_from_seg_base"#"dirichlet_bcs_fix_base_x"
+    
     patient = initialize_patient_data(params["Patient_parameters"], 
                                       params["synth_data"])
     
@@ -93,12 +96,14 @@ def test_active():
     # Test that we can store the results
     store_results(params, rd, gamma)
 
+    
+
     # Dump html visualization of the forward and adjoint system
     adj_html("active_forward.html", "forward")
     adj_html("active_adjoint.html", "adjoint")
 
     # Replay the forward run, i.e make sure that the recording is correct.
-    replay_dolfin(tol=1e-12)
+    assert replay_dolfin(tol=1e-12)
     
     # Test that the gradient is correct
     my_taylor_test(rd, gamma)
@@ -108,5 +113,7 @@ def test_active():
     
 
 if __name__ == "__main__":
+    # plot_displacements()
+    # exit()
     test_passive()
     test_active()
