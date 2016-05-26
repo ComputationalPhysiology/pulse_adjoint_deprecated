@@ -151,7 +151,8 @@ class LVSolver(object):
                    solver_parameters = self.parameters["solve"],
                    annotate = False)
 
-        except RuntimeError:
+        except RuntimeError as ex:
+            logger.debug(ex)
             # Solver did not converge
             logger.warning("Solver did not converge")
             # Retrun the old state, and a flag crash = True
@@ -352,7 +353,9 @@ class LVSolver(object):
         
         # Internal energy
         self._strain_energy = material.strain_energy(F)
-        self._pi_int = self._strain_energy + self._compressibility(J)      
+        self._pi_int = self._strain_energy + self._compressibility(J)
+
+        
         # Internal virtual work
         self._G = derivative(self._pi_int*dx, self._w, self._w_test)
 
@@ -376,6 +379,13 @@ class LVSolver(object):
         if self.parameters.has_key("body_force"):
             self._G += -inner(self.parameters["body_force"], v)*dx
 
+        # Penalty term
+        if self.parameters["bc"].has_key("penalty"):
+            if hasattr(self.parameters["bc"]["penalty"], '__call__'):
+                
+                penalty = self.parameters["bc"]["penalty"](u)
+                self._G += derivative(penalty, self._w, self._w_test)
+
         # Dirichlet BC
         if self.parameters["bc"].has_key("dirichlet"):
             if hasattr(self.parameters["bc"]["dirichlet"], '__call__'):
@@ -383,6 +393,23 @@ class LVSolver(object):
             else:
                 self._bcs = self._make_dirichlet_bcs()
 
+
+        # Weakly impose Dirichlet by Nitsches method
+        # NOTE: THIS IS NOT TESTED
+        if self.parameters["bc"].has_key("nitsche"):
+            beta_value = 10
+            beta = Constant(beta_value)
+            
+            h_E = MaxFacetEdgeLength(self.parameters["mesh"])
+            for nitsche in self.parameters["bc"]["nitsche"]:
+                
+                val, dS = nitsche
+                
+                self._G += - inner(dot(grad(u), N), v)*dS \
+                  + inner(u, dot(grad(v), N))*dS \
+                  + beta*h_E**-1*inner(u, v)*dS \
+                  - inner(val, dot(grad(v), N))*dS \
+                  - beta*h_E**-1*inner(val, v)*dS
         
         self._dG = derivative(self._G, self._w)
 
