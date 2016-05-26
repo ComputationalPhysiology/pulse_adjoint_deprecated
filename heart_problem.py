@@ -48,20 +48,38 @@ class BasicHeartProblem(collections.Iterator):
         
         # Start with the first pressure
         self.p_lv.t = self.pressure[0]
+        
+    
+        self.base_bc_from_seg = solver_parameters["base_bc_y"] is not None
+
+        if self.base_bc_from_seg:
+            self.solver.parameters["base_bc_y"].reset()
+            self.solver.parameters["base_bc_z"].reset()
+         
+            
 
     def set_direchlet_bc(self):
+        """
+        Set Direclet BC at the endoring by an iterative process
+        """
+        # for i in range(self.solver.parameters["base_bc_y"].npoints):
+        self.solver.parameters["base_bc_y"].next()
+        self.solver.parameters["base_bc_z"].next()
         it = self.solver.parameters["base_it"]
-
-        nsteps = 4
+        
+        nsteps = 2
         ts = np.linspace(0,1, nsteps)
         _i = 0.0
         done = False
+
+        # In case the solver chrashes when solving for the
+        # Dirichlet BC we can set this BC in an iterative way. 
         while not done and nsteps < 20:
             for i in ts[1:]:
-           
+                
                 it.t = i
-                print i
                 out, crash = self.solver.solve()
+                
                 if crash:
                     nsteps += 2
                     ts = np.linspace(_i, 1, nsteps)
@@ -118,6 +136,10 @@ class BasicHeartProblem(collections.Iterator):
 
         if nsteps >= n_max:
             raise RuntimeError("Unable to increase pressure")
+
+        
+        if self.base_bc_from_seg:
+            self.set_direchlet_bc()
 
         
         return out
@@ -212,7 +234,10 @@ class BasicHeartProblem(collections.Iterator):
         grad_u_diag = as_vector([inner(e,gradu*e) for e in self.crl_basis])
 
         # Solve for the strain fields
-        solve(inner(self.strainfield_u, self.strainfield_v)*self.dx == inner(self.strainfield_v, grad_u_diag)*self.dx,self.strainfield)
+        # Somehow this does not work with LU solver when base is fixed according to the
+        # segemental surfaces
+        solve(inner(self.strainfield_u, self.strainfield_v)*dx == \
+                  inner(self.strainfield_v, grad_u_diag)*dx,self.strainfield, solver_parameters={"linear_solver": "gmres"})
     
         # Solve for the regional strains
         for i in STRAIN_REGION_NUMS:
@@ -275,21 +300,14 @@ class SyntheticHeartProblem(BasicHeartProblem):
         logger.debug("\tNext      {:.3f}  {:.3f} ".format(get_mean(gamma_current), 
                                                          get_max(gamma_current)))
 
-
-       
-
         dg = Function(g_prev.function_space())
         dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] - g_prev.vector()[:])
         g = Function(g_prev.function_space())
         g.assign(g_prev)
 
         out = self.get_state()
-
-        
         done = False
-        
-        
-        
+ 
         
         while not done:
                 
@@ -300,7 +318,6 @@ class SyntheticHeartProblem(BasicHeartProblem):
                 self.solver.parameters['material'].gamma.assign(g)
 
                 try:
-                    # mpi_print("try1: mean gamma = {}".format(gather_broadcast(g.vector().array()).mean()))
                     out = self.solver.solve()
                 except RuntimeError:
                     logger.warning("Solver crashed. Reduce gamma step")
@@ -341,7 +358,6 @@ class ActiveHeartProblem(BasicHeartProblem):
                  annotate = False):
                    
         
-
         self.alpha = params["alpha"]
         self.passive_filling_duration = passive_filling_duration
        
@@ -491,12 +507,13 @@ class PassiveHeartProblem(BasicHeartProblem):
                                     endo_lv_marker, crl_basis, spaces)
 
         BasicHeartProblem._init_volume_forms(self)
+
         
     def next(self):
         """
         Increase the pressure and solve the system
         """
-        self.set_direchlet_bc()
+        
         out = self.increase_pressure()
         strains = self.project_to_strains(self.u)
         

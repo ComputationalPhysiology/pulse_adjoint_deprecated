@@ -94,16 +94,16 @@ def setup_application_parameters():
     params.add("base_spring_k", BASE_K)
     params.add("reg_par", REG_PAR)
     params.add("active_model", "active_strain")
-    params.add("gamma_space", "regional", ["CG_1", "R_0", "regional"])
+    params.add("gamma_space", "CG_1", ["CG_1", "R_0", "regional"])
     params.add("state_space", "P_2:P_1")
     params.add("compressibility", "incompressible", ["incompressible", 
                                                      "stabalized_incompressible", 
                                                      "penalty", "hu_washizu"])
-    params.add("incompressibility_penalty", 10.0)
+    params.add("incompressibility_penalty", 0.0)
     params.add("use_deintegrated_strains", False)
     params.add("optimize_matparams", True)
     params.add("nonzero_initial_guess", True)
-    params.add("base_bc", "dirichlet_bcs_fix_base_x", ["dirichlet_bcs_from_seg_base",
+    params.add("base_bc", "dirichlet_bcs_from_seg_base", ["dirichlet_bcs_from_seg_base",
                                                               "dirichlet_bcs_fix_base_x"])
     
     params.add("synth_data", False)
@@ -148,9 +148,6 @@ def initialize_patient_data(patient_parameters, synth_data):
     from patient_data import Patient
     
     patient = Patient(**patient_parameters)
-    
-    # if args_full.use_deintegrated_strains:
-        # patient.load_deintegrated_strains(STRAIN_FIELDS_PATH)
 
     if synth_data:
         patient.passive_filling_duration = SYNTH_PASSIVE_FILLING
@@ -288,68 +285,100 @@ def make_solver_params(params, patient, measurements):
     
         
 
-    p_lv = Expression("t", t = measurements.pressure[0])
-    
-    
+    p_lv = Expression("t", t = measurements.pressure[0], name = "LV_endo_pressure")
     N = FacetNormal(patient.mesh)
 
     # Direchlet BC at the Base
-    mesh_verts = patient.mesh_verts
-    seg_verts = measurements.seg_verts[0]
-    
-    endoring = Endoring([[0.0, a[0], a[1]] for a in mesh_verts])
-    base_it = Expression("t", t = 0.0)
-    base_bc_y = BaseExpression(mesh, mesh_verts, seg_verts, "y", base_it)
-    base_bc_z = BaseExpression(mesh, mesh_verts, seg_verts, "z", base_it)
+    try:
+        mesh_verts = patient.mesh_verts
+        seg_verts = measurements.seg_verts
+    except:
+        logger.debug("No mesh vertices found. Fix base is the only applicable Direchlet BC")
+        mesh_verts = None
 
-    if 0:
-        # Plot the points on the endoring
-        sub_domains = MeshFunction("size_t", patient.mesh, 0)
-        sub_domains.set_all(0)
-        endoring.mark(sub_domains, 1)
-        plot(sub_domains, interactive=True)
+
+    if params["base_bc"] == "dirichlet_bcs_from_seg_base" and (mesh_verts is not None):
+
+        endoring = VertexDomain(mesh_verts)
+        base_it = Expression("t", t = 0.0, name = "base_iterator")
         
-        
-
-    def dirichlet_bcs_from_seg_base(W):
-        """
-        Fix base in the x = 0 plane, and fix the vertices at 
-        the endoring at the base according to the segmeted surfaces. 
-        """
-        V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-
-        
-        bc = [DirichletBC(V.sub(0), Constant(0.0), patient.BASE),
-                                 DirichletBC(V.sub(1), base_bc_y, endoring, "pointwise"),
-                                 DirichletBC(V.sub(2), base_bc_y, endoring, "pointwise")]
-        return bc
-    
-    
-    def dirichlet_bcs_fix_base_x(W):
-	'''Make Dirichlet boundary conditions where the base is allowed to slide
-        in the x = 0 plane.
-        '''
-        V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-        bc = [DirichletBC(V.sub(0), 0, patient.BASE)]
-        return bc
-
-
-    if params["base_bc"] == "dirichlet_bcs_from_seg_base":
-        base_bc = dirichlet_bcs_from_seg_base
         robin_bc = [None]
-    elif params["base_bc"] == "dirichlet_bcs_fix_base_x":
-        base_bc = dirichlet_bcs_fix_base_x
-        robin_bc = [[-Constant(params["base_spring_k"], 
-                                   name ="base_spring_constant"), patient.BASE]]
+       
+        
+        # Expression for defining the boundary conditions
+        base_bc_y = BaseExpression(mesh_verts, seg_verts, "y", base_it, name = "base_expr_y")
+        base_bc_z = BaseExpression(mesh_verts, seg_verts, "z", base_it, name = "base_expr_z")
+        
+
+        if 0:
+            # Plot the points on the endoring
+            sub_domains = MeshFunction("size_t", patient.mesh, 0)
+            sub_domains.set_all(0)
+            endoring.mark(sub_domains, 1)
+            plot(sub_domains, interactive=True)
+            
+            base_it.t = 1.0
+            V = FunctionSpace(patient.mesh, "CG", 1)
+            VV = VectorFunctionSpace(patient.mesh, "CG", 1, dim = 3)
+
+            funy = interpolate(base_bc_y, V)
+            funz = interpolate(base_bc_z, V)
+
+            u_dir_weak = Function(VV)
+    
+            fa = [FunctionAssigner(VV.sub(i+1), V) for i in range(2)]
+            fa[0].assign(u_dir_weak.split()[1], funy)
+            fa[1].assign(u_dir_weak.split()[2], funz)
+        
+            plot(funy, title = "y")
+            plot(funz, title = "z")
+            plot(u_dir_weak, title = "y+z")
+            interactive()
+            exit()
+
+            
+            
+   
+        def base_bc(W):
+            """
+            Fix base in the x = 0 plane, and fix the vertices at 
+            the endoring at the base according to the segmeted surfaces. 
+            """
+            V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
+
+        
+            bc = [DirichletBC(V.sub(0), Constant(0.0), patient.BASE),
+                      DirichletBC(V.sub(1), base_bc_y, endoring, "pointwise"),
+                      DirichletBC(V.sub(2), base_bc_z, endoring, "pointwise")]
+            return bc
     else:
-        logger.Warning("Unknown Base BC. Fix base in x direction")
-        base_bc = dirichlet_bcs_fix_base_x
+        if not params["base_bc"] == "dirichlet_bcs_fix_base_x":
+            if mesh_verts is None:
+                logger.warning("No mesh vertices found. This must be set in the patient class")
+            else:
+                logger.warning("Unknown Base BC")
+            logger.warning("Fix base in x direction")
+    
+        def base_bc(W):
+            '''Make Dirichlet boundary conditions where the base is allowed to slide
+            in the x = 0 plane.
+            '''
+            V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
+            bc = [DirichletBC(V.sub(0), 0, patient.BASE)]
+            return bc
+    
+        
+        base_bc_y = None
+        base_bc_z = None
+        base_it = None
+        
+        # Apply a linear sprint robin type BC to limit motion
         robin_bc = [[-Constant(params["base_spring_k"], 
                                    name ="base_spring_constant"), patient.BASE]]
+
 
     
     from material import HolzapfelOgden
-
     matparams = {"a":a, "a_f":a_f, "b":b, "b_f":b_f}
     material = HolzapfelOgden(patient.e_f, gamma, matparams, params["active_model"], patient.strain_markers)
     
@@ -381,6 +410,7 @@ def make_solver_params(params, patient, measurements):
     logger.info('\talpha = {}'.format(params["alpha"]))
     logger.info('\talpha_matparams = {}'.format(params["alpha_matparams"]))
     logger.info('\treg_par = {}\n'.format(params["reg_par"]))
+
 
     if params["phase"] == PHASES[0]:
         return solver_parameters, p_lv, paramvec
@@ -488,9 +518,7 @@ def setup_simulation(params, patient):
     
     # Load measurements
     measurements = get_measurements(params, patient)
-
     solver_parameters, p_lv, controls = make_solver_params(params, patient, measurements)
-    
 
     return measurements, solver_parameters, p_lv, controls
 
@@ -510,10 +538,8 @@ class MyReducedFunctional(ReducedFunctional):
         adj_reset()
         self.iter += 1
 
-        
         paramvec_new = Function(self.paramvec.function_space(), name = "new control")
-            
-        
+
         if isinstance(value, Function):
             paramvec_new.assign(value)
         else:
@@ -540,7 +566,7 @@ class MyReducedFunctional(ReducedFunctional):
         ReducedFunctional.__init__(self, Functional(self.for_res.total_functional), control)
 
         if crash:
-            # This exection is thrown if the solver uses more than x times.
+            # This exection is thrown if the solver uses more than x steps.
             # The solver is stuck, return a large value so it does not get stuck again
             logger.warning(Text.red("Iteration limit exceeded. Return a large value of the functional"))
             # Return a big value, and make sure to increment the big value so the 
@@ -760,19 +786,21 @@ class RegionalGamma(object):
             fun += c*f
 
         return fun
-    
+
+
 
 class BaseExpression(Expression):
     """
     A class for assigning boundary condition according to segmented surfaces
-    Since the base is located at x = 0, two classes must be set: 
+    Since the base is located at x = a (usually a=0), two classes must be set: 
     One for the y-direction and one for the z-direction
 
     Point on the endocardium and epicardium is given and the
     points on the mesh base is set accordingly.
     Points that lie on the base but not on the epi- or endoring
+    will be given a zero value.
     """
-    def __init__(self, mesh, mesh_verts, seg_verts, sub, it):
+    def __init__(self, mesh_verts, seg_verts, sub, it, name):
         """
         
         *Arguments*
@@ -794,56 +822,94 @@ class BaseExpression(Expression):
           it (dolfin.Expression)
             Can be used to incrment the direclet bc
 
-        """
-        self.mesh = mesh
-        self.mesh_verts = np.array(mesh_verts)
-        self.seg_verts = np.array(seg_verts)
-
+        """ 
         assert sub in ["y", "z"]
-        self.sub = sub
-        self.it = it
-
-    def update(self, seg_verts):
-        self.seg_verts[:] = np.array(seg_verts)
-    
+        self._mesh_verts = np.array(mesh_verts)
+        self._all_seg_verts = np.array(seg_verts)
+        self.point = 0
+        self.npoints = len(seg_verts)-1
         
+        self._seg_verts = self._all_seg_verts[0]
+  
+        self._sub = sub
+        self._it = it
+        self.rename(name, name)
+        # if self._sub == "y":
+        #     print "Mesh_verts:"
+        #     print self._mesh_verts
+        #     print "Point 0, Seg_verts"
+        #     print self._seg_verts
+           
+
+        
+    def next(self):
+        self._it.t = 0
+        self.point += 1
+        self._seg_verts = self._all_seg_verts[self.point]
+        # if self._sub == "y":
+        #     print "Point {}, Seg_verts".format(self.point)
+        #     print self._seg_verts
+
+    def reset(self):
+        self.point = 0
+        self._it.t = 0
+    
+
     def eval(self, value, x):
 
         # Check if given coordinate is in the endoring vertices
         # and find the cooresponding index
-        if x[0] == 0 and (x[1:] in self.mesh_verts):
-            idx = np.where(x[1:] == self.mesh_verts)[0][0]
+        d = [np.where(x[i] == self._mesh_verts.T[i])[0] for i in range(3)]
+        d_intersect = set.intersection(*map(set,d))
+        assert len(d_intersect) < 2
+        if len(d_intersect) == 1:
+          
+            idx = d_intersect.pop()
+    
+            prev_seg_verts = self._all_seg_verts[self.point-1] 
 
+            # Return the displacement in the given direction
+            # Iterated starting from the previous displacemet to the current one
+            if self._sub == "y":
+                u_prev = prev_seg_verts[idx][1] - self._mesh_verts[idx][1] 
+                u_current = self._seg_verts[idx][1] - self._mesh_verts[idx][1] 
+                value[0] = u_prev + self._it.t*(u_current - u_prev)
+            else: # sub == "z"
+                u_prev = prev_seg_verts[idx][2] - self._mesh_verts[idx][2] 
+                u_current = self._seg_verts[idx][2] - self._mesh_verts[idx][2] 
+                value[0] = u_prev + self._it.t*(u_current - u_prev)
         else:
+            value[0] = 0
             # Find the closest vertex
-            idx = np.argmin([a[0]**2 + a[1]**2 for a in np.abs(x[1:] - self.mesh_verts)])
-
-        # Return the displacement in the given direction
-        if self.sub == "y":
-            value[0] = self.it.t*(self.seg_verts[idx][0] - self.mesh_verts[idx][0])
-        else: # sub == "z"
-            value[0] = self.it.t*(self.seg_verts[idx][1] - self.mesh_verts[idx][1])
+            # idx = np.argmin([a[0]**2 + a[1]**2 for a in np.abs(x[1:] - self._mesh_verts)])
 
 
-class Endoring(SubDomain):
+class VertexDomain(SubDomain):
     """
-    A subdomain description to be used for
-    setting Direchlet BCs on at the endoring
+    A subdomain defined in terms of
+    a given set of coordinates.
+    A point that is close to the given coordinates
+    within a given tolerance will be marked as inside 
+    the domain.
     """
-    def __init__(self, coords):
+    def __init__(self, coords, tol=1e-4):
         """
         *Arguments*
           coords (list)
-            List of coordinates for vertices on the endoring
-            corresponding to the reference geometry
+            List of coordinates for vertices in reference geometry
+            defining this domains
+
+          tol (float)
+            Tolerance for how close a pointa should be to the given coordinates
+            to be marked as inside the domain
         """
         self.coords = np.array(coords)
-
+        self.tol = tol
         SubDomain.__init__(self)
 
     def inside(self, x, on_boundary):
         
-        if np.all([np.any(abs(x[i] - self.coords.T[i]) < 1e-4) for i in range(3)]):
+        if np.all([np.any(abs(x[i] - self.coords.T[i]) < self.tol) for i in range(3)]):
             return True
         
         return False

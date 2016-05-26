@@ -62,7 +62,7 @@ class BasicForwardRunner(object):
         self._set_target_data(target_data)
         self._init_functions(spaces)
 
-
+        
     def _set_target_data(self, target_data):
 
         self.target_strains = target_data.target_strains
@@ -133,7 +133,8 @@ class BasicForwardRunner(object):
 	
         # Start the clock
         adj_start_timestep(0.0)
-        
+
+      
         #Save Information for later storage.
         self.states = []
         self.volumes = []
@@ -280,11 +281,6 @@ class BasicForwardRunner(object):
         v_sim = gather_broadcast(self.V_sim.vector().array())[0]
         v_meas = gather_broadcast(self.V_meas.vector().array())[0]
 
-        # self.logger.debug(self.OUTPUT_STR.format(self._get_exprval(phm.p_lv, phm.mesh),
-		# 			 self._get_exprval(phm.p_rv, phm.mesh),
-		# 			 v_sim, v_meas, strain_error, v_diff))
-
-        
         logger.info(self.output_str.print_line(LVP=self._get_exprval(phm.p_lv, phm.mesh), 
                                                LV_Volume=v_sim, 
                                                Target_Volume=v_meas, 
