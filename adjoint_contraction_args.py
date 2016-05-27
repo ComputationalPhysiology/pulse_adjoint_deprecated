@@ -201,7 +201,7 @@ NONLINSOLVER = "snes"
 SNES_SOLVER_METHOD = "newtontr"
 
 # Maximum number of iterations
-SNES_SOLVER_MAXITR = 50
+SNES_SOLVER_MAXITR = 15
 
 # Absolute Tolerance
 SNES_SOLVER_ABSTOL = 1.0e-5
