@@ -76,11 +76,13 @@ class BasicHeartProblem(collections.Iterator):
         # Dirichlet BC we can set this BC in an iterative way. 
         while not done and nsteps < 20:
             for i in ts[1:]:
-                
+
+                logger.debug("Iterator for BC = {}".format(i))
                 it.t = i
                 out, crash = self.solver.solve()
                 
                 if crash:
+                    logger.debug("Crashed when setting BC")
                     nsteps += 2
                     ts = np.linspace(_i, 1, nsteps)
                     break

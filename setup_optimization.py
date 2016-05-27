@@ -412,7 +412,7 @@ def make_solver_params(params, patient, measurements):
     logger.info('\treg_par = {}\n'.format(params["reg_par"]))
 
 
-    if params["phase"] == PHASES[0]:
+    if params["phase"] in [PHASES[0], PHASES[2]]:
         return solver_parameters, p_lv, paramvec
     elif params["phase"] == PHASES[1]:
         return solver_parameters, p_lv, gamma
@@ -865,19 +865,22 @@ class BaseExpression(Expression):
         if len(d_intersect) == 1:
           
             idx = d_intersect.pop()
-    
+            
             prev_seg_verts = self._all_seg_verts[self.point-1] 
 
             # Return the displacement in the given direction
             # Iterated starting from the previous displacemet to the current one
             if self._sub == "y":
-                u_prev = prev_seg_verts[idx][1] - self._mesh_verts[idx][1] 
-                u_current = self._seg_verts[idx][1] - self._mesh_verts[idx][1] 
-                value[0] = u_prev + self._it.t*(u_current - u_prev)
+                u_prev = self._mesh_verts[idx][1] - prev_seg_verts[idx][1]
+                u_current = self._mesh_verts[idx][1] - self._seg_verts[idx][1]
+                # value[0] = u_prev + self._it.t*(u_current - u_prev)
             else: # sub == "z"
-                u_prev = prev_seg_verts[idx][2] - self._mesh_verts[idx][2] 
-                u_current = self._seg_verts[idx][2] - self._mesh_verts[idx][2] 
-                value[0] = u_prev + self._it.t*(u_current - u_prev)
+                u_prev = self._mesh_verts[idx][2] - prev_seg_verts[idx][2]
+                u_current = self._mesh_verts[idx][2] - self._seg_verts[idx][2]
+
+            val = u_prev + self._it.t*(u_current - u_prev)
+            value[0] = val
+            
         else:
             value[0] = 0
             # Find the closest vertex
