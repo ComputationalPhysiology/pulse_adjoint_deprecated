@@ -70,6 +70,9 @@ class Compressibility(object):
         
         def get_displacement_space(self):
             return self.W.sub(0)
+
+        def get_pressure_space(self):
+            return self.W.sub(1)
         
         def get_displacement_variable(self):
             return self.u
@@ -83,6 +86,16 @@ class Compressibility(object):
             fa.assign(u, self.w.split()[0], 
                       annotate = annotate)
             return u
+
+        def get_hydrostatic_pressue(self, name, annotate = True):
+            D = self.get_pressure_space()
+            V = D.collapse()
+        
+            fa = FunctionAssigner(V, D)
+            p = Function(V, name = name)
+            fa.assign(p, self.w.split()[1], 
+                      annotate = annotate)
+            return p
         
         def calculate_average_volume_ratio(self, w, mesh):
             return assemble(det(grad(split(w)[0]) \
@@ -116,7 +129,7 @@ class Compressibility(object):
             return (J - 1)*self.p + 0.5*self.lamda*(J - 1)**2
 
         def is_incompressible(self):
-            raise NotImplementedError
+            return True
        
     class Penalty(object):
         def __init__(self, parameters):
@@ -133,12 +146,20 @@ class Compressibility(object):
         
         def get_displacement_variable(self):
             return self.w
+
+        def get_hydrostatic_pressue(self, *args):
+            return None
         
         def get_displacement(self, name, annotate = True):
-            return Function(self.w, name = name)
+            V = self.get_displacement_space()
+            u = Function(V, name = name)
+            u.assign( self.w,annotate = annotate)
+            return u
         
         def __call__(self, J):
-            return self.lamda*(J - 1)**2
+            return self.lamda * (J**2 - 1 - 2*ln(J))
+            # return self.lamda*( 0.5*(J - 1)**2 - ln(J) ) 
+            # return self.lamda*(J - 1)**2
 
         def is_incompressible(self):
             return False
