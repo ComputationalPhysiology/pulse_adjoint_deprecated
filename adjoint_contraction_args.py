@@ -76,7 +76,7 @@ RESOLUTION = "low_res"
 
 
 #Centipascals for our centimeter mesh.
-KPA_TO_CPA = 0.1
+KPA_TO_CPA = 1.0
 
 PATIENT_TYPES = ["impact", "healthy"]
 DEFAULT_PATIENT_TYPE = "impact"
@@ -100,17 +100,12 @@ REG_PAR = 0.001
 ALPHA = 0.5
 ALPHA_MATPARAMS = 1.0
 
-# Use the original strain or the deintegrated ones
-# USE_DEINTEGRATED_STRAINS = True
-# if USE_DEINTEGRATED_STRAINS:
-    # from strain_projection.project_strains import STRAIN_FIELDS_PATH
-
 
 # The different phases we can optimize
 PHASES = ['passive_inflation', 'active_contraction', "all"]
 
 # Initial material parameters
-INITIAL_MATPARAMS = [0.795, 6.855, 21.207, 40.545] 
+INITIAL_MATPARAMS = [0.795, 6.855, 21.207, 40.545]
 # INITIAL_MATPARAMS = [0.291, 2.582, 5,5] 
 
 # If true, Optimize material parameters, otherswise use the default material parameters
@@ -126,7 +121,7 @@ GAMMA_INC_LIMIT = 0.02
 MAX_GAMMA = 0.9
 
 # MAX size of pressure step (cPa)
-PRESSURE_INC_LIMIT = 0.4
+#PRESSURE_INC_LIMIT = 0.4
 
 # Optimization method
 DEFAULT_OPTIMIZATION_METHOD = "SLSQP"

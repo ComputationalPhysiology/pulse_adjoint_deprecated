@@ -78,8 +78,8 @@ def setup_patient_parameters():
     params.add("weight_rule", DEFAULT_WEIGHT_RULE, WEIGHT_RULES)
     params.add("weight_direction", DEFAULT_WEIGHT_DIRECTION, WEIGHT_DIRECTIONS) 
     params.add("resolution", "low_res")
-    params.add("fiber_angle_epi", 50)
-    params.add("fiber_angle_endo", 40)
+    params.add("fiber_angle_epi", 60)
+    params.add("fiber_angle_endo", 60)
     params.add("mesh_type", "lv", ["lv", "biv"])
 
     return params
@@ -103,7 +103,9 @@ def setup_application_parameters():
     params.add("use_deintegrated_strains", False)
     params.add("optimize_matparams", True)
     params.add("nonzero_initial_guess", True)
-    params.add("base_bc", "dirichlet_bcs_from_seg_base", ["dirichlet_bcs_from_seg_base",
+    # params.add("base_bc", "dirichlet_bcs_from_seg_base", ["dirichlet_bcs_from_seg_base",
+    #                                                           "dirichlet_bcs_fix_base_x"])
+    params.add("base_bc", "dirichlet_bcs_fix_base_x", ["dirichlet_bcs_from_seg_base",
                                                               "dirichlet_bcs_fix_base_x"])
     
     params.add("synth_data", False)
@@ -446,12 +448,11 @@ def get_measurements(params, patient):
         volume = np.subtract(patient.volume,volume_offset)
 
         #Convert pressure to centipascal (the mesh is in cm)
-        pressure = np.multiply(KPA_TO_CPA, pressure)
-
+        # pressure = np.multiply(KPA_TO_CPA, pressure)
 
         # Choose the pressure at the beginning as reference pressure
         reference_pressure = pressure[0] 
-        logger.info("Pressure offset = {} cPa".format(reference_pressure))
+        logger.info("Pressure offset = {} kPa".format(reference_pressure))
 
         #Here the issue is that we do not have a stress free reference mesh. 
         #The reference mesh we use is already loaded with a certain amount of pressure, which we remove.    
@@ -511,7 +512,9 @@ def get_volume_offset(patient):
     N = FacetNormal(patient.mesh)
     ds = Measure("exterior_facet", subdomain_data = patient.facets_markers, domain = patient.mesh)(patient.ENDO)
     X = SpatialCoordinate(patient.mesh)
-    vol = assemble((-1.0/3.0)*dot(X,N)*ds)
+    
+    # Divide by 1000 to get the volume in ml
+    vol = assemble((-1.0/3.0)*dot(X,N)*ds) / 1000.0
     return patient.volume[0] - vol
 
 def setup_simulation(params, patient):
@@ -834,22 +837,13 @@ class BaseExpression(Expression):
         self._sub = sub
         self._it = it
         self.rename(name, name)
-        # if self._sub == "y":
-        #     print "Mesh_verts:"
-        #     print self._mesh_verts
-        #     print "Point 0, Seg_verts"
-        #     print self._seg_verts
-           
 
         
     def next(self):
         self._it.t = 0
         self.point += 1
         self._seg_verts = self._all_seg_verts[self.point]
-        # if self._sub == "y":
-        #     print "Point {}, Seg_verts".format(self.point)
-        #     print self._seg_verts
-
+     
     def reset(self):
         self.point = 0
         self._it.t = 0
@@ -883,9 +877,7 @@ class BaseExpression(Expression):
             
         else:
             value[0] = 0
-            # Find the closest vertex
-            # idx = np.argmin([a[0]**2 + a[1]**2 for a in np.abs(x[1:] - self._mesh_verts)])
-
+          
 
 class VertexDomain(SubDomain):
     """
