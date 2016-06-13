@@ -110,33 +110,41 @@ class BasicHeartProblem(collections.Iterator):
         logger.debug("\t            {:.3f}     {:.3f}".format(p_prev, p_next))
 
         converged = False
-        nsteps = max(2, int(math.ceil(p_diff/PRESSURE_INC_LIMIT)))
+        # nsteps = max(2, int(math.ceil(p_diff/PRESSURE_INC_LIMIT)))
+        # nsteps = np.ceil(abs((p_next - p_prev)/(p_prev+1)))
+        nsteps = 2
         n_max = 100
         pressures = np.linspace(p_prev, p_next, nsteps)
-        
+        p = p_prev
 
         while not converged and nsteps < n_max:
 
             crash = False
             for p in pressures[1:]:
                 self.p_lv.t = p
-
+                
+                logger.debug("\nSolve for pressure = {}".format(p))
                 out, crash = self.solver.solve()
                 
+                
                 if crash:
-                    logger.warning("Solver chrashed when increasing pressure from {} to {}".format(p_prev, p))
+                    logger.warning("\nSolver chrashed when increasing pressure from {} to {}".format(p_prev, p))
                     logger.warning("Take smaller steps")
                     nsteps *= 2
                     pressures = np.linspace(p_prev, p_next, nsteps)
                     break
                 else:
                     p_prev = p
+                    # Adapt
+                    nsteps = np.ceil(nsteps/1.5)
+                    pressures = np.linspace(p_prev, p_next, nsteps)
+                    converged = True if p == p_next else False
+                    break
+                    
 
-            
-            converged = False if crash else True
-                
 
         if nsteps >= n_max:
+            
             raise RuntimeError("Unable to increase pressure")
 
         
@@ -221,7 +229,8 @@ class BasicHeartProblem(collections.Iterator):
         J = det(F)
 
         # Compute volume
-        self.vol = (-1.0/3.0)*dot(X + self.u, J*inv(F).T*N)
+        # Assume mesh is in mm, divide by 100 to get volume in ml
+        self.vol = (-1.0/3.0)*dot(X + self.u, J*inv(F).T*N) / 1000.0
         self.vol_form = self.vol*self.ds
 
     def project_to_strains(self, u):
@@ -319,15 +328,15 @@ class SyntheticHeartProblem(BasicHeartProblem):
 
                 self.solver.parameters['material'].gamma.assign(g)
 
-                try:
-                    out = self.solver.solve()
-                except RuntimeError:
+              
+                out, crash = self.solver.solve()
+                if crash:
                     logger.warning("Solver crashed. Reduce gamma step")
                     
                     nr_steps += 4
                     g.assign(g_prev)
                     dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] - g_prev.vector()[:]) 
-                    mpi_print("DG vector max {}".format(dg.vector().max()))
+                    logger.debug("DG vector max {}".format(dg.vector().max()))
                     
                     break
 
@@ -386,34 +395,37 @@ class ActiveHeartProblem(BasicHeartProblem):
         BasicHeartProblem._init_volume_forms(self)
        
     
-    def next_active(self, gamma_current, g_prev):
+    def next_active(self, gamma_current, gamma, assign_prev_state=True, steps = None):
         """
         Step up gamma iteratively.
         """
 
-        max_diff = get_max_diff(gamma_current, g_prev)
-        nr_steps = max(2, int(math.ceil(max_diff/GAMMA_INC_LIMIT)))
+        max_diff = get_max_diff(gamma_current, gamma)
+        nr_steps = max(2, int(math.ceil(max_diff/GAMMA_INC_LIMIT))) if steps is None else steps
 
         logger.debug("\tGamma:    Mean    Max     max difference")
-        logger.debug("\tPrevious  {:.3f}  {:.3f}    {:.3e}".format(get_mean(g_prev), 
-                                                                   get_max(g_prev), 
+        logger.debug("\tPrevious  {:.3f}  {:.3f}    {:.3e}".format(get_mean(gamma), 
+                                                                   get_max(gamma), 
                                                                    max_diff))
         logger.debug("\tNext      {:.3f}  {:.3f} ".format(get_mean(gamma_current), 
                                                           get_max(gamma_current)))
 
         # Step size for gamma
-        dg = Function(g_prev.function_space(), name = "dg")
-        dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] - g_prev.vector()[:])
+        dg = Function(gamma.function_space(), name = "dg")
+        dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] - gamma.vector()[:])
 
         # Gamma the will be used in the iteration
-        g = Function(g_prev.function_space(), name = "g")
-        g.assign(g_prev)
+        g = Function(gamma.function_space(), name = "g")
+        g.assign(gamma)
+
+        g_previous = gamma.copy()
 
         # Keep the old gamma
-        g_old = g_prev.copy()
+        g_old = gamma.copy()
         
         done = False
         finished_stepping = False
+
              
         # If the solver crashes n times it is probably stuck
         MAX_NR_CRASH = 5
@@ -447,21 +459,27 @@ class ActiveHeartProblem(BasicHeartProblem):
                         # If that does not work increase the number of steps
                         logger.warning("Solver crashed. Reduce gamma step")
                         nr_steps *=2
-                        
-                        # Assign the previous gamma
-                        g.assign(g_prev)
+
+                        g.assign(g_previous)
+                            
                         
                         dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] 
-                                                        - g_prev.vector()[:]) 
+                                                        - g_previous.vector()[:]) 
                         nr_crashes += 1
 
                         break
 
                     else:
-                        g_prev.assign(g.copy())
+                        g_previous.assign(g.copy())
+
+                        # Adapt
+                        # nr_steps /= 1.5
+                        # dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] 
+                        #                                 - g_prev.vector()[:])
                         
                         
-                if i == nr_steps-1:
+                        
+                if nr_steps == 1 or i == nr_steps-1:
                     finished_stepping = True
 
             # All points up to the last point converged. 
@@ -469,6 +487,7 @@ class ActiveHeartProblem(BasicHeartProblem):
             
             # Store the current solution
             w = self.get_state()
+            
 
             self.solver.parameters['material'].gamma.assign(gamma_current)
             
@@ -480,15 +499,16 @@ class ActiveHeartProblem(BasicHeartProblem):
             if crash:
                 nr_steps *= 2
                 logger.warning("\tFinal solve-step crashed. Reduce gamma step")
-                g.assign(g_prev)
-                dg.vector()[:] = 1./(nr_steps) * (gamma_current.vector()[:] - g_prev.vector()[:]) 
+                g.assign(g_previous)
+                dg.vector()[:] = 1./(nr_steps) * (gamma_current.vector()[:] - g_previous.vector()[:]) 
 
                 finished_stepping = False
             else:
-                # Assign the previous state
-                self.solver.get_state().assign(w, annotate = False)
-                self.solver.reinit(w)
-                self.solver.parameters['material'].gamma.assign(g_prev)
+                if assign_prev_state:
+                    # Assign the previous state
+                    self.solver.get_state().assign(w, annotate = False)
+                    self.solver.reinit(w)
+                    self.solver.parameters['material'].gamma.assign(g_previous)
               
                 done = True
 
