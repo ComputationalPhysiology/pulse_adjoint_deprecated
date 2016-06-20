@@ -229,8 +229,7 @@ class BasicHeartProblem(collections.Iterator):
         J = det(F)
 
         # Compute volume
-        # Assume mesh is in mm, divide by 100 to get volume in ml
-        self.vol = (-1.0/3.0)*dot(X + self.u, J*inv(F).T*N) / 1000.0
+        self.vol = (-1.0/3.0)*dot(X + self.u, J*inv(F).T*N)
         self.vol_form = self.vol*self.ds
 
     def project_to_strains(self, u):

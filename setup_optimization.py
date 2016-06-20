@@ -514,7 +514,7 @@ def get_volume_offset(patient):
     X = SpatialCoordinate(patient.mesh)
     
     # Divide by 1000 to get the volume in ml
-    vol = assemble((-1.0/3.0)*dot(X,N)*ds) / 1000.0
+    vol = assemble((-1.0/3.0)*dot(X,N)*ds)
     return patient.volume[0] - vol
 
 def setup_simulation(params, patient):
