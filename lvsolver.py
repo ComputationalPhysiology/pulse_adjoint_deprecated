@@ -55,7 +55,8 @@ class LVSolver(object):
                 else:
                     prm[k] = v
         else:
-            prm = self.default_solver_parameters()
+            self.use_snes = True
+            prm= self.default_solver_parameters()
             
         self.parameters["solve"] = prm
         
@@ -69,11 +70,11 @@ class LVSolver(object):
 
         prm = {"nonlinear_solver": "snes", "snes_solver":{}} if self.use_snes else {"nonlinear_solver": "newton", "newton_solver":{}}
 
-        prm[nsolver]['absolute_tolerance'] = 1E-5
-        prm[nsolver]['relative_tolerance'] = 1E-5
-        prm[nsolver]['maximum_iterations'] = 8
+        prm[nsolver]['absolute_tolerance'] = 1E-8
+        prm[nsolver]['relative_tolerance'] = 1E-8
+        prm[nsolver]['maximum_iterations'] = 15
         # prm[nsolver]['relaxation_parameter'] = 1.0
-        prm[nsolver]['linear_solver'] = 'lu'
+        prm[nsolver]['linear_solver'] = 'mumps'
         prm[nsolver]['error_on_nonconvergence'] = True
         prm[nsolver]['report'] = True if logger.level < INFO else False
         if self.iterative_solver:
@@ -101,6 +102,10 @@ class LVSolver(object):
         
     def get_displacement(self, name = "displacement", annotate = True):
         return self._compressibility.get_displacement(name, annotate)
+
+    def get_hydrostatic_pressue(self, name = "hydrostatic_pressure", annotate = True):
+        return self._compressibility.get_hydrostatic_pressue(name, annotate)
+    
     def get_u(self):
         if self._W.sub(0).num_sub_spaces() == 0:
             return self._w
@@ -144,12 +149,12 @@ class LVSolver(object):
         w_old = self.get_state().copy(True)
         try:
             # Try to solve the system
-             solve(self._G == 0,
-                   self._w,
-                   self._bcs,
-                   J = self._dG,
-                   solver_parameters = self.parameters["solve"],
-                   annotate = False)
+            solve(self._G == 0,
+                  self._w,
+                  self._bcs,
+                  J = self._dG,
+                  solver_parameters = self.parameters["solve"],
+                  annotate = False)
 
         except RuntimeError as ex:
             logger.debug(ex)
@@ -236,12 +241,15 @@ class LVSolver(object):
            \sigma = \mathbf{F} \frac{\partial \psi}{\partial \mathbf{F}}
         
         """
+        return self._F*diff(self._pi_int, self._F)
+    
         if self.is_incompressible():
             p = self._compressibility.p
-            return self._F*diff(self._strain_energy, self._F) - p*self._I 
+            return self._F*diff(self._strain_energy, self._F) + p*self._I 
         else:
             J = det(self._F)
             return J**(-1)*self._F*diff(self._strain_energy, self._F)
+
 
     def fiber_stress(self):
         r"""Compute Fiber stress
@@ -256,7 +264,7 @@ class LVSolver(object):
         """
         # Fibers
         f0 = self.parameters["material"].f0
-        f = self._F*f0
+        f = self._F*f0 / sqrt(self.I4f())
 
         return inner(f, self.chaucy_stress()*f)
 
@@ -273,7 +281,7 @@ class LVSolver(object):
         """
         # Fibers
         f0 = self.parameters["material"].f0
-        f = self._F*f0
+        f = self._F*f0 / sqrt(self.I4f())
 
         return inner(f, self._E*f)
 
@@ -300,7 +308,7 @@ class LVSolver(object):
         
         # Fibers
         f0 = self.parameters["material"].f0
-        f = self._F*f0
+        f = self._F*f0 / sqrt(self.I4f())
 
         Ef = self._E*f
         Sf = self.second_piola_stress()*f
@@ -319,6 +327,47 @@ class LVSolver(object):
         """
         return self.parameters["material"].I4f(self._F)
 
+    def W1(self):
+        """
+        Return the isotropic part of the strain energy
+        """
+        return self.parameters["material"].W_1(self.I1())
+
+    def W4f(self):
+        """
+        Return the fiber part of the strain energy
+        """
+        return self.parameters["material"].W_4(self.I4f())
+
+  
+    def strain_energy(self):
+        """
+        Return the total strain energy
+        """
+        return self.parameters["material"].strain_energy(self._F)
+    
+    def GreenLagrange(self):
+        return self._E
+
+    def Eff(self, V):        
+        f = self._F * self.parameters["material"].f0 / sqrt(self.I4f())
+        # f = f / inner(f, f)
+        return self._localproject(inner(self._E*f, f), V)
+
+    def Tff(self, V):
+        f = self._F * self.parameters["material"].f0 / sqrt(self.I4f())
+       
+        return self._localproject(inner(self.chaucy_stress()*f, f), V)
+        
+    def _localproject(self, fun, V) :
+        a = inner(TestFunction(V), TrialFunction(V)) * dx
+        L = inner(TestFunction(V), fun) * dx
+        res = Function(V)
+    
+        solver = LocalSolver(a, L, to_annotate = False)
+        solver.solve_local(res.vector(), assemble(L), V.dofmap())
+        return res
+        
     def _init_spaces(self):
         """
         Initialize function spaces
@@ -367,6 +416,7 @@ class LVSolver(object):
             for neumann_bc in self.parameters["bc"]["neumann"]:
                 p, marker = neumann_bc
                 self._G += inner(J*p*dot(inv(F).T, N), v)*ds(marker)
+                # self._G += p*inner(v, cofac(F)*N)*ds(marker)
         
         # Robin BC
         if self.parameters["bc"].has_key("robin"):

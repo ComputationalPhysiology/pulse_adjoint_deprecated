@@ -32,6 +32,7 @@ try:
 except:
     has_pyipopt = False
 
+
 def run_passive_optimization(params, patient):
 
     logger.info(Text.blue("\nRun Passive Optimization"))
@@ -130,10 +131,6 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     #Get initial guess for gamma
     if not params["nonzero_initial_guess"] or params["active_contraction_iteration_number"] == 0:
         # Use zero initial guess
-        # from IPython import embed; embed()
-        # exit()
-        # gamma.assign(Constant(0.0))
-        # from IPython import embed; embed()
         zero = Constant(0.0) if gamma.value_size() == 1 \
           else Constant([0.0]*gamma.value_size())
 
@@ -319,9 +316,20 @@ def solve_oc_problem(params, rd, paramvec):
                 method = "SLSQP"
             else:
                 method = opt_params["method"]
+                
+            def lowerbound_constraint(m):
+                return m - lb
 
+            def upperbound_constraint(m):
+                return ub - m 
+
+
+            cons = ({"type": "ineq", "fun": lowerbound_constraint},
+                   {"type": "ineq", "fun": upperbound_constraint})
+            
             kwargs = {"method": method,
-                      "bounds":zip(lb,ub),
+                      "constraints": cons, 
+                      # "bounds":zip(lb,ub),
                       "jac": rd.derivative,
                       "tol":tol,
                       "options": {"disp": opt_params["disp"],
@@ -377,7 +385,7 @@ def load_target_data(measurements, params, spaces):
        
 
     logger.info(Text.blue("Load target data"))
-    logger.info("\tLV Pressure (cPa) \tLV Volume (mL)")
+    logger.info("\tLV Pressure (kPa) \tLV Volume (mL)")
 
 
     for it, p in enumerate(pressures):

@@ -210,11 +210,11 @@ class HolzapfelOgden(object):
         
         # Active stress model
         if self._active_model == 'active_stress':
-            W1   = self.W_1(I1)
-            W4f  = self.W_4(I4f)
+            self._W1   = self.W_1(I1)
+            self._W4f  = self.W_4(I4f)
             
-            Wactive = gamma * I4f
-            W = W1 + W4f + Wactive 
+            self._Wactive = gamma * I4f
+            W = self._W1 + self._W4f + self._Wactive 
 
         # Active strain model
         elif self._active_model == 'active_strain':
@@ -225,10 +225,10 @@ class HolzapfelOgden(object):
             # I8fse = 1/sqrt(mgamma) * I8fs
             
             
-            W1   = self.W_1(I1e)
-            W4f  = self.W_4(I4fe)
+            self._W1   = self.W_1(I1e)
+            self._W4f  = self.W_4(I4fe)
             
-            W = W1 + W4f
+            W = self._W1 + self._W4f
         else:
             raise NotImplementedError("The active model '{}' is "\
                                       "not implemented.".format(\
@@ -269,6 +269,27 @@ class Guccione(object) :
         """
         p = self._parameters
         return p['bt'] == 1.0 and p['bf'] == 1.0 and p['bfs'] == 1.0
+
+    def I1(self, F):
+        """
+        First Isotropic invariant
+        """
+        C = F.T * F
+        J = det(F)
+        Jm23 = pow(J, -float(2)/3)
+        return  Jm23 * tr(C)
+
+    def I4f(self, F):
+        """
+        Quasi invariant in fiber direction
+        """
+        if self.f0 is None:
+            return Constant(0.0)
+
+        C = F.T * F
+        J = det(F)
+        Jm23 = pow(J, -float(2)/3)
+        return Jm23 * inner(C*self.f0, self.f0)
 
     def is_incompressible(self) :
         """
