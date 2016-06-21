@@ -161,23 +161,37 @@ def initialize_patient_data(patient_parameters, synth_data):
 def save_patient_data_to_simfile(patient, sim_file):
 
     file_format = "a" if os.path.isfile(sim_file) else "w"
-    
-    with HDF5File(mpi_comm_world(), sim_file, file_format) as h5file:
-        h5file.write(patient.mesh, 'geometry/mesh')
-        fgroup = "microstructure"
-        names = []
-        for field in [patient.e_f, patient.e_s, patient.e_sn]:
-            name = "{}_{}".format(str(field), field.label())
-            fsubgroup = "{}/{}".format(fgroup, name)
-            h5file.write(field, fsubgroup)
-            h5file.attributes(fsubgroup)['name'] = field.name()
-            names.append(name)
+    from mesh_generation.mesh_utils import save_geometry_to_h5
 
-        elm = field.function_space().ufl_element()
-        family, degree = elm.family(), elm.degree()
-        fspace = '{}_{}'.format(family, degree)
-        h5file.attributes(fgroup)['space'] = fspace
-        h5file.attributes(fgroup)['names'] = ":".join(names)
+    if hasattr(patient, "e_s"):
+        fields = [patient.e_f, patient.e_s, patient.e_sn]
+    else:
+        fields = [patient.e_f]
+
+    local_basis = [patient.e_circ, patient.e_rad, patient.e_long]
+        
+    save_geometry_to_h5(patient.mesh, sim_file, "", patient.markers,
+                            fields, local_basis)
+    
+    
+    # with HDF5File(mpi_comm_world(), sim_file, file_format) as h5file:
+    #     h5file.write(patient.mesh, 'geometry/mesh')
+
+        
+    #     fgroup = "microstructure"
+    #     names = []
+    #     for field in [patient.e_f, patient.e_s, patient.e_sn]:
+    #         name = "{}_{}".format(str(field), field.label())
+    #         fsubgroup = "{}/{}".format(fgroup, name)
+    #         h5file.write(field, fsubgroup)
+    #         h5file.attributes(fsubgroup)['name'] = field.name()
+    #         names.append(name)
+
+    #     elm = field.function_space().ufl_element()
+    #     family, degree = elm.family(), elm.degree()
+    #     fspace = '{}_{}'.format(family, degree)
+    #     h5file.attributes(fgroup)['space'] = fspace
+    #     h5file.attributes(fgroup)['names'] = ":".join(names)
 
 def load_synth_data(mesh, synth_output, num_points, use_deintegrated_strains = False):
     pressure = []
