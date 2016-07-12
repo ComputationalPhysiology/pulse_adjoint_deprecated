@@ -1,4 +1,20 @@
 #!/usr/bin/env python
+# Copyright (C) 2016 Henrik Finsberg
+#
+# This file is part of PULSE-ADJOINT.
+#
+# PULSE-ADJOINT is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# PULSE-ADJOINT is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from sympy import *
 from sympy.printing import ccode
 import dolfin as df
@@ -269,12 +285,16 @@ def setup_neohookean_2d(active_model, material_model):
 
 
     # Psym2 = Psym - p*J*F_sym.inv().T
+    # Tff = (((alpha*Y)**2)*T[0]+ alpha*Y*T[1] + alpha*Y*T[2] + T[3])/(1+(alpha*Y)**2)
+    Tff = T[3]#/(1+(alpha*Y)**2)
+    print "Tff = ", Tff
+
 
     print "\ndivP = ",
     for e in divP:
         print ccode(e), ",\n"
     
-    return P, divP, U, p, T
+    return P, divP, U, p, T, Tff
 
 
 def setup_neohookean_3d(active_model = "active_stress", material_model = "neo_hookean"):
@@ -535,7 +555,7 @@ def test_neohookean_2d():
 
         matparams = {"a":a, "b":b, "a_f":a_f, "b_f":b_f}
     
-    P_sym, divP_sym, u_sym, p_sym, T_sym = setup_neohookean_2d(active_model, material_model)
+    P_sym, divP_sym, u_sym, p_sym, T_sym, Tff_sym = setup_neohookean_2d(active_model, material_model)
 
     
     DIR_BOUND = 1
@@ -545,10 +565,11 @@ def test_neohookean_2d():
     err_u = []
     err_p = []
     err_J = []
+    err_Tf = []
     # ndivs = [10, 20, 40, 80]
-    # ndivs = [2,4,8,16, 32, 64]
-    ndivs = [16]
-    plot = True
+    ndivs = [2,4,8,16, 32, 64, 128]
+    # ndivs = [16]
+    plot = False
     
     
     for ndiv in ndivs:
@@ -609,6 +630,9 @@ def test_neohookean_2d():
         T_df = df.Expression(( (ccode(T_sym[0]), ccode(T_sym[1]) ),
                                        (ccode(T_sym[2]), ccode(T_sym[3]) )),
                                      gamma_f =gamma, Ta = Ta, alpha = alpha, **matparams)
+
+        Tff_df = df.Expression(ccode(Tff_sym),
+                                   gamma_f =gamma, Ta = Ta, alpha = alpha, **matparams)
         
         divP_df = df.Expression((ccode(divP_sym[0]), ccode(divP_sym[1])),
                                         gamma_f = gamma, Ta = Ta, alpha = alpha, **matparams)
@@ -633,23 +657,34 @@ def test_neohookean_2d():
         w = solver.get_state().copy(True)
     
         uh,ph = solver.get_state().split(deepcopy=True)
-        J = df.project(solver.postprocess.J(), df.FunctionSpace(mesh, "CG", 1))
+        Tff_h = df.project(solver.postprocess().fiber_stress(),df.FunctionSpace(mesh, "CG", 1))
+        J = df.project(solver.postprocess().J(), df.FunctionSpace(mesh, "CG", 1))
 
         if plot:
             u = df.interpolate(u_df, df.VectorFunctionSpace(mesh, "CG", 2))
             p = df.interpolate(p_df, df.FunctionSpace(mesh, "CG", 1)) #- mu*(1+gamma)
+            Tff = df.interpolate(Tff_df, df.FunctionSpace(mesh, "CG", 1)) #- mu*(1+gamma)
             
-            df.plot(uh, mode = "displacement", title = "u Numerical")
-            df.plot(u, mode = "displacement", title = "u Exact")
-            df.plot(abs(u-uh),  title = "u diff")
-            df.plot(ph, title = "p Numerical")
-            df.plot(p, title = "p Exact")
-            df.plot(abs(p-ph),  title = "p diff")
+            
+            
+            # df.plot(uh, mode = "displacement", title = "u Numerical")
+            # df.plot(u, mode = "displacement", title = "u Exact")
+            # df.plot(abs(u-uh),  title = "u diff")
+            # df.plot(ph, title = "p Numerical")
+            # df.plot(p, title = "p Exact")
+            # df.plot(abs(p-ph),  title = "p diff")
+
+            df.plot(Tff, title = "Fiber stress exact")
+            df.plot(Tff_h, title = "Fiber stress numerical")
+            df.plot(abs(Tff-Tff_h), title = "Fiber stress diff")
+            
+            
             df.interactive()
 
         err_u.append(df.errornorm(u_df, uh, "H1", mesh = mesh))
         err_p.append(df.errornorm(p_df, ph, "L2", mesh = mesh))
         err_J.append(df.errornorm(df.Expression("1.0"), J, "L2", mesh = mesh))
+        err_Tf.append(df.errornorm(Tff_df, Tff_h, "L2", mesh = mesh))
         print "\nNdiv = ", ndiv
         print "Number of cells = ", mesh.num_cells()
         print "Error u (H1)= ", err_u[-1]
@@ -661,6 +696,7 @@ def test_neohookean_2d():
     plt.loglog(1.0/np.array(ndivs), err_u, "b-o", label = r"$\|u - u_h\|_{H^1}$")
     plt.loglog(1.0/np.array(ndivs), err_p, "r-o", label = r"$\|p - p_h\|_{L^2}$")
     plt.loglog(1.0/np.array(ndivs), err_J, "g-o", label = r"$\|J - 1\|_{L^2}$")
+    plt.loglog(1.0/np.array(ndivs), err_Tf, "k-.o", label = r"$\|Tf - Tf_h\|_{L^2}$")
     plt.legend(loc = "best")
     plt.show()
 

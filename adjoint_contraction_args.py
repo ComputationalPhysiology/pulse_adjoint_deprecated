@@ -1,20 +1,20 @@
 #!/usr/bin/env python
 # Copyright (C) 2016 Henrik Finsberg
 #
-# This file is part of CAMPASS.
+# This file is part of PULSE-ADJOINT.
 #
 # CAMPASS is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# CAMPASS is distributed in the hope that it will be useful,
+# PULSE-ADJOINT is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public License
-# along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
+# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 import os, logging
 import dolfin
 
@@ -105,8 +105,8 @@ ALPHA_MATPARAMS = 1.0
 PHASES = ['passive_inflation', 'active_contraction', "all"]
 
 # Initial material parameters
-INITIAL_MATPARAMS = [0.795, 6.855, 21.207, 40.545]
-# INITIAL_MATPARAMS = [0.291, 2.582, 5,5] 
+# INITIAL_MATPARAMS = [0.795, 6.855, 21.207, 40.545]
+INITIAL_MATPARAMS = [2.91, 2.582, 5,5] 
 
 # If true, Optimize material parameters, otherswise use the default material parameters
 OPTIMIZE_MATPARAMS = True

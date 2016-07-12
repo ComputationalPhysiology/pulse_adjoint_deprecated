@@ -1,21 +1,20 @@
 #!/usr/bin/env python
 # Copyright (C) 2016 Henrik Finsberg
 #
-# This file is part of CAMPASS.
+# This file is part of PULSE-ADJOINT.
 #
 # CAMPASS is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# CAMPASS is distributed in the hope that it will be useful,
+# PULSE-ADJOINT is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public License
-# along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
-
+# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfinimport import *
 from setup_optimization import setup_simulation, logger, MyReducedFunctional
 from utils import Text, Object, pformat, print_optimization_report, contract_point_exists, get_spaces
@@ -321,11 +320,12 @@ def solve_oc_problem(params, rd, paramvec):
                 return m - lb
 
             def upperbound_constraint(m):
-                return ub - m 
+                return ub - m
+
 
 
             cons = ({"type": "ineq", "fun": lowerbound_constraint},
-                   {"type": "ineq", "fun": upperbound_constraint})
+                    {"type": "ineq", "fun": upperbound_constraint})
             
             kwargs = {"method": method,
                       "constraints": cons, 

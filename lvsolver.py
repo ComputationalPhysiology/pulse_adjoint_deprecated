@@ -3,7 +3,7 @@
 #
 # This file is part of PULSE-ADJOINT.
 #
-# CAMPASS is free software: you can redistribute it and/or modify
+# PULSE-ADJOINT is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
@@ -26,7 +26,7 @@ class LVSolver(object):
     A Cardiac Mechanics Solver
     """
     
-    def __init__(self, params):        
+    def __init__(self, params):
 
         for k in ["mesh", "facet_function", "material", "bc"]:
             assert params.has_key(k), \
@@ -65,8 +65,11 @@ class LVSolver(object):
         self._init_spaces()
         self._init_forms()
 
-        self.postprocess = Postprocess(self)
-
+        self._postprocess = Postprocess(self)
+        
+    def postprocess(self):
+        return self._postprocess
+        
     def default_solver_parameters(self):
 
         nsolver = "snes_solver" if self.use_snes else "newton_solver"
@@ -223,17 +226,19 @@ class LVSolver(object):
         
         # Deformation gradient
         F = grad(u) + self._I
+        self._C = F.T * F
+        self._E = 0.5*(self._C - self._I)
 
         
         self._F = variable(F)
-        J = det(F)
+        J = det(self._F)
 
 
         # If model is not compressible remove volumetric strains
         if self.is_incompressible():
-            F_iso = F
+            F_iso = self._F
         else:
-            F_iso = pow(J, -float(1)/dim)*F
+            F_iso = pow(J, -float(1)/dim)*self._F
             
                 
         # Internal energy
@@ -316,12 +321,18 @@ class LVSolver(object):
             else:
                 args = [D, val, marker]
             bcs.append(DirichletBC(*args))
-        return bcs 
+        return bcs
+
 
 
 class Postprocess(object):
     def __init__(self, solver):
         self.solver = solver
+        
+        self._F = self.solver._F
+        self._C = self.solver._C
+        self._E = self.solver._E
+        self._I = self.solver._I
 
     def internal_energy(self):
         """
@@ -346,8 +357,7 @@ class Postprocess(object):
            \mathbf{P} = \frac{\partial \psi}{\partial \mathbf{F}}
         
         """
-        F = self.solver._F
-        return diff(self.solver._pi_int, F)
+        return diff(self.internal_energy(), self._F)
 
     def second_piola_stress(self):
         r"""
@@ -358,7 +368,7 @@ class Postprocess(object):
            \mathbf{S} =  \mathbf{F}^{-1} \mathbf{P}
 
         """
-        return inv(self.solver._F)*self.first_piola_stress()
+        return inv(self._F)*self.first_piola_stress()
 
     def chaucy_stress(self):
         r"""
@@ -377,43 +387,8 @@ class Postprocess(object):
            \sigma = \mathbf{F} \frac{\partial \psi}{\partial \mathbf{F}}
         
         """
-        F = self.solver._F
-        return F*diff(self.solver._pi_int, F)
+        return self._F*diff(self.internal_energy(), self._F)
     
-
-    def fiber_stress(self):
-        r"""Compute Fiber stress
-
-        .. math::
-
-           \sigma_{f} = f \cdot \sigma f,
-
-        with :math:`\sigma` being the Chauchy stress tensor
-        and :math:`f` the fiber field on the current configuration
-
-        """
-        # Fibers
-        f0 = self.parameters["material"].f0
-        f = self.solver._F*f0 / sqrt(self.I4f())
-
-        return inner(f, self.chaucy_stress()*f)
-
-    def fiber_strain(self):
-        r"""Compute Fiber strain
-
-        .. math::
-
-           \mathbf{E}_{f} = f \cdot \mathbf{E} f,
-
-        with :math:`\mathbf{E}` being the Green-Lagrange strain tensor
-        and :math:`f` the fiber field on the current configuration
-
-        """
-        # Fibers
-        f0 = self.solver.parameters["material"].f0
-        f = self.solver._F*f0 / sqrt(self.I4f())
-
-        return inner(f, self._E*f)
 
     def work(self):
         r"""
@@ -426,7 +401,10 @@ class Postprocess(object):
         with :math:`\mathbf{E}` being the Green-Lagrange strain tensor
         and :math:`\mathbf{E}` the second Piola stress tensor
         """
-        return inner(self.solver._E, self.second_piola_stress())
+        
+        return inner(self.GreenLagrange(), self.second_piola_stress())
+
+    
         
     def work_fiber(self):
         r"""Compute Work in Fiber work
@@ -437,16 +415,18 @@ class Postprocess(object):
         """
         
         # Fibers
-        f0 = self.solver.parameters["material"].f0
-        f = self.solver._F*f0 / sqrt(self.I4f())
+        f = self.solver.parameters["material"].f0
 
-        Ef = self.solver._E*f
+        # Fiber strain
+        Ef = self.GreenLagrange()*f
+        # Fiber stress
         Sf = self.second_piola_stress()*f
-        
+
         return inner(Ef, Sf)
 
+
     def J(self):
-        return det(self.solver._F)
+        return det(self._F)
     
     def I1(self):
         """
@@ -460,18 +440,6 @@ class Postprocess(object):
         """
         return self.solver.parameters["material"].I4f(self._F)
 
-    def W1(self):
-        """
-        Return the isotropic part of the strain energy
-        """
-        return self.solver.parameters["material"].W_1(self.I1())
-
-    def W4f(self):
-        """
-        Return the fiber part of the strain energy
-        """
-        return self.solver.parameters["material"].W_4(self.I4f())
-
   
     def strain_energy(self):
         """
@@ -480,18 +448,37 @@ class Postprocess(object):
         return self.solver.parameters["material"].strain_energy(self._F)
     
     def GreenLagrange(self):
-        return self.solver._E
+        return self._E
 
-    def Eff(self, V):
-        f = self.solver._F * self.solver.parameters["material"].f0 / sqrt(self.I4f())
-        # f = f / inner(f, f)
-        return self._localproject(inner(self.GreenLagrange()*f, f), V)
+    def fiber_strain(self):
+        r"""Compute Fiber strain
 
-    def Tff(self, V):
+        .. math::
+
+           \mathbf{E}_{f} = f \cdot \mathbf{E} f,
+
+        with :math:`\mathbf{E}` being the Green-Lagrange strain tensor
+        and :math:`f` the fiber field on the current configuration
+
+        """
+        f =  self.solver.parameters["material"].f0
+        return inner(self.GreenLagrange()*f/f**2, f)
         
-        f = self.solver._F * self.solver.parameters["material"].f0 / sqrt(self.I4f())
+
+    def fiber_stress(self):
+        r"""Compute Fiber stress
+
+        .. math::
+
+           \sigma_{f} = f \cdot \sigma f,
+
+        with :math:`\sigma` being the Chauchy stress tensor
+        and :math:`f` the fiber field on the current configuration
+
+        """
+        f =  self.solver.parameters["material"].f0 
+        return inner((self.chaucy_stress()*f)/f**2, f)
        
-        return self._localproject(inner(self.chaucy_stress()*f, f), V)
 
     def _localproject(self, fun, V) :
         a = inner(TestFunction(V), TrialFunction(V)) * dx

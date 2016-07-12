@@ -1,22 +1,17 @@
-# CardioMechanical Patient-Specific Simulator (campass)#
+# Pulse-Adjoint #
 
 This repo contains the code that is based on the following paper: (link to paper)
-Name might be changed later (suggestions?)
 
 A cardiac computational model is constrained using clinical measurements such as pressure, volume and regional strain. The problem is formulated as a PDE-constrained optimisation problem where the objective functional represents the misfit between measured and simulated data. The control parameter for the active phase is a spatially varying contraction parameter defined at every vertex in the mesh. The control parameters for the passive phase is material parameters for a Holzapfel and Ogden transversally isotropic material. The problem is solved using a gradient based optimization algorithm where the gradient is provided by solving the adjoint system.
 
 ## Requirements ##
 In order to simply run the code you need
 ```
-* FEniCS version >= 1.6
+* FEniCS version 1.6
   -- http://fenicsproject.org
-* Dolfin-Adjoint version >= 1.6
+* Dolfin-Adjoint version 1.6
   -- http://www.dolfin-adjoint.org/en/latest/download/index.html
-* numpy_mpi (Should perhaps make this as a part of the repo)
-  -- Scripts to make in run in parallell
-  -- git clone git@bitbucket.org:Gabrielbalaban/numpy_mpi.git
-  -- Ask Gabriel for access
-```
+
 Optional
 To get the most out of it you also need
 ```
@@ -40,6 +35,7 @@ To get the most out of it you also need
   -- Interior Point Optimization algorithm
   -- This is the best available open-source optimisation algorithm
   -- see http://www.dolfin-adjoint.org/en/latest/download/index.html#optional-dependencies
+  -- Currently not working in parallell (Fix later)
 
 ```
 
