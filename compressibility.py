@@ -1,20 +1,20 @@
 #!/usr/bin/env python
 # Copyright (C) 2016 Gabriel Balaban
 #
-# This file is part of CAMPASS.
+# This file is part of PULSE-ADJOINT.
 #
 # CAMPASS is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# CAMPASS is distributed in the hope that it will be useful,
+# PULSE-ADJOINT is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public License
-# along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
+# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfinimport import *
 
 def get_compressibility(parameters):
@@ -56,14 +56,14 @@ class Compressibility(object):
             # Lagrange Multiplier
             Q = FunctionSpace(mesh, Q_str.split("_")[0], 
                               int(Q_str.split("_")[1]))
-            self.W = V*Q
+            self.W = MixedFunctionSpace([V, Q])
             self.w = Function(self.W, name = "displacement-pressure")
             self.w_test = TestFunction(self.W)
             self.u_test, self.p_test = split(self.w_test)
             self.u, self.p = split(self.w)
     
         def __call__(self, J):
-            return (J - 1)*self.p
+            return -self.p*(J-1)
 
         def is_incompressible(self):
             return True
@@ -76,6 +76,8 @@ class Compressibility(object):
         
         def get_displacement_variable(self):
             return self.u
+        def get_lp_variable(self):
+            return self.p
         
         def get_displacement(self, name, annotate = True):
             D = self.get_displacement_space()
@@ -87,7 +89,7 @@ class Compressibility(object):
                       annotate = annotate)
             return u
 
-        def get_hydrostatic_pressue(self, name, annotate = True):
+        def get_hydrostatic_pressue(self, name = "p", annotate = True):
             D = self.get_pressure_space()
             V = D.collapse()
         
@@ -97,16 +99,7 @@ class Compressibility(object):
                       annotate = annotate)
             return p
         
-        def calculate_average_volume_ratio(self, w, mesh):
-            return assemble(det(grad(split(w)[0]) \
-                                + Identity(3))*dx) \
-                                /assemble(1.0*Measure("dx", domain = mesh))
-        
-        def calculate_max_volume_ratio(self, w, mesh):
-            J = project(det(grad(split(w)[0]) + Identity(3)), 
-                        self.W.sub(1).collapse(), name = "J max")
 
-            return max(abs(J.vector().array() -1))
     
     class StabalizedIncompressible(Incompressible):
         """
@@ -164,13 +157,7 @@ class Compressibility(object):
         def is_incompressible(self):
             return False
 
-        def calculate_average_volume_ratio(self, w, mesh):
-            return assemble(det(grad(w) + Identity(3))*dx)/assemble(1.0*Measure("dx", domain = mesh))
-    
-        def calculate_max_volume_ratio(self, w, mesh):
-            J = project(det(grad(w) + Identity(3)), FunctionSpace(mesh, "DG", 0))
-            return max(abs(J.vector().array() - 1))
-    
+      
     class HuWashizu(object):
         """
         This gives the formulation used in Goektepe et al 2011
@@ -202,13 +189,6 @@ class Compressibility(object):
         def is_incompressible(self):
             raise NotImplementedError
 
-        def calculate_average_volume_ratio(self, w, mesh):
-            return assemble(det(grad(split(w)[0]) + Identity(3))*dx)/assemble(1.0*Measure("dx", domain = mesh))
-        
-        def calculate_max_volume_ratio(self, w, mesh):
-            J = project(det(grad(split(w)[0]) + Identity(3)), self.W.sub(1).collapse(), name = "max_volume_ration")
-            return max(abs(J.vector().array() - 1))
-        
         def get_displacement_space(self):
             return self.W.sub(0)
         

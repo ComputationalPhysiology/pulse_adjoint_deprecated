@@ -1,22 +1,22 @@
 #!/usr/bin/env python
 # Copyright (C) 2016 Henrik Finsberg
 #
-# This file is part of CAMPASS, but based on PULSE.
+# This file is part of PULSE-ADJOINT.
 #
 # CAMPASS is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# CAMPASS is distributed in the hope that it will be useful,
+# PULSE-ADJOINT is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public License
-# along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
-
+# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfinimport import *
+
 
 def subplus(x):
     return conditional(ge(x, 0.0), x, 0.0)
@@ -24,15 +24,141 @@ def subplus(x):
 def heaviside(x):
     return conditional(ge(x, 0.0), 1.0, 0.0)
 
+class Material(object):
+    def __init__(self):
+        assert self._active_model in \
+          ["active_stress", "active_strain", "active_strain_rossi"], \
+          "The active model '{}' is not implemented.".format(self._active_model)
 
-class HolzapfelOgden(object):
+    
+    def I1(self, F):
+        """
+        First Isotropic invariant
+        """
+        J = det(F)
+        # C = pow(J, -float(2)/self.dim) * F.T * F
+        C =  F.T * F
+        return tr(C)
+
+    def I4f(self, F):
+        """
+        Quasi invariant in fiber direction
+        """
+        if self.f0 is None:
+            return Constant(0.0)
+
+        J = det(F)
+        # C =  pow(J, -float(2)/self.dim) * F.T * F
+        C =  F.T * F
+        # C = F * F.T
+        return inner(C*self.f0, self.f0)
+
+    def I4s(self, F):
+        """
+        Quasi invariant in fiber direction
+        """
+        if self.s0 is None:
+            return Constant(0.0)
+
+        J = det(F)
+        # C =  pow(J, -float(2)/3)*F.T * F
+        C =  F.T * F 
+        return  inner(C*self.s0, self.s0)
+
+    def I4n(self, F):
+        """
+        Quasi invariant in fiber direction
+        """
+        if self.n0 is None:
+            return Constant(0.0)
+
+        J = det(F)
+        # C = pow(J, -float(2)/3) * F.T * F
+        C =  F.T * F
+        return  inner(C*self.n0, self.n0)
+
+    def I8fs(self, F):
+        """
+        Quasi invariant in fiber direction
+        """
+        if (self.f0 and self.s0) is None:
+            return Constant(0.0)
+
+        J = det(F)
+        # C = pow(J, -float(2)/3) * F.T * F
+        C = F.T * F
+        return  inner(C*self.f0, self.s0)
+
+    def I1e(self, F):
+        """
+        First isotropic invariant in the elastic configuration
+        """
+
+        I1  = self.I1(F)
+        I4f = self.I4f(F)
+        
+        gamma = self.gamma
+        
+        
+
+        if self._active_model == 'active_stress':
+            
+            return I1
+        
+        # Active strain model
+        elif self._active_model == 'active_strain':
+            mgamma = 1 - gamma
+
+            return  mgamma * I1 + (1/mgamma**2 - mgamma) * I4f
+            
+        elif self._active_model == "active_strain_rossi":
+            
+            I4s = self.I4s(F)
+            I4n = self.I4n(F)
+            d = F.geometric_dimension()
+            gamma_trans = pow((1+self.gamma), -float(1)/(d-1)) - 1
+            
+            return I1 - I4f*gamma*(gamma +2)/(1+gamma)**2 - (I4s+ I4n)*gamma_trans*(gamma_trans +2)/(1+gamma_trans)**2
+
+        
+
+    def I4fe(self, F):
+        """
+        First isotropic invariant in the elastic configuration
+        """
+
+        I4f = self.I4f(F)
+        # I4s = self.I4s(F)
+        # I4f = self.I4f(F)
+        gamma = self.gamma
+
+        if self._active_model == 'active_stress':
+            
+            return I4f
+        
+        # Active strain model
+        elif self._active_model == 'active_strain':
+            
+            mgamma = 1 - gamma
+
+            return   1/mgamma**2 * I4f
+            
+        elif self._active_model == "active_strain_rossi":
+            
+            mgamma = 1 + gamma
+            
+            return   1/mgamma**2 * I4f
+    
+
+
+class HolzapfelOgden(Material):
     def __init__(self, f0 = None, gamma = None, params = None, active_model = "active_strain", strain_markers = None, s0 = None, n0 = None):
 
         assert active_model in ["active_strain", "active_stress"]
 
         # Fiber system
         self.f0 = f0
-        # self.s0 = s0
+        self.s0 = s0
         # self.n0 = n0
         
         self.strain_markers = strain_markers
@@ -46,6 +172,10 @@ class HolzapfelOgden(object):
             setattr(self, k, v)
 
         self._active_model = active_model
+
+        
+        Material.__init__(self)
+        
 
 
     def default_parameters(self):
@@ -107,82 +237,6 @@ class HolzapfelOgden(object):
                      * (1 + 2.0 * b * pow(I_4 - 1, 2)) \
                      * exp(b * pow(I_4 - 1, 2))
 
-    # def W_8(self, I_8, diff=0):
-    #     """
-    #     Cross fiber-sheet contribution.
-    #     """
-    #     a = self._control_parameters['a_cross']
-    #     b = self._control_parameters['b_cross']
-
-    #     if I_8 == 0:
-    #         return 0
-
-    #     # if float(a) < DOLFIN_EPS:
-    #     #     return 0.0
-    #     # elif float(b) < DOLFIN_EPS:
-    #     #     if diff == 0:
-    #     #         return a / 2.0 * pow(I_8, 2)
-    #     #     elif diff == 1:
-    #     #         return a * I_8
-    #     #     elif diff == 2:
-    #     #         return a
-    #     # else:
-    #     if diff == 0:
-    #         return a/(2.0*b) * (exp(b * pow(I_8, 2)) - 1)
-    #     elif diff == 1:
-    #         return a * I_8 \
-    #           * exp(b * pow(I_8, 2))
-    #     elif diff == 2:
-    #         return a * (1 + 2.0 * b * pow(I_8, 2)) \
-    #           * exp(b * pow(I_8, 2))
-              
-
-    def I1(self, F):
-        """
-        First Isotropic invariant
-        """
-        C = F.T * F
-        J = det(F)
-        Jm23 = pow(J, -float(2)/3)
-        return  Jm23 * tr(C)
-
-    def I4f(self, F):
-        """
-        Quasi invariant in fiber direction
-        """
-        if self.f0 is None:
-            return Constant(0.0)
-
-        C = F.T * F
-        J = det(F)
-        Jm23 = pow(J, -float(2)/3)
-        return Jm23 * inner(C*self.f0, self.f0)
-
-    # def I4s(self, F):
-    #     """
-    #     Quasi invariant in fiber direction
-    #     """
-    #     if self.s0 is None:
-    #         return Constant(0.0)
-
-    #     C = F.T * F
-    #     J = det(F)
-    #     Jm23 = pow(J, -float(2)/3)
-    #     return Jm23 * inner(C*self.s0, self.s0)
-
-    # def I8fs(self, F):
-    #     """
-    #     Quasi invariant in fiber direction
-    #     """
-    #     if (self.f0 and self.s0) is None:
-    #         return Constant(0.0)
-
-    #     C = F.T * F
-    #     J = det(F)
-    #     Jm23 = pow(J, -float(2)/3)
-    #     return Jm23 * inner(C*self.f0, self.s0)
-
-
 
     def strain_energy(self, F):
         """
@@ -207,37 +261,35 @@ class HolzapfelOgden(object):
         # I4s = self.I4s(F)
         # I8fs = self.I8fs
 
-        
         # Active stress model
         if self._active_model == 'active_stress':
-            self._W1   = self.W_1(I1)
-            self._W4f  = self.W_4(I4f)
-            
-            self._Wactive = gamma * I4f
-            W = self._W1 + self._W4f + self._Wactive 
+
+            # Invariants
+            I1  = self.I1(F)
+            I4f = self.I4f(F)
+
+            W1   = self.W_1(I1)
+            W4f  = self.W_4(I4f)
+            Wactive = gamma * I4f
+            W = W1 + W4f + Wactive 
 
         # Active strain model
-        elif self._active_model == 'active_strain':
-            mgamma = 1 - gamma
-            I1e   = mgamma * I1 + (1/mgamma**2 - mgamma) * I4f
-            I4fe  = 1/mgamma**2 * I4f
-            # I4se  = mgamma * I4s
-            # I8fse = 1/sqrt(mgamma) * I8fs
-            
-            
-            self._W1   = self.W_1(I1e)
-            self._W4f  = self.W_4(I4fe)
-            
-            W = self._W1 + self._W4f
         else:
-            raise NotImplementedError("The active model '{}' is "\
-                                      "not implemented.".format(\
-                                          self._active_model))
+            # Invariants
+            I1  = self.I1e(F)
+            I4f = self.I4fe(F)
+            
+            W1   = self.W_1(I1)
+            W4f  = self.W_4(I4f)
+            
+            W = W1 + W4f
+   
 
         return W
+        
 
 
-class Guccione(object) :
+class Guccione(Material) :
     """
     Guccione material model. Copied from https://bitbucket.org/peppu/mechbench
     """
@@ -270,26 +322,7 @@ class Guccione(object) :
         p = self._parameters
         return p['bt'] == 1.0 and p['bf'] == 1.0 and p['bfs'] == 1.0
 
-    def I1(self, F):
-        """
-        First Isotropic invariant
-        """
-        C = F.T * F
-        J = det(F)
-        Jm23 = pow(J, -float(2)/3)
-        return  Jm23 * tr(C)
 
-    def I4f(self, F):
-        """
-        Quasi invariant in fiber direction
-        """
-        if self.f0 is None:
-            return Constant(0.0)
-
-        C = F.T * F
-        J = det(F)
-        Jm23 = pow(J, -float(2)/3)
-        return Jm23 * inner(C*self.f0, self.f0)
 
     def is_incompressible(self) :
         """
@@ -358,3 +391,55 @@ class Guccione(object) :
 
 
 
+
+
+class NeoHookean(Material):
+    def __init__(self, f0 = None, gamma = None, params = None, active_model = "active_strain", s0 = None, n0 = None):
+
+        # Fiber system
+        self.f0 = f0
+        self.s0 = s0
+        self.n0 = n0
+       
+        self.gamma = Constant(0, name="gamma") if gamma is None else gamma
+
+        
+        if params is None:
+            params = self.default_parameters()
+
+        for k,v in params.iteritems():
+            setattr(self, k, v)
+
+        self._active_model = active_model
+
+        Material.__init__(self)
+        
+    def default_parameters(self):
+        return {"mu": 0.385}
+
+    def strain_energy(self, F):
+
+        mu = self.mu 
+        
+        d = F.geometric_dimension()
+        
+        # Active stress model
+        if self._active_model == 'active_stress':
+
+            # Invariants
+            I1  = self.I1(F)
+            I4f  = self.I4f(F)
+           
+            Wactive = self.gamma * I4f
+            W = 0.5*mu*(I1-d) + Wactive 
+
+        else:
+            # Invariants
+            I1  = self.I1e(F)
+            
+            W = 0.5*mu*(I1-d)
+   
+
+        return W
+
+    
