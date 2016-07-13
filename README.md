@@ -13,7 +13,7 @@ In order to simply run the code you need
   -- http://www.dolfin-adjoint.org/en/latest/download/index.html
 ```
 
-Optional
+### Optional ###
 To get the most out of it you also need
 ```
 * yaml
