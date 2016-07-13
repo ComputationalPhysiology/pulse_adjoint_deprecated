@@ -69,6 +69,20 @@ as input. To do so run the script synthetic_data.py
 * One can postprocess the results with the scripts in postprocessing/.
 There are one script for synthetic data and one for real patient data.
 
-## Contributors ##
+## License ##
+PULSE-ADJOINT is free software: you can redistribute it and/or modify
+it under the terms of the GNU Lesser General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
 
-* Henrik Finsberg and Gabriel Balaban
+PULSE-ADJOINT is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public License
+along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
+
+## Contributors ##
+* Henrik Finsberg (henriknf@simula.no)
+* Gabriel Balaban (gabrib@simula.no)
