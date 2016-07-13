@@ -20,9 +20,9 @@ from sympy.printing import ccode
 import dolfin as df
 import numpy as np
 import math
-import campass.material as mat
-from campass.lvsolver import LVSolver
-from campass.compressibility import Compressibility
+import pulse_adjoint.material as mat
+from pulse_adjoint.lvsolver import LVSolver
+from pulse_adjoint.compressibility import Compressibility
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 

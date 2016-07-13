@@ -1,4 +1,4 @@
-"""This module handles all dolfin import in campass. Here dolfin and
+"""This module handles all dolfin import in pulse_adjoint. Here dolfin and
 dolfin_adjoint gets imported. If dolfin_adjoint is not present it will not
 be imported."""
 

@@ -18,10 +18,10 @@
 
 from dolfin import *
 from dolfin_adjoint import *
-from campass.lvsolver import LVSolver
-from campass.material import HolzapfelOgden
-from campass.setup_optimization import setup_application_parameters, setup_solver_parameters, setup_general_parameters
-from campass.adjoint_contraction_args import logger
+from pulse_adjoint.lvsolver import LVSolver
+from pulse_adjoint.material import HolzapfelOgden
+from pulse_adjoint.setup_optimization import setup_application_parameters, setup_solver_parameters, setup_general_parameters
+from pulse_adjoint.adjoint_contraction_args import logger
 
 logger.setLevel(DEBUG)
 

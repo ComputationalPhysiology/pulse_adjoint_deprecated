@@ -15,15 +15,13 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-
 from dolfin import *
 from dolfin_adjoint import *
-from campass.adjoint_contraction_args import *
-from campass.setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters
 import numpy as np
-from numpy_mpi import *
-from campass.utils import Text
-
+from pulse_adjoint.adjoint_contraction_args import *
+from pulse_adjoint.setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters
+from pulse_adjoint.numpy_mpi import *
+from pulse_adjoint.utils import Text
 def setup_params():
     setup_general_parameters()
     params = setup_adjoint_contraction_parameters()
@@ -72,7 +70,7 @@ def my_taylor_test(Jhat, m0_fun):
 
 
 def store_results(params, rd, control):
-    from campass.store_opt_results import write_opt_results_to_h5
+    from pulse_adjoint.store_opt_results import write_opt_results_to_h5
 
     rd(control)
     
@@ -90,14 +88,14 @@ def store_results(params, rd, control):
 def plot_displacements():
     params = setup_params()
     params["base_bc"] =  "dirichlet_bcs_from_seg_base"#"dirichlet_bcs_fix_base_x"
-    from campass.setup_optimization import initialize_patient_data
+    from pulse_adjoint.setup_optimization import initialize_patient_data
     patient = initialize_patient_data(params["Patient_parameters"], 
                                       params["synth_data"])
 
     alpha_regpars = [(params["alpha"], params["reg_par"])]
     # from IPython import embed; embed()
     # exit()
-    from campass.postprocessing.postprocess_utils import get_all_data
+    from pulse_adjoint.postprocessing.postprocess_utils import get_all_data
     data, kwargs = get_all_data(params, patient, alpha_regpars)
 
     

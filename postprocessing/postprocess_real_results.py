@@ -17,7 +17,7 @@
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from postprocess_utils import *
 import pickle
-from campass.setup_optimization import RegionalGamma
+from pulse_adjoint.setup_optimization import RegionalGamma
 figdir = "/home/finsberg/src/adjoint_contraction/article/figures/reproducible_plots/data"
 save_data_to_figdir = False
 

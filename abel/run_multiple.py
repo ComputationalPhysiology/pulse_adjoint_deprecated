@@ -1,8 +1,25 @@
+#!/usr/bin/env python
+# Copyright (C) 2016 Henrik Finsberg
+#
+# This file is part of PULSE-ADJOINT.
+#
+# PULSE-ADJOINT is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# PULSE-ADJOINT is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 import os
 from numpy import logspace, multiply
 from itertools import product
 import yaml
-#from campass.setup_optimization import setup_adjoint_contraction_parameters
+
 
 filepath= os.path.dirname(os.path.abspath(__file__))
 OUTPATH_REAL = filepath+"/results/real{}/patient_{}/alpha_{}/regpar_{}/{}/{}_{}"

@@ -16,9 +16,6 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfin import *
-from campass.setup_optimization import setup_simulation, initialize_patient_data, setup_adjoint_contraction_parameters, setup_general_parameters
-from campass.utils import  AutoVivification, Text,  pformat, passive_inflation_exists, contract_point_exists, get_spaces as get_strain_spaces
-from campass.adjoint_contraction_args import *
 import vtk, argparse, h5py, pickle, sys, collections, warnings, yaml
 import numpy as np
 import seaborn as sns
@@ -26,6 +23,10 @@ from copy import deepcopy
 from tvtk.array_handler import *
 import matplotlib as mpl
 from matplotlib import pyplot as plt, rcParams, cbook, ticker, cm
+
+from pulse_adjoint.setup_optimization import setup_simulation, initialize_patient_data, setup_adjoint_contraction_parameters, setup_general_parameters
+from pulse_adjoint.utils import  AutoVivification, Text,  pformat, passive_inflation_exists, contract_point_exists, get_spaces as get_strain_spaces
+from pulse_adjoint.adjoint_contraction_args import *
 
 ALL_ACTIVE_GROUP = "alpha_{}/reg_par_{}/active_contraction/contract_point_{}"
 ALL_PASSIVE_GROUP = "alpha_{}/reg_par_0.0/passive_inflation"
@@ -1029,8 +1030,7 @@ def save_results_to_h5(sim_data, spaces, h5name):
 ####### Create/set up stuff #########
 def get_solver(params, data, patient, gamma, p_lv, strain_markers = None):
 
-    from campass.setup_optimization import setup_solver_parameters
-    from haosolver import Compressibility, ActiveHaoSolver
+    from pulse_adjoint.setup_optimization import setup_solver_parameters
 
     def make_dirichlet_bcs(W):
 	'''Make Dirichlet boundary conditions where the base is allowed to slide
@@ -1040,7 +1040,7 @@ def get_solver(params, data, patient, gamma, p_lv, strain_markers = None):
         return [no_base_x_tran_bc]
 
     
-    from campass.material import HolzapfelOgden
+    from pulse_adjoint.material import HolzapfelOgden
 
     matparams_arr = data["passive"]["material_parameters"]["optimal"]
     matparams = {"a": matparams_arr[0], 
@@ -1069,7 +1069,7 @@ def get_solver(params, data, patient, gamma, p_lv, strain_markers = None):
                                                    name ="base_spring_constant"), patient.BASE]]},
                          "solve":setup_solver_parameters()}
 
-    from campass.lvsolver import LVSolver
+    from pulse_adjoint.lvsolver import LVSolver
 
     return LVSolver(solver_parameters)
 

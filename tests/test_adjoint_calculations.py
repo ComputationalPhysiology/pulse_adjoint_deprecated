@@ -15,18 +15,13 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-
-from campass.run_optimization import run_passive_optimization_step, run_active_optimization_step, run_passive_optimization
-from campass.setup_optimization import initialize_patient_data, setup_simulation
-from campass.adjoint_contraction_args import *
-from campass.utils import Text, pformat, passive_inflation_exists
-from test_utils import setup_params, my_taylor_test, store_results, plot_displacements
 from dolfin_adjoint import replay_dolfin, adj_reset, adj_html
 import dolfin
-alphas = [0.0, 0.5, 1.0]
-
-
-
+from pulse_adjoint.run_optimization import run_passive_optimization_step, run_active_optimization_step, run_passive_optimization
+from pulse_adjoint.setup_optimization import initialize_patient_data, setup_simulation
+from pulse_adjoint.adjoint_contraction_args import *
+from pulse_adjoint.utils import Text, pformat, passive_inflation_exists
+from test_utils import setup_params, my_taylor_test, store_results, plot_displacements
 def test_passive():
     # dolfin.parameters["adjoint"]["fussy_replay"] = True
     params = setup_params()

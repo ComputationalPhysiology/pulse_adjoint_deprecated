@@ -3,3 +3,6 @@
 *.htm
 *.html
 *.pyc
+tests/data
+local_results
+posprocessing/results
