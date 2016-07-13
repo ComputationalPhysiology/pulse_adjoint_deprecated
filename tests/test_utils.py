@@ -1,20 +1,20 @@
 #!/usr/bin/env python
 # Copyright (C) 2016 Henrik Finsberg
 #
-# This file is part of CAMPASS.
+# This file is part of PULSE-ADJOINT.
 #
-# CAMPASS is free software: you can redistribute it and/or modify
+# PULSE-ADJOINT is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# CAMPASS is distributed in the hope that it will be useful,
+# PULSE-ADJOINT is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 # GNU Lesser General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public License
-# along with CAMPASS. If not, see <http://www.gnu.org/licenses/>.
+# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 
 from dolfin import *
 from dolfin_adjoint import *
@@ -68,7 +68,7 @@ def my_taylor_test(Jhat, m0_fun):
     con_ord = convergence_order(grad_errors)
     logger.info("{}".format(con_ord))
     
-    assert (np.array(con_ord) > 1.9).all()
+    assert (np.array(con_ord) > 1.85).all()
 
 
 def store_results(params, rd, control):
