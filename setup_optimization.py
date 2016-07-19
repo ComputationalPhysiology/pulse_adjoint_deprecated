@@ -78,9 +78,10 @@ def setup_patient_parameters():
     params.add("weight_rule", DEFAULT_WEIGHT_RULE, WEIGHT_RULES)
     params.add("weight_direction", DEFAULT_WEIGHT_DIRECTION, WEIGHT_DIRECTIONS) 
     params.add("resolution", "low_res")
-    params.add("fiber_angle_epi", 60)
-    params.add("fiber_angle_endo", 60)
+    params.add("fiber_angle_epi", 50)
+    params.add("fiber_angle_endo", 40)
     params.add("mesh_type", "lv", ["lv", "biv"])
+    params.add("include_sheets", True)
 
     return params
 
@@ -93,7 +94,7 @@ def setup_application_parameters():
     params.add("alpha", ALPHA)
     params.add("base_spring_k", BASE_K)
     params.add("reg_par", REG_PAR)
-    params.add("active_model", "active_strain")
+    params.add("active_model", "active_strain_rossi")
     params.add("gamma_space", "CG_1", ["CG_1", "R_0", "regional"])
     params.add("state_space", "P_2:P_1")
     params.add("compressibility", "incompressible", ["incompressible", 
@@ -393,10 +394,14 @@ def make_solver_params(params, patient, measurements):
                                    name ="base_spring_constant"), patient.BASE]]
 
 
-    
     from material import HolzapfelOgden
     matparams = {"a":a, "a_f":a_f, "b":b, "b_f":b_f}
-    material = HolzapfelOgden(patient.e_f, gamma, matparams, params["active_model"], patient.strain_markers)
+    if params["active_model"] == "active_strain_rossi":
+        material = HolzapfelOgden(patient.e_f, gamma, matparams, params["active_model"],
+                                      patient.strain_markers, s0 = patient.e_s, n0 = patient.e_sn)
+    else:
+        material = HolzapfelOgden(patient.e_f, gamma, matparams,
+                                      params["active_model"], patient.strain_markers)
     
     solver_parameters = {"mesh": patient.mesh,
                          "facet_function": patient.facets_markers,

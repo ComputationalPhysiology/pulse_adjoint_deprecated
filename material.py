@@ -154,12 +154,11 @@ class Material(object):
 class HolzapfelOgden(Material):
     def __init__(self, f0 = None, gamma = None, params = None, active_model = "active_strain", strain_markers = None, s0 = None, n0 = None):
 
-        assert active_model in ["active_strain", "active_stress"]
 
         # Fiber system
         self.f0 = f0
         self.s0 = s0
-        # self.n0 = n0
+        self.n0 = n0
         
         self.strain_markers = strain_markers
         self.gamma = Constant(0, name="gamma") if gamma is None else gamma
@@ -284,7 +283,6 @@ class HolzapfelOgden(Material):
             
             W = W1 + W4f
    
-
         return W
         
 
