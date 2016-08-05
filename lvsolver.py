@@ -333,6 +333,8 @@ class Postprocess(object):
         self._C = self.solver._C
         self._E = self.solver._E
         self._I = self.solver._I
+        self._p = self.solver.get_state().split()[1]
+
 
     def internal_energy(self):
         """
@@ -391,8 +393,7 @@ class Postprocess(object):
            \sigma = \mathbf{F} \frac{\partial \psi}{\partial \mathbf{F}}
         
         """
-        return self.first_piola_stress()*self._F.T
-    
+        return self.solver.parameters["material"].CauchyStress(self._F, self._p)
 
     def work(self):
         r"""
@@ -480,7 +481,10 @@ class Postprocess(object):
         and :math:`f` the fiber field on the current configuration
 
         """
-        f =  self.solver.parameters["material"].f0
+
+        f0 = self.solver.parameters["material"].f0
+        f =  self._F*f0
+        
         return inner((self.chaucy_stress()*f)/f**2, f)
        
 

@@ -30,15 +30,123 @@ class Material(object):
           ["active_stress", "active_strain", "active_strain_rossi"], \
           "The active model '{}' is not implemented.".format(self._active_model)
 
+
+    def strain_energy(self, F):
+        """
+        Strain-energy density function.
+        """
+
+     
+        # Activation
+        if self.gamma.value_size() == 17:
+            from setup_optimization import RegionalGamma
+            assert self.strain_markers is not None, \
+              "Provide strain markers is using regional gamma"
+            RG = RegionalGamma(self.strain_markers)
+            RG.set(self.gamma)
+            gamma = RG.get_function()
+        else:
+            gamma = self.gamma
+
+
+        # Active stress model
+        if self._active_model == 'active_stress':
+
+            # Invariants
+            I1  = self.I1(F)
+            I4f = self.I4f(F)
+
+        # Active strain model
+        else:
+            # Invariants
+            I1  = self.I1e(F)
+            I4f = self.I4fe(F)
+            
+
+        dim = F.geometric_dimension()
+        W1   = self.W_1(I1, diff = 0, dim = dim)
+        W4f  = self.W_4(I4f, diff = 0)
+        Wactive = self.Wactive(I4f, diff = 0)
+       
+        W = W1 + W4f + Wactive 
+        
+        return W
+
+    def CauchyStress(self, F, p = None):
+        r"""
+        Chaucy Stress Tensor
+
+        Incompressible:
+
+        .. math::
+
+           \sigma = \mathbf{F} \frac{\partial \Psi}{\partial \mathbf{F}} - pI 
+
+        Since the strain energy depends on the invariants we can write
+
+        .. math::
+
+           \sigma = \mathbf{F} \sum_{i = 1, i\neq3}^{N} \psi_i \frac{\partial \I1}{\partial \mathbf{F}} - pI 
+
+        Compressible:
+
+        .. math::
+
+           \sigma = \mathbf{F} \frac{\partial \psi}{\partial \mathbf{F}}
+
+        Since the strain energy depends on the invariants we can write
+
+        .. math::
+
+           \sigma = J^{-1} \mathbf{F} \sum_{i = 1}^{N} \psi_i \frac{\partial \I1}{\partial \mathbf{F}}
+        
+        """
+
+        # Left Cauchy green
+        B = F*F.T
+
+        # Fibers on the current configuration
+        f = F*self.f0
+        # Normalize fibers
+        f = f / sqrt(dot(f,f))
+        # The outer product of the fibers
+        ff = outer(f,f)
+        
+        dim = F.geometric_dimension()
+        I = Identity(dim)
+        
+        I1 = self.I1(F)
+        I4f = self.I4f(F)
+
+        
+        w1 = self.W_1(I1, diff = 1, dim = dim)
+        w4f = self.W_4(I4f, diff = 1)
+        wactive = self.Wactive(I4f, diff = 1)
+
+        return 2*w1*B + 2*w4f*ff + 2*wactive*ff - p*I
+
+    def Wactive(self, I4f = 0, diff = 0):
+        if self._active_model == 'active_stress':
+
+            if diff == 0:
+                return self.gamma*I4f
+            elif diff == 1:
+                return self.gamma 
+            
+        else:
+            # No active stress
+            return 0
     
     def I1(self, F):
         """
         First Isotropic invariant
         """
+
         J = det(F)
-        # C = pow(J, -float(2)/self.dim) * F.T * F
         C =  F.T * F
         return tr(C)
+        
+        
 
     def I4f(self, F):
         """
@@ -48,10 +156,11 @@ class Material(object):
             return Constant(0.0)
 
         J = det(F)
-        # C =  pow(J, -float(2)/self.dim) * F.T * F
         C =  F.T * F
-        # C = F * F.T
         return inner(C*self.f0, self.f0)
+
+            
+
 
     def I4s(self, F):
         """
@@ -61,7 +170,6 @@ class Material(object):
             return Constant(0.0)
 
         J = det(F)
-        # C =  pow(J, -float(2)/3)*F.T * F
         C =  F.T * F 
         return  inner(C*self.s0, self.s0)
 
@@ -73,8 +181,8 @@ class Material(object):
             return Constant(0.0)
 
         J = det(F)
-        # C = pow(J, -float(2)/3) * F.T * F
         C =  F.T * F
+        
         return  inner(C*self.n0, self.n0)
 
     def I8fs(self, F):
@@ -99,7 +207,6 @@ class Material(object):
         
         gamma = self.gamma
         
-        
 
         if self._active_model == 'active_stress':
             
@@ -109,16 +216,18 @@ class Material(object):
         elif self._active_model == 'active_strain':
             mgamma = 1 - gamma
 
-            return  mgamma * I1 + (1/mgamma**2 - mgamma) * I4f
+            d = F.geometric_dimension()
+            return  pow(mgamma, 4-d) * I1 + (1/mgamma**2 - pow(mgamma, 4-d)) * I4f
             
         elif self._active_model == "active_strain_rossi":
             
             I4s = self.I4s(F)
             I4n = self.I4n(F)
             d = F.geometric_dimension()
+            
             gamma_trans = pow((1+self.gamma), -float(1)/(d-1)) - 1
             
-            return I1 - I4f*gamma*(gamma +2)/(1+gamma)**2 - (I4s+ I4n)*gamma_trans*(gamma_trans +2)/(1+gamma_trans)**2
+            return I1 - I4f*gamma*(gamma +2)/(1+gamma)**2 - (I1-I4f)*gamma_trans*(gamma_trans +2)/(1+gamma_trans)**2
 
         
 
@@ -128,8 +237,6 @@ class Material(object):
         """
 
         I4f = self.I4f(F)
-        # I4s = self.I4s(F)
-        # I4f = self.I4f(F)
         gamma = self.gamma
 
         if self._active_model == 'active_stress':
@@ -182,7 +289,7 @@ class HolzapfelOgden(Material):
                 "b":5.0, "b_f":5.0}
 
 
-    def W_1(self, I_1, diff=0):
+    def W_1(self, I_1, diff=0, *args, **kwargs):
         """
         Isotropic contribution.
         """
@@ -206,7 +313,7 @@ class HolzapfelOgden(Material):
         elif diff == 2:
             return a*b/2.0 * exp(b * (I_1 - 3))
 
-    def W_4(self, I_4, diff=0):
+    def W_4(self, I_4, diff=0, *args, **kwargs):
         """
         Anisotropic contribution.
         """
@@ -235,55 +342,8 @@ class HolzapfelOgden(Material):
             return a * heaviside(I_4 - 1) \
                      * (1 + 2.0 * b * pow(I_4 - 1, 2)) \
                      * exp(b * pow(I_4 - 1, 2))
-
-
-    def strain_energy(self, F):
-        """
-        Strain-energy density function.
-        """
-
-     
-        # Activation
-        if self.gamma.value_size() == 17:
-            from setup_optimization import RegionalGamma
-            assert self.strain_markers is not None, \
-              "Provide strain markers is using regional gamma"
-            RG = RegionalGamma(self.strain_markers)
-            RG.set(self.gamma)
-            gamma = RG.get_function()
-        else:
-            gamma = self.gamma
-
-        # Invariants
-        I1  = self.I1(F)
-        I4f =  self.I4f(F)
-        # I4s = self.I4s(F)
-        # I8fs = self.I8fs
-
-        # Active stress model
-        if self._active_model == 'active_stress':
-
-            # Invariants
-            I1  = self.I1(F)
-            I4f = self.I4f(F)
-
-            W1   = self.W_1(I1)
-            W4f  = self.W_4(I4f)
-            Wactive = gamma * I4f
-            W = W1 + W4f + Wactive 
-
-        # Active strain model
-        else:
-            # Invariants
-            I1  = self.I1e(F)
-            I4f = self.I4fe(F)
-            
-            W1   = self.W_1(I1)
-            W4f  = self.W_4(I4f)
-            
-            W = W1 + W4f
-   
-        return W
+        
+    
         
 
 
@@ -372,21 +432,7 @@ class Guccione(Material) :
         else :
             Wactive = 0.0
 
-        # incompressibility
-        # if params['kappa'] is not None :
-        #     kappa = Constant(params['kappa'], name='kappa')
-        #     Winc = kappa * (J**2 - 1 - 2*ln(J))
-        # else :
-        #     Winc = - p * (J - 1)
-        
-        return Wpassive + Wactive #+ Winc
-
-    # def set_active_stress(self, value) :
-    #     self.Tactive.assign(value)
-
-    # def get_active_stress(self) :
-    #     return float(self.Tactive)
-
+        return Wpassive + Wactive 
 
 
 
@@ -415,29 +461,20 @@ class NeoHookean(Material):
     def default_parameters(self):
         return {"mu": 0.385}
 
-    def strain_energy(self, F):
-
-        mu = self.mu 
+    def W_1(self, I_1, diff = 0, dim = 3, *args, **kwargs):
         
-        d = F.geometric_dimension()
+        mu = self.mu
+
+        if diff == 0:
+            return  0.5*mu*(I_1-dim)
+        elif diff == 1:
+            return 0.5*mu
+        elif diff == 2:
+            return 0
         
-        # Active stress model
-        if self._active_model == 'active_stress':
-
-            # Invariants
-            I1  = self.I1(F)
-            I4f  = self.I4f(F)
-           
-            Wactive = self.gamma * I4f
-            W = 0.5*mu*(I1-d) + Wactive 
-
-        else:
-            # Invariants
-            I1  = self.I1e(F)
+    def W_4(self, *args, **kwargs):
+        return 0
             
-            W = 0.5*mu*(I1-d)
+
    
-
-        return W
-
     
