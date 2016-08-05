@@ -436,7 +436,12 @@ class ActiveForwardRunner(BasicForwardRunner):
             self.gamma_previous.assign(m)
 
             logger.debug("Solve the forward problem with the new gamma")
+            # Relax on the convergence criteria in order to ensure convergence
+            self.cphm.solver.parameters["solve"]["snes_solver"]['absolute_tolerance']*= 100
+            self.cphm.solver.parameters["solve"]["snes_solver"]['relative_tolerance']*= 100
             forward_result = BasicForwardRunner.solve_the_forward_problem(self, annotate, self.cphm, "active")
+            self.cphm.solver.parameters["solve"]["snes_solver"]['absolute_tolerance']*= 0.01
+            self.cphm.solver.parameters["solve"]["snes_solver"]['relative_tolerance']*= 0.01
 
             return forward_result, False
 

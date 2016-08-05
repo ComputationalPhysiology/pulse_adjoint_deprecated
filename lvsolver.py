@@ -178,7 +178,7 @@ class LVSolver(object):
             if not parameters["adjoint"]["stop_annotating"]:
 
                 # Assign the old state
-                self._w.assign(w_old)
+                self.reinit(w_old)
                 # Solve the system with annotation
                 solve(self._G == 0,
                       self._w,
@@ -348,7 +348,7 @@ class Postprocess(object):
 
         .. math::
 
-           \mathbf{P} =  \frac{\partial \psi}{\partial \mathbf{F}} - p\mathbf{F}^T
+           \mathbf{P} =  \frac{\partial \psi}{\partial \mathbf{F}} - pJ\mathbf{F}^{-T}
 
         Compressible:
 
@@ -357,6 +357,10 @@ class Postprocess(object):
            \mathbf{P} = \frac{\partial \psi}{\partial \mathbf{F}}
         
         """
+        # Some numerical instabilities at first point
+        if assemble((self._F - self._I)**2*dx) == 0:
+            return self._F*Constant(0.0)
+        
         return diff(self.internal_energy(), self._F)
 
     def second_piola_stress(self):
@@ -387,7 +391,7 @@ class Postprocess(object):
            \sigma = \mathbf{F} \frac{\partial \psi}{\partial \mathbf{F}}
         
         """
-        return self._F*diff(self.internal_energy(), self._F)
+        return self.first_piola_stress()*self._F.T
     
 
     def work(self):
@@ -476,7 +480,7 @@ class Postprocess(object):
         and :math:`f` the fiber field on the current configuration
 
         """
-        f =  self.solver.parameters["material"].f0 
+        f =  self.solver.parameters["material"].f0
         return inner((self.chaucy_stress()*f)/f**2, f)
        
 
