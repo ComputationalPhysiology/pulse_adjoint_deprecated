@@ -169,6 +169,12 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
 
     # Compute the functional as a pure function of gamma
     rd = MyReducedFunctional(for_run, gamma)
+
+    # Evaluate the reduced functional in case the solver chrashes at the first point.
+    # If this is not done, and the solver crashes in the first point
+    # then Dolfin adjoit has no recording and will raise an exception.
+    rd(gamma)
+
             
     return rd, gamma
 
