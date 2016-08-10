@@ -19,6 +19,12 @@ from adjoint_contraction_args import  logger, PHASES
 from pprint import pformat
 
 
+class UnableToChangePressureExeption(Exception):
+    pass
+
+def test():
+    raise UnableToChangePressureExeption("test")
+
 class AutoVivification(dict):
     """Implementation of perl's autovivification feature."""
     def __getitem__(self, item):
@@ -256,9 +262,4 @@ class Text:
         return text
 
 if __name__ == '__main__':
-    # logger = make_logger("test_logger", INFO)
-    # logger.info("testmessage")
-    # logger = make_logger("test_logger", INFO)
-    # logger.info("testmessage")
-    gamma = range(18)
-    print_regional_gamma(gamma)
+    pass
