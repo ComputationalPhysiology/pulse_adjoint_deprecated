@@ -20,7 +20,7 @@ from adjoint_contraction_args import *
 import math
 import numpy as np
 from numpy_mpi import *
-from utils import Text
+from utils import Text, UnableToChangePressureExeption
 import collections
 from lvsolver import LVSolver
 
@@ -145,7 +145,7 @@ class BasicHeartProblem(collections.Iterator):
 
         if nsteps >= n_max:
             
-            raise RuntimeError("Unable to increase pressure")
+            raise UnableToChangePressureExeption("Unable to increase pressure")
 
         
         if self.base_bc_from_seg:
