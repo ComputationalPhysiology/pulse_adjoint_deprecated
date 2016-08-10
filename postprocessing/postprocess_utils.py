@@ -107,18 +107,18 @@ def load_single_result(params, patient):
     passive_data = {"misfit":{}, "material_parameters":{}, 
                     "strain": deepcopy(strain_dict), "states":[],
                     "gammas":[], "displacements":[],
-                    "I1":[], "I4f":[], "p":[], "fiber_strains":[],
+                    "I1":[], "I4f":[], "p":[], "fiber_strains":[], "fiber_strains_Q4":[],
                     "strainfields":[], "fiber_stresses":[], "work":[], 
-                    "fiber_work": [], "Eff":[], "Tff":[]}
+                    "fiber_work": [], "fiber_stresses_Q4":[]}#, "Eff":[], "Tff":[]}
 
     active_data = {a:{l:{"volume":[], "pressure":[], "gamma_gradient":[],
                    "strain": deepcopy(strain_dict),
                    "misfit":{"I_strain_initial":[], "I_volume_initial":[], 
                    "I_strain_optimal":[], "I_volume_optimal":[]},
                    "states":[], "gammas":[], "displacements":[],
-                   "I1":[], "I4f":[], "p":[], "fiber_strains":[], "Eff":[], 
-                   "strainfields":[], "fiber_stresses":[], "work":[],
-                   "Tff":[], "fiber_work": []}}}
+                   "I1":[], "I4f":[], "p":[], "fiber_strains":[], #"Eff":[], "Tff":[],
+                   "strainfields":[], "fiber_stresses":[], "work":[], "fiber_strains_Q4":[],
+                   "fiber_work": [], "fiber_stresses_Q4":[]}}}
     
         
     # Groups within the result file
@@ -212,7 +212,8 @@ def load_single_result(params, patient):
                 p += 1
                     
                 
-            active_data[a][l]["num_points"] = p-1
+        active_data[a][l]["num_points"] = p-1
+       
             
     measured_data = load_measured_strain_and_volume(patient)
     data = {"passive":passive_data, "active":active_data, "measured":measured_data}
@@ -267,7 +268,8 @@ def load_single_result(params, patient):
             passive_data["p"].append(Vector(p.vector()))
 
             p_lv.t = data["passive"]["pressure"][pv_num]
-            get_mechanical_features(solver, state, gamma, kwargs, passive_data)
+            
+            get_mechanical_features(solver.postprocess(), state, gamma, kwargs, passive_data)
 
 
             try:
@@ -304,7 +306,7 @@ def load_single_result(params, patient):
 
                     
             p_lv.t = data["active"][a][l]["pressure"][pv_num]
-            get_mechanical_features(solver, state, gamma, kwargs,active_data[a][l])
+            get_mechanical_features(solver.postprocess(), state, gamma, kwargs,active_data[a][l])
 
 
             try:
@@ -333,9 +335,9 @@ def load_single_result(params, patient):
 def load_geometry_and_microstructure_from_results(patient, params):
 
     from mesh_generation.mesh_utils import load_geometry_from_h5
+    
     geo = load_geometry_from_h5(params["sim_file"])
-    # from IPython import embed; embed()
-    # exit()
+    
     
 
 def get_h5py_data(params, patient, alpha_regpars, synthetic_data=False):
@@ -582,7 +584,7 @@ def get_dolfin_data(params, patient, alpha_regpars, data):
     passive_data = {"states":[], "gammas":[], "displacements":[],
                     "I1":[], "I4f":[], "p":[], "fiber_strains":[],
                     "strainfields":[], "fiber_stresses":[], "work":[], 
-                    "fiber_work": [], "Eff":[], "Tff":[]}
+                    "fiber_work": []}#, "Eff":[], "Tff":[]}
     
 
 
@@ -623,7 +625,7 @@ def get_dolfin_data(params, patient, alpha_regpars, data):
             passive_data["p"].append(Vector(p.vector()))
 
             p_lv.t = data["passive"]["pressure"][pv_num]
-            get_mechanical_features(solver, state, gamma, kwargs, passive_data)
+            get_mechanical_features(solver.postprocess(), state, gamma, kwargs, passive_data)
 
 
             try:
@@ -644,8 +646,8 @@ def get_dolfin_data(params, patient, alpha_regpars, data):
 
 
                 active_data = {"states":[], "gammas":[], "displacements":[],
-                               "I1":[], "I4f":[], "p":[], "fiber_strains":[], "Eff":[], 
-                               "strainfields":[], "fiber_stresses":[], "work":[], "Tff":[], 
+                               "I1":[], "I4f":[], "p":[], "fiber_strains":[], #"Eff":[], 
+                               "strainfields":[], "fiber_stresses":[], "work":[], #"Tff":[], 
                                "fiber_work": [], "active_attrs":{key:[] for key in opt_keys}}
 
                 for pv_num in range(n+1):
@@ -667,7 +669,7 @@ def get_dolfin_data(params, patient, alpha_regpars, data):
 
                     
                     p_lv.t = data["active"][alpha][reg_par]["pressure"][pv_num]
-                    get_mechanical_features(solver, state, gamma, kwargs,active_data)
+                    get_mechanical_features(solver.postprocess(), state, gamma, kwargs,active_data)
 
 
                     try:
@@ -708,7 +710,7 @@ def get_dolfin_data_synthetic(params, patient, alpha_regpars, data):
     time_stamps = time_stamps[:num_points]
 
     passive_data = {"states":[], "gammas":[], "displacements":[],
-                    "I1":[], "I4_f":[], "p":[], "Eff":[], "Tff": [],
+                    "I1":[], "I4_f":[], "p":[], #"Eff":[], "Tff": [],
                     "strainfields":[], "stresses":[], "work":[] }
     
 
@@ -723,8 +725,8 @@ def get_dolfin_data_synthetic(params, patient, alpha_regpars, data):
     state = Function(kwargs["state_space"], name = "State")
     strainfield = Function(kwargs["strainfield_space"], name = "Strainfield")
     stress = Function(kwargs["gamma_space"], name = "Contraction Parameter")
-    Eff = Function(kwargs["quad_space"], name = "Eff")
-    Tff = Function(kwargs["quad_space"], name = "Tff")
+    # Eff = Function(kwargs["quad_space"], name = "Eff")
+    # Tff = Function(kwargs["quad_space"], name = "Tff")
 
     with HDF5File(mpi_comm_world(), params["sim_file"], "r") as h5file:
 
@@ -758,7 +760,7 @@ def get_dolfin_data_synthetic(params, patient, alpha_regpars, data):
                     active_data["states"].append(Vector(state.vector()))
                     active_data["gammas"].append(Vector(gamma.vector()))
 
-                    I1, I4_f, Eff, Tff  = get_mechanical_features(solver, state)
+                    I1, I4_f, Eff, Tff  = get_mechanical_features(solver.postprocess(), state)
                     active_data["I1"].append(Vector(I1.vector()))
                     active_data["I4_f"].append(Vector(I4_f.vector()))
                     active_data["p"].append(Vector(p.vector()))
@@ -811,7 +813,7 @@ def get_dolfin_data_synthetic(params, patient, alpha_regpars, data):
                 synth_data["gammas"].append(Vector(gamma.vector()))
 
                 # Mechanical features
-                I1, I4_f,  Eff, Tff = get_mechanical_features(solver, state)
+                I1, I4_f,  Eff, Tff = get_mechanical_features(solver.postprocess(), state)
                 synth_data["I1"].append(Vector(I1.vector()))
                 synth_data["I4_f"].append(Vector(I4_f.vector()))
                 synth_data["p"].append(Vector(p.vector()))
@@ -864,7 +866,7 @@ def get_dolfin_data_synthetic(params, patient, alpha_regpars, data):
                 passive_data["states"].append(Vector(state.vector()))
                 passive_data["gammas"].append(Vector(gamma.vector()))
 
-                I1, I4_f, Eff, Tff  = get_mechanical_features(solver, state)
+                I1, I4_f, Eff, Tff  = get_mechanical_features(solver.postprocess(), state)
                 passive_data["I1"].append(Vector(I1.vector()))
                 passive_data["I4_f"].append(Vector(I4_f.vector()))
                 passive_data["p"].append(Vector(p.vector()))
@@ -1090,7 +1092,7 @@ def merge_passive_active(data, alpha, reg_par, key, return_n = False):
 
     passive_data = data["passive"][key]
     active_data = data["active"][alpha][reg_par][key]
-
+    
     if key == "strain":
         pas_act = {}
         for d in passive_data.keys():
@@ -1098,7 +1100,7 @@ def merge_passive_active(data, alpha, reg_par, key, return_n = False):
             for r in passive_data[d].keys():
                 pas_act[d][r] = passive_data[d][r] + active_data[d][r]
                 n = len(pas_act[d][r])
-
+       
         if return_n:
             return pas_act, n 
 
@@ -1138,6 +1140,7 @@ def init_spaces(mesh, gamma_space = "CG_1"):
     # spaces["real_space"] = FunctionSpace(mesh, "R", 0)
     spaces["marker_space"] = FunctionSpace(mesh, "DG", 0)
     spaces["stress_space"] = FunctionSpace(mesh, "CG", 1)
+    # spaces["stress_space"] = FunctionSpace(mesh, "Quadrature", 4)
 
     if gamma_space == "regional":
         spaces["gamma_space"] = VectorFunctionSpace(mesh, "R", 0, dim = 17)
@@ -1199,6 +1202,29 @@ def setup_bullseye_sim(bullseye_mesh, fun_arr):
 
 
 ####### Compute stuff ###########
+def get_features(reg_arr, times):
+
+    time_max = []
+    reg_max = []
+    
+    for r in reg_arr:
+        
+        # Find time to peak:
+        t = np.argmax(np.abs(r))
+        time_max.append(times[t])
+
+        # Find peak
+        reg_max.append(r[t])
+
+    # Normalize
+    time_max = np.divide(time_max, times[-1])
+    
+    # reg_max = np.divide(reg_max, np.max(reg_max))
+    reg_max = np.array(reg_max)
+    
+    return reg_max.tolist(), time_max.tolist()
+        
+    
 def recompute_strains_to_original_reference(strains, ref):
 
     strain_dict = {strain : {i:[] for i in STRAIN_REGION_NUMS}  for strain in STRAIN_NUM_TO_KEY.values()}
@@ -1249,30 +1275,41 @@ def compute_inner_cavity_volume(mesh, ffun, endo_lv_marker):
 
 def get_mechanical_features(solver, state, gamma, spaces, data):
 
-    solver.get_state().assign(state)
-    solver.get_gamma().assign(gamma)
+    solver.solver.get_state().assign(state)
+    solver.solver.get_gamma().assign(gamma)
 
-    # Fiber stress
+    
+    ## Fiber stress
+    # CG 1
     fiber_stress = project(solver.fiber_stress(), 
                            spaces["stress_space"])
     data["fiber_stresses"].append(Vector(fiber_stress.vector()))
+    # Quad 4
+    fiber_stress = project(solver.fiber_stress(), 
+                           spaces["quad_space"])
+    data["fiber_stresses_Q4"].append(Vector(fiber_stress.vector()))
 
-    # Fiber strain
+    ## Fiber strain
+    # CG 1
     fiber_strain = project(solver.fiber_strain(), 
                            spaces["stress_space"])
     data["fiber_strains"].append(Vector(fiber_strain.vector()))
+    # Quad 4
+    fiber_strain = project(solver.fiber_strain(), 
+                           spaces["quad_space"])
+    data["fiber_strains_Q4"].append(Vector(fiber_strain.vector()))
 
-    # Fiber Work
+    ## Fiber Work
     fiber_work = project(solver.work_fiber(), 
                          spaces["stress_space"])
     data["fiber_work"].append(Vector(fiber_work.vector()))
 
-    # Work
+    ## Work
     work = project(solver.work(), 
                    spaces["stress_space"])
     data["work"].append(Vector(work.vector()))
 
-    #Invariants
+    ## Invariants
     I1 = project(solver.I1(), 
                  spaces["stress_space"])
     data["I1"].append(Vector(I1.vector()))
@@ -1281,12 +1318,12 @@ def get_mechanical_features(solver, state, gamma, spaces, data):
                   spaces["stress_space"])
     data["I4f"].append(Vector(I4f.vector()))
 
-    # Correct fiber strain and fiber stress
-    Eff = solver.Eff(spaces["quad_space"])
-    data["Eff"].append(Vector(Eff.vector()))
+    # # Correct fiber strain and fiber stress
+    # Eff = solver.Eff(spaces["quad_space"])
+    # data["Eff"].append(Vector(Eff.vector()))
 
-    Tff = solver.Tff(spaces["quad_space"])
-    data["Tff"].append(Vector(Tff.vector()))
+    # Tff = solver.Tff(spaces["quad_space"])
+    # data["Tff"].append(Vector(Tff.vector()))
 
 
     
@@ -1733,8 +1770,7 @@ def plot_strains2(simulated_strains, measured_strains, outdir):
                 # ax.set_yticks([smin, 0, smax])
 
 
-                # from IPython import embed; embed()
-                # exit()
+                
                 if i <= 7:
                     ax.set_ylim(smins[0], smaxs[0])
                     ax.set_yticks([smins[0], 0, smaxs[0]])

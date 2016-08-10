@@ -27,7 +27,49 @@ try:
 except:
     save_seg_surfaces = False
 
+######### SAVE STUFF ####################
+def save_features(data, kwargs, outdir):
 
+
+    spaces = {"fiber_stresses_Q4":"quad_space",
+              "gammas": "gamma_space"}
+    d = {"fiber_stresses_Q4":{}, "gammas":{}}
+    
+    for alpha in data["active"].keys():
+        for reg_par in data["active"][alpha].keys():
+            
+
+            for key in d.keys():
+
+                
+                funcs = merge_passive_active(data, alpha, reg_par, key)
+
+                if len(funcs) == len(data["measured"]["volume"]):
+                    d["all_data"] = True
+                    print "All data present"
+                else:
+                    d["all_data"] = False
+                    print "Data missing"
+                
+                fun = Function(kwargs[spaces[key]])
+                funcs_reg = get_regional(kwargs["dx"], fun, funcs)
+                funcs_avg = get_global(kwargs["dx"], fun, funcs)
+                
+                
+                funcs_peak, times_to_peak = get_features(funcs_reg, kwargs["time_stamps"])
+                
+
+                d[key]["peak"] = funcs_peak
+                d[key]["time_to_peak"] = times_to_peak
+                d[key]["avg"] = funcs_avg
+                
+        
+    with open("/".join([outdir, "features.yml"]), "wb") as out:
+        
+        yaml.dump(d, out, default_flow_style=False)
+    
+   
+    
 def save_pickle_to_fig_dir(res_dir, alphas, reg_pars):
 
     data = {}
@@ -55,6 +97,104 @@ def save_pickle_to_fig_dir(res_dir, alphas, reg_pars):
 
 
 ######### CREATE IMAGES ##############
+def postprocess_features(sick_patients, healthy_patients, path):
+
+    keys = ["fiber_stresses_Q4", "gammas"]
+    spaces = {"fiber_stresses_Q4":"stress",
+              "gammas": "gamma"}
+    
+
+    for key in keys:
+        # Sick Patients
+        avg_sick = []
+        peak_sick = []
+        peak_norm_sick = []
+        time_to_peak_sick = []
+    
+        for p in sick_patients:
+            with open( path.format(p), "rb" ) as output:
+                d = yaml.load(output)
+
+            
+            avg_sick.append(d[key]["avg"])
+            peak_sick.append(d[key]["peak"])
+
+            if key == "gammas":
+                peak_norm_sick.append(d[key]["peak"])
+            else:
+                peak_norm_sick.append(np.divide(d[key]["peak"],np.max(d[key]["peak"])).tolist())
+            time_to_peak_sick.append(d[key]["time_to_peak"])
+
+        
+        ttp_s_mean = np.mean(time_to_peak_sick, 0)
+        ttp_s_std = np.std(time_to_peak_sick, 0)
+
+        
+        pn_s_mean = np.mean(peak_norm_sick, 0)
+        pn_s_std = np.std(peak_norm_sick, 0)
+
+
+        # Sick Patients
+        avg_healthy = []
+        peak_healthy = []
+        peak_norm_healthy = []
+        time_to_peak_healthy = []
+    
+        for p in healthy_patients:
+            with open( path.format(p), "rb" ) as output:
+                d = yaml.load(output)
+
+            avg_healthy.append(d[key]["avg"])
+            peak_healthy.append(d[key]["peak"])
+            if key == "gammas":
+                peak_norm_healthy.append(d[key]["peak"])
+            else:
+                peak_norm_healthy.append(np.divide(d[key]["peak"],np.max(d[key]["peak"])).tolist())
+            time_to_peak_healthy.append(d[key]["time_to_peak"])
+
+        ttp_h_mean = np.mean(time_to_peak_healthy, 0)
+        ttp_h_std = np.std(time_to_peak_healthy, 0)
+
+        pn_h_mean = np.mean(peak_norm_healthy, 0)
+        pn_h_std = np.std(peak_norm_healthy, 0)
+
+
+    
+        x = np.arange(1,18)
+        cols = [sns.xkcd_rgb["pale red"], sns.xkcd_rgb["denim blue"]]
+        width = 0.2
+
+    
+        fig = plt.figure()
+        ax = fig.gca()
+        ax.bar(x-0.5*width, ttp_s_mean, width = width, color = cols[0], align = "center", yerr = ttp_s_std, label = "Sick")
+        ax.bar(x+0.5*width, ttp_h_mean, width = width, color = cols[1], align = "center", yerr = ttp_h_std, label = "Healthy")
+        ax.set_ylabel("Time to peak {}".format(spaces[key]))
+        ax.set_xlabel("Region")
+        ax.legend()
+        fig.savefig("results/real_gmax04_rossi/time_to_peak_{}.pdf".format(spaces[key]))
+        # plt.show()
+
+
+        fig = plt.figure()
+        ax = fig.gca()
+        ax.bar(x-0.5*width, pn_s_mean, width = width, color = cols[0], align = "center", yerr = pn_s_std, label = "Sick")
+        ax.bar(x+0.5*width, pn_h_mean, width = width, color = cols[1], align = "center", yerr = pn_s_std, label = "Healthy")
+        ax.set_ylabel("Peak Amplitude (normalized) {}".format(spaces[key]))
+        ax.set_xlabel("Region")
+        ax.legend()
+        fig.savefig("results/real_gmax04_rossi/peak_amp_{}.pdf".format(spaces[key]))
+        # plt.show()
+
+        
+
+    # ax.plot(x, ttp_s_std, label = "Time to peak std")
+    
+    # from IPython import embed; embed()
+    exit()
+
+    # peak
+    
 def plot_L_curves_alpha(data, outdir):
 
     cm = plt.cm.get_cmap('RdYlBu')
@@ -408,14 +548,17 @@ def plot_strain(data, kwargs, outdir_str):
 
             
             # Recompute the strains according to the original reference in echopac
-            outdir_ = "/".join([outdir, "strains_orig_ref"])
-            if not os.path.exists(outdir_):
-                os.makedirs(outdir_)
-            ref = kwargs["num_points"] - kwargs["passive_filling_begins"]
-            strains = data["measured"]["strain"]
-            simulated_strains = recompute_strains_to_original_reference(simulated_strains, ref)
-            measured_strains = recompute_strains_to_original_reference(measured_strains, ref)
-            plot_strains2(simulated_strains, measured_strains, outdir_)
+            try:
+                outdir_ = "/".join([outdir, "strains_orig_ref"])
+                if not os.path.exists(outdir_):
+                    os.makedirs(outdir_)
+                ref = kwargs["num_points"] - kwargs["passive_filling_begins"]
+                strains = data["measured"]["strain"]
+                simulated_strains = recompute_strains_to_original_reference(simulated_strains, ref)
+                measured_strains = recompute_strains_to_original_reference(measured_strains, ref)
+                plot_strains2(simulated_strains, measured_strains, outdir_)
+            except:
+                print "Point of reference does not exists for simulated strain because it crashed to early."
             
             
             
@@ -578,8 +721,8 @@ def simulation(data, kwargs, outdir_str):
             ps = merge_passive_active(data, alpha, reg_par, "p")
             I1s = merge_passive_active(data, alpha, reg_par, "I1")
             I4fs = merge_passive_active(data, alpha, reg_par, "I4f")
-            Effs = merge_passive_active(data, alpha, reg_par, "Eff") 
-            Tffs = merge_passive_active(data, alpha, reg_par, "Tff") 
+            # Effs = merge_passive_active(data, alpha, reg_par, "Eff") 
+            # Tffs = merge_passive_active(data, alpha, reg_par, "Tff") 
 
             n = len(gammas)
   
@@ -608,8 +751,8 @@ def simulation(data, kwargs, outdir_str):
                          name="I1")
             I4f = Function(kwargs["pressure_space"], 
                          name="I4_f")
-            Eff = Function(kwargs["quad_space"], name = "Eff")
-            Tff = Function(kwargs["quad_space"], name = "Tff")
+            # Eff = Function(kwargs["quad_space"], name = "Eff")
+            # Tff = Function(kwargs["quad_space"], name = "Tff")
 
             fname = "simulation_{}.vtu"
             path = outdir + "/" + fname        
@@ -631,13 +774,13 @@ def simulation(data, kwargs, outdir_str):
                 I1.vector()[:] = I1s[i]
                 I4f.vector()[:] = I4fs[i]
 
-                Eff.vector()[:] = Effs[i]
-                Tff.vector()[:] = Tffs[i]
+                # Eff.vector()[:] = Effs[i]
+                # Tff.vector()[:] = Tffs[i]
 
                 add_stuff(mesh, path.format(i), 
                           gamma, sm, p, I1, I4f, 
                           fiber_stress, fiber_strain, 
-                          work, fiber_work, Eff, Tff)
+                          work, fiber_work)#, Eff, Tff)
 
             write_pvd(outdir+"/simulation.pvd", fname, time_stamps)
 
@@ -693,8 +836,8 @@ def simulation_moving(data, kwargs, outdir_str):
             ps = merge_passive_active(data, alpha, reg_par, "p")
             I1s = merge_passive_active(data, alpha, reg_par, "I1")
             I4fs = merge_passive_active(data, alpha, reg_par, "I4f")
-            Effs = merge_passive_active(data, alpha, reg_par, "Eff") 
-            Tffs = merge_passive_active(data, alpha, reg_par, "Tff")
+            # Effs = merge_passive_active(data, alpha, reg_par, "Eff") 
+            # Tffs = merge_passive_active(data, alpha, reg_par, "Tff")
 
             n = len(gammas)
 
@@ -725,8 +868,8 @@ def simulation_moving(data, kwargs, outdir_str):
                           name="I1")
             I4f = Function(new_spaces["pressure_space"], 
                            name="I4_f")
-            Eff = Function(new_spaces["quad_space"], name = "Eff")
-            Tff = Function(new_spaces["quad_space"], name = "Tff")
+            # Eff = Function(new_spaces["quad_space"], name = "Eff")
+            # Tff = Function(new_spaces["quad_space"], name = "Tff")
 
 
             u_prev, u_current, state, d, fa = setup_moving_mesh(kwargs["state_space"], newmesh)
@@ -757,13 +900,13 @@ def simulation_moving(data, kwargs, outdir_str):
                 I1.vector()[:] = I1s[i]
                 I4f.vector()[:] = I4fs[i]
 
-                Eff.vector()[:] = Effs[i]
-                Tff.vector()[:] = Tffs[i]
+                # Eff.vector()[:] = Effs[i]
+                # Tff.vector()[:] = Tffs[i]
                 
                 add_stuff(newmesh, path.format(i), 
                           gamma, sm, p, I1, I4f, 
                           fiber_stress, fiber_strain, 
-                          work, fiber_work, Eff, Tff)
+                          work, fiber_work)#, Eff, Tff)
 
 
                 u_prev.assign(u_current)
@@ -868,6 +1011,7 @@ def postprocess(data, kwargs, params, outdir_main):
     
 
     print Text.blue("\nStart postprocessing")
+    save_features(data, kwargs, outdir_main)
     
 
     # plot_vph(data.copy(), outdir_main)
@@ -906,7 +1050,7 @@ def postprocess(data, kwargs, params, outdir_main):
 
     print Text.purple("Plot strain")
     plot_strain(data.copy(), kwargs, outdir_main)
-    # exit()
+    # # exit()
 
     print Text.purple("Save simulation")
     outdir = "/".join([outdir_main, "simulation"])
@@ -927,7 +1071,7 @@ def postprocess_single(params):
     patient = initialize_patient_data(params["Patient_parameters"], False)
 
     load_geometry_and_microstructure_from_results(patient,params)
-
+   
     data, kwargs = load_single_result(params, patient)
 
     return data, kwargs
@@ -962,11 +1106,37 @@ def main():
     set_log_active(False)
 
     params = setup_adjoint_contraction_parameters()
+    params["active_model"] = "active_strain_rossi"
+    # params["active_model"] = "active_strain"
+
+    if params["active_model"] == "active_strain_rossi":
+        wild = "real_gmax04_rossi/"
+    else:
+        wild = ""
+
+    wild = ""
     
     # Turn of annotation
     parameters["adjoint"]["stop_annotating"] = True
 
 
+    healty_patients = ["Joakim",
+                    "Sjur_10",
+                    "Sam_12",
+                    "Henrik",
+                    "Andrew_08",
+                    "Bernardo",
+                    "Gaur_11",
+                    "Rohan_13"]
+    sick_patients = ["Impact_p14_i43",
+                         "Impact_p16_i43",
+                         "Impact_p12_i45",
+                         "Impact_p10_i45",
+                         "Impact_p15_i38",
+                         "Impact_p8_i56",
+                         "Impact_p9_i49",
+                         "Impact_p19_i55"]
+    
     patients = ["Impact_p12_i45",
                   "Impact_p10_i45",
                   "Impact_p8_i56",
@@ -977,26 +1147,65 @@ def main():
                   "CRID-pas_ESC",
                   "Impact_p19_i55"]
         
-    patients = ["Impact_p16_i43"]
+    # "Impact_p14_i43"
+    # "Impact_p8_i56",
+    # "Impact_p9_i49",
+    # "Sam_12"
+    # patients = ["Impact_p16_i43",
+    #             "Impact_p12_i45",
+    #             "Impact_p10_i45",
+    #             "Impact_p15_i38",
+                
+    #             "Joakim",
+    #             "Sjur_10",
+    #             "CRID-pas_ESC",
+    #             "Impact_p19_i55",
+    #             "Henrik",
+    #             "Andrew_08",
+    #             "Bernardo",
+    #             "Gaur_11",
+    #             "Rohan_13"]
+    patients = healty_patients +sick_patients
+    # patients = patients[2:]
+    # patients = sick_patients
+  
+    # patients = []
+
+    # NOTE!!! Made changes to
+    # "Impact_p14_i43",Impact_p8, Impact_p9, Sam_12
+    
+    params["Patient_parameters"]["resolution"] = "low_res"
+    
+    # params["gamma_space"] = "regional"
+    params["gamma_space"] = "CG_1"
+    # params["gamma_space"] = "R_0"
+    params["alpha_matparams"] = 1.0
+
+    # wild = "_active_stress"
+    # wild = "_segbase_old"
+
+    params["alpha"] = 0.95
+    params["reg_par"] = 0.01
+
+    feature_path = "results_new/{}patient_{}/alpha_{}/regpar_{}/{}/incompressible_0.0/features.yml".format(wild,"{}",params["alpha"], params["reg_par"], params["Patient_parameters"]["resolution"])
+    print feature_path
+    # postprocess_features(sick_patients, healty_patients, feature_path)
+    # exit()
+    # patients = ["Rohan_13"]
+    # patients = ["Henrik"]
 
     for patient in patients:
         # params["Patient_parameters"]["patient"] = "Impact_p15_i38"
         params["Patient_parameters"]["patient"] = patient
         # params["Patient_parameters"]["patient"] = "Sam_12"
         # params["Patient_parameters"]["patient"] = "Sjur_10"
-        params["Patient_parameters"]["resolution"] = "low_res"
-    
-        # params["gamma_space"] = "regional"
-        params["gamma_space"] = "CG_1"
-        # params["gamma_space"] = "R_0"
-        params["alpha_matparams"] = 1.0
-
-        # wild = "_active_stress"
-        wild = "_segbase_old"
+        
         
         if params["gamma_space"] == "CG_1":
-            params["sim_file"] = "results/patient_{}{}{}/results.h5".format(params["Patient_parameters"]["patient"],
-                                                                                params["Patient_parameters"]["resolution"], wild)
+            params["sim_file"] = "results_new/{}patient_{}/alpha_{}/regpar_{}/{}/incompressible_0.0/result.h5".format(wild,params["Patient_parameters"]["patient"],params["alpha"], params["reg_par"], params["Patient_parameters"]["resolution"])
+            
+            # params["sim_file"] = "results/patient_{}{}{}/results.h5".format(params["Patient_parameters"]["patient"],
+                                                                                # params["Patient_parameters"]["resolution"], wild)
         elif params["gamma_space"] == "R_0":
             params["sim_file"] = "results/patient_{}_scalar_{}/results.h5".format(params["Patient_parameters"]["patient"],
                                                                                       params["Patient_parameters"]["resolution"])
@@ -1010,14 +1219,13 @@ def main():
 
 
 
-        params["alpha"] = 0.9
-        params["reg_par"] = 0.01
-       
-       
-        params["Patient_parameters"]["fiber_angle_epi"] = 20
-        params["Patient_parameters"]["fiber_angle_endo"] = 20
         
-        params["sim_file"] = "results/patient_{}/alpha_{}/regpar_{}/fendo{}_fepi{}/result.h5".format(params["Patient_parameters"]["patient"], params["alpha"], params["reg_par"], params["Patient_parameters"]["fiber_angle_endo"], params["Patient_parameters"]["fiber_angle_epi"])
+       
+       
+        # params["Patient_parameters"]["fiber_angle_epi"] = 20
+        # params["Patient_parameters"]["fiber_angle_endo"] = 20
+        
+        # params["sim_file"] = "results/patient_{}/alpha_{}/regpar_{}/fendo{}_fepi{}/result.h5".format(params["Patient_parameters"]["patient"], params["alpha"], params["reg_par"], params["Patient_parameters"]["fiber_angle_endo"], params["Patient_parameters"]["fiber_angle_epi"])
         print params["sim_file"]
         params["outdir"] = os.path.dirname(params["sim_file"])
 
@@ -1035,7 +1243,6 @@ def main():
         simulated_data, kwargs = postprocess_single(params)
         outdir_main = params["outdir"]
 
-        
         # simulated_data, kwargs = initialize(params, alpha_regpars)
         # outdir_main = "/".join([params["outdir"], "alpha_{}", "regpar_{}"])
         
