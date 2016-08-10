@@ -147,10 +147,12 @@ def setup_optimization_parameters():
 
 def initialize_patient_data(patient_parameters, synth_data):
 
+    set_log_active(True)
     logger.info("Initialize patient data")
     from patient_data import Patient
     
     patient = Patient(**patient_parameters)
+    
 
     if synth_data:
         patient.passive_filling_duration = SYNTH_PASSIVE_FILLING
@@ -440,7 +442,7 @@ def make_solver_params(params, patient, measurements):
     else:
         return solver_parameters, p_lv
 
-def get_measurements(params, patient):  
+def get_measurements(params, patient):
 
     # FIXME
     if params["synth_data"]:
@@ -509,7 +511,7 @@ def get_measurements(params, patient):
     measurements.pressure = pressure[start:end]
 
     # Endoring vertex coordinates from segementation
-    measurements.seg_verts = patient.seg_verts[start:end]
+    measurements.seg_verts = None if not hasattr(patient, 'seg_verts') else patient.seg_verts[start:end]
     
     # Strain 
     if  params["use_deintegrated_strains"]:
