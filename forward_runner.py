@@ -343,8 +343,8 @@ class ActiveForwardRunner(BasicForwardRunner):
 
         
         BasicForwardRunner.__init__(self, solver_parameters, p_lv, 
-                               target_data, self.endo_lv_marker,
-                               self.crl_basis, params, spaces)
+                                    target_data, self.endo_lv_marker,
+                                    self.crl_basis, params, spaces)
 
         
         
@@ -352,14 +352,14 @@ class ActiveForwardRunner(BasicForwardRunner):
         self.solver_parameters['material'].gamma.assign(gamma_previous, annotate = True)
 
         self.cphm = ActiveHeartProblem(self.pressures,
-                                             self.solver_parameters,
-                                             self.p_lv,
-                                             self.endo_lv_marker,
-                                             self.crl_basis,
-                                             spaces,
-                                             self.passive_filling_duration, 
-                                             params,
-                                             annotate = False)
+                                       self.solver_parameters,
+                                       self.p_lv,
+                                       self.endo_lv_marker,
+                                       self.crl_basis,
+                                       spaces,
+                                       self.passive_filling_duration, 
+                                       params,
+                                       annotate = False)
 	
         logger.debug("\nVolume before pressure change: {:.3f}".format(self.cphm.get_inner_cavity_volume()))
         self.cphm.increase_pressure()

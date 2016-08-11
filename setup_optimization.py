@@ -67,8 +67,8 @@ def setup_general_parameters():
     # dolfin.parameters["std_out_all_processes"] = False
     # dolfin.parameters["num_threads"] = 8
     
-    dolfin.set_log_active(True)
-    dolfin.set_log_level(ERROR)
+    dolfin.set_log_active(False)
+    dolfin.set_log_level(INFO)
 
 
 def setup_patient_parameters():
@@ -147,7 +147,7 @@ def setup_optimization_parameters():
 
 def initialize_patient_data(patient_parameters, synth_data):
 
-    set_log_active(True)
+    
     logger.info("Initialize patient data")
     from patient_data import Patient
     

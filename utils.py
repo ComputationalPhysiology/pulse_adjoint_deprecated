@@ -176,6 +176,26 @@ def get_spaces(mesh):
     
     return spaces
 
+def QuadratureSpace(mesh, degree, dim=3):
+    import dolfin as d
+    if d.DOLFIN_VERSION_MAJOR > 1.6:
+        if dim == 1:
+            element = d.FiniteElement(family = "Quadrature",
+                                        cell = mesh.ufl_cell(),
+                                        degree = 4,
+                                        quad_scheme="default")
+        else:
+            element = d.VectorElement(family = "Quadrature",
+                                        cell = mesh.ufl_cell(),
+                                        degree = 4,
+                                        quad_scheme="default")
+        
+        return d.FunctionSpace(mesh, element)
+    else:
+        if dim == 1:
+            return d.FunctionSpace(mesh, "Quadrature", 4)
+        else:
+            return d.VectorFunctionSpace(mesh, "Quadrature", 4)
 
 class TablePrint(object):
     """

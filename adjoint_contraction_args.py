@@ -47,7 +47,7 @@ def make_logger(name, level = logging.INFO):
     logger.addFilter(mpi_filt)
 
     
-    dolfin.set_log_active(True)
+    dolfin.set_log_active(False)
     dolfin.set_log_level(dolfin.WARNING)
 
     # ffc_logger = logging.getLogger('FFC')

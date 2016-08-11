@@ -455,11 +455,12 @@ class ActiveHeartProblem(BasicHeartProblem):
 
                     # Make the convergence criteria stricter so that it is more likely to converge
                     # when annotating is on
-                    self.cphm.solver.parameters["solve"]["snes_solver"]['absolute_tolerance']*= 0.01
-                    self.cphm.solver.parameters["solve"]["snes_solver"]['relative_tolerance']*= 0.01
+                    
+                    self.solver.parameters["solve"]["snes_solver"]['absolute_tolerance']*= 0.01
+                    self.solver.parameters["solve"]["snes_solver"]['relative_tolerance']*= 0.01
                     out, crash = self.solver.solve()
-                    self.cphm.solver.parameters["solve"]["snes_solver"]['absolute_tolerance']*= 100
-                    self.cphm.solver.parameters["solve"]["snes_solver"]['relative_tolerance']*= 100
+                    self.solver.parameters["solve"]["snes_solver"]['absolute_tolerance']*= 100
+                    self.solver.parameters["solve"]["snes_solver"]['relative_tolerance']*= 100
 
                     if crash:
                         # If that does not work increase the number of steps

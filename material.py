@@ -62,8 +62,11 @@ class Material(object):
             I1  = self.I1e(F)
             I4f = self.I4fe(F)
             
-
-        dim = F.geometric_dimension()
+        if DOLFIN_VERSION_MAJOR > 1.6:
+            dim = find_geometric_dimension(F)
+        else:
+            dim = F.geometric_dimension()
+            
         W1   = self.W_1(I1, diff = 0, dim = dim)
         W4f  = self.W_4(I4f, diff = 0)
         Wactive = self.Wactive(I4f, diff = 0)
@@ -111,8 +114,12 @@ class Material(object):
         f = f / sqrt(dot(f,f))
         # The outer product of the fibers
         ff = outer(f,f)
-        
-        dim = F.geometric_dimension()
+
+        if DOLFIN_VERSION_MAJOR > 1.6:
+            dim = find_geometric_dimension(F)
+        else:
+            dim = F.geometric_dimension()
+
         I = Identity(dim)
         
         I1 = self.I1(F)
@@ -207,6 +214,10 @@ class Material(object):
         
         gamma = self.gamma
         
+        if DOLFIN_VERSION_MAJOR > 1.6:
+            d = find_geometric_dimension(F)
+        else:
+            d = F.geometric_dimension()
 
         if self._active_model == 'active_stress':
             
@@ -214,16 +225,13 @@ class Material(object):
         
         # Active strain model
         elif self._active_model == 'active_strain':
-            mgamma = 1 - gamma
-
-            d = F.geometric_dimension()
+            mgamma = 1 - gamma            
             return  pow(mgamma, 4-d) * I1 + (1/mgamma**2 - pow(mgamma, 4-d)) * I4f
             
         elif self._active_model == "active_strain_rossi":
             
             I4s = self.I4s(F)
             I4n = self.I4n(F)
-            d = F.geometric_dimension()
             
             gamma_trans = pow((1+self.gamma), -float(1)/(d-1)) - 1
             

@@ -61,7 +61,8 @@ def broadcast(array, from_process):
     array = array.flatten()
     
     out_array = cpp_module.broadcast(mpi_comm_world(), array, from_process)
-    if len(shape) != 0:
+   
+    if len(shape) > 1:
         out_array = out_array.reshape(*shape)
 
     return out_array

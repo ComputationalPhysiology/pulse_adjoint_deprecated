@@ -5,6 +5,7 @@ be imported."""
 
 from dolfin import *
 import dolfin
+from ufl.domain import find_geometric_dimension
 
 
 try:
