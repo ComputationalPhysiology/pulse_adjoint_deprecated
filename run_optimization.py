@@ -16,8 +16,8 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfinimport import *
-from setup_optimization import setup_simulation, logger, MyReducedFunctional
-from utils import Text, Object, pformat, print_optimization_report, contract_point_exists, get_spaces
+from setup_optimization import setup_simulation, logger, MyReducedFunctional, get_measurements
+from utils import Text, Object, pformat, print_optimization_report, contract_point_exists, get_spaces,  UnableToChangePressureExeption
 from forward_runner import ActiveForwardRunner, PassiveForwardRunner
 
 from numpy_mpi import *
@@ -100,21 +100,45 @@ def run_active_optimization(params, patient):
 
     #Load patient data, and set up the simulation
     measurements, solver_parameters, p_lv, gamma = setup_simulation(params, patient)
-    
+
     # Loop over contract points
-    for i in range(patient.num_contract_points):
+    i = 0
+    # for i in range(patient.num_contract_points):
+    while i < patient.num_contract_points:
         params["active_contraction_iteration_number"] = i
         if not contract_point_exists(params):
-            
-            rd, gamma = run_active_optimization_step(params, patient, 
-                                                     solver_parameters, 
-                                                     measurements, p_lv, 
-                                                     gamma)
 
+            # Number of times we have interpolated in order
+            # to be able to change the pressure
+            attempts = 0
+            pressure_change = False
+            while (not pressure_change and attempts < 8):
+                try:
+                    rd, gamma = run_active_optimization_step(params, patient, 
+                                                             solver_parameters, 
+                                                             measurements, p_lv, 
+                                                             gamma)
+                except UnableToChangePressureExeption:
+                    logger.info("Unable to change pressure. Exception caught")
 
-            logger.info("\nSolve optimization problem.......")
-            solve_oc_problem(params, rd, gamma)
-            adj_reset()
+                    logger.info("Lets interpolate. Add one extra point")
+                    patient.interpolate_data(i+patient.passive_filling_duration-1)
+
+                    # Update the measurements
+                    measurements = get_measurements(params, patient)
+                    
+                    attempts += 1
+                    
+                else:
+                    pressure_change = True
+
+                    logger.info("\nSolve optimization problem.......")
+                    solve_oc_problem(params, rd, gamma)
+                    adj_reset()
+                    i += 1
+                    
+            if not pressure_change:
+                raise RuntimeError("Unable to increasure")
 
 def run_active_optimization_step(params, patient, solver_parameters, measurements, p_lv, gamma):
 
