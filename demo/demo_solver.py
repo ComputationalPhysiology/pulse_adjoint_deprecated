@@ -31,6 +31,7 @@ from pulse_adjoint.lvsolver import LVSolver
 from pulse_adjoint.material import HolzapfelOgden, NeoHookean
 from pulse_adjoint.setup_optimization import  setup_solver_parameters, setup_general_parameters
 from pulse_adjoint.adjoint_contraction_args import logger
+from pulse_adjoint.utils import QuadratureSpace
 import os
 
 logger.setLevel(DEBUG)
@@ -64,7 +65,7 @@ def load_patient_data():
         patient.facets_markers = ffun
 
         # Get fibers
-        V = VectorFunctionSpace(mesh, "Quadrature", 4)
+        V = QuadratureSpace(mesh, 4)
         name = "fiber"
         l = Function(V, name = name)
         fsubgroup = fgroup+"/fiber_epi50_endo40"
@@ -209,7 +210,7 @@ def demo_cube():
     pressure = Expression("t", t = 0.1)
 
     # Fibers
-    V_f = VectorFunctionSpace(mesh, "Quadrature", 4)
+    V_f = QuadratureSpace(mesh, 4)
     # V_f = VectorFunctionSpace(mesh, "CG", 1)
     # Unit field in x-direction
     f0 = interpolate(Expression(("1.0", "0.0", "0.0")), V_f)

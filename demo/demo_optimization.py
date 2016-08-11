@@ -83,7 +83,15 @@ def load_patient_data():
             setattr(patient, lb_names[name], l)
 
         # Get fibers
-        V = VectorFunctionSpace(mesh, "Quadrature", 4)
+        if DOLFIN_VERSION_MAJOR > 1.6:
+            elm = VectorElement(family = "Quadrature",
+                                cell = mesh.ufl_cell(),
+                                degree = 4,
+                                quad_scheme="default")
+            V = FunctionSpace(mesh, elm)
+        else:
+            V = VectorFunctionSpace(mesh, "Quadrature", 4)
+            
         name = "fiber"
         l = Function(V, name = name)
         fsubgroup = fgroup+"/fiber_epi50_endo40"
