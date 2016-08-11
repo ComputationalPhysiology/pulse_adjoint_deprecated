@@ -21,6 +21,7 @@ from dolfin_adjoint import *
 import numpy as np
 from pulse_adjoint.lvsolver import LVSolver
 from pulse_adjoint.material import HolzapfelOgden, NeoHookean
+from pulse_adjoint.utils import QuadratureSpace
 from pulse_adjoint.setup_optimization import setup_application_parameters, setup_solver_parameters, setup_general_parameters
 from pulse_adjoint.adjoint_contraction_args import logger
 logger.setLevel(DEBUG)
@@ -93,7 +94,7 @@ def test_pressure_increase_active():
     """
     
     from test_utils import setup_params as setup_test_params
-    from pulse_adjoint.utils import Text, pformat, UnableToChangePressureExeption
+    from pulse_adjoint.utils import Text, pformat, UnableToChangePressureExeption, passive_inflation_exists
     from pulse_adjoint.setup_optimization import initialize_patient_data, setup_simulation
     from pulse_adjoint.run_optimization import run_passive_optimization, run_active_optimization_step
     
@@ -153,33 +154,38 @@ def test_solver_heart():
     setup_general_parameters()
     params = setup_application_parameters()
 
-    from patient_data import FullPatient
+    from patient_data import TestPatient
 
-    patient = FullPatient("Rohan_13", "low_res")
-    
+    patient = TestPatient()
     
 
     mesh = patient.mesh
     ffun = patient.facets_markers
     N = FacetNormal(mesh)
+    # element_type = "mini"
+    element_type = "taylor_hood"
 
-
-    # f = File("mesh.pvd")
-    # f << mesh
-   
-    # from IPython import embed; embed()
-    # exit()
 
     # Dirichlet BC
     def make_dirichlet_bcs(W):
-        V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-        # no_base_x_tran_bc = DirichletBC(V, Constant((0.0, 0.0, 0.0)), patient.BASE)
-        no_base_x_tran_bc = DirichletBC(V.sub(0), Constant(0.0), patient.BASE)
+        V = W.sub(0)
+        if element_type == "mini":
+            P1 = VectorFunctionSpace(mesh, "Lagrange", 1)
+            B  = VectorFunctionSpace(mesh, "Bubble", 4)
+            V1 = P1+B
+            zero = project(Constant((0, 0, 0)), V1)
+        else:
+            zero = Constant((0,0,0))
+            
+        no_base_x_tran_bc = DirichletBC(V, zero, patient.BASE)
+        
+        # V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
+        # no_base_x_tran_bc = DirichletBC(V.sub(0), 0, patient.BASE)
         return no_base_x_tran_bc
 
 
     # Fibers
-    V_f = VectorFunctionSpace(mesh, "Quadrature", 4)
+    V_f = QuadratureSpace(mesh, 4)
     # Unit field in x-direction
     f0 = patient.e_f
     
@@ -196,7 +202,8 @@ def test_solver_heart():
     spring = Constant(0.0)
     
     # Set up material model
-    material = HolzapfelOgden(f0, gamma, active_model = "active_stress")
+    # material = HolzapfelOgden(f0, gamma, active_model = "active_stress")
+    material = HolzapfelOgden(f0, gamma, active_model = "active_strain")
     # material = NeoHookean(f0, gamma, active_model = "active_stress")
 
     # Solver parameters
@@ -218,7 +225,8 @@ def test_solver_heart():
     params= {"mesh": mesh,
              "facet_function": ffun,
              "facet_normal": N,
-             "state_space": "P_2:P_1",
+             # "state_space": "P_2:P_1",
+             "elements": element_type, 
              "compressibility":{"type": "incompressible",
                                 "lambda":0.0},
              "material": material,
@@ -231,10 +239,10 @@ def test_solver_heart():
     solver = LVSolver(params)
 
     solver.solve()
-    # u,p = solver.get_state().split()
-    u = solver.get_state()#.split()
+    u,p = solver.get_state().split()
+    # u = solver.get_state().split()
     plot(u, mode="displacement", title = "displacement")
-    # plot(p, title = "hydrostatic pressure")
+    plot(p, title = "hydrostatic pressure")
     
     interactive()
 
@@ -243,6 +251,9 @@ def test_solver_cube():
     params = setup_application_parameters()
     mesh = UnitCubeMesh(3,3,3)
 
+    # element_type = "taylor_hood"
+    element_type = "mini"
+    
     # Make some simple boundary conditions
     class Right(SubDomain):
         def inside(self, x, on_boundary): 
@@ -273,12 +284,20 @@ def test_solver_cube():
 
     # Dirichlet BC
     def make_dirichlet_bcs(W):
-        V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-        no_base_x_tran_bc = DirichletBC(V.sub(0), 0, topbottom_marker)
+        V = W.sub(0)
+        if element_type == "mini":
+            P1 = VectorFunctionSpace(mesh, "Lagrange", 1)
+            B  = VectorFunctionSpace(mesh, "Bubble", 4)
+            V1 = P1+B
+            zero = project(Constant((0, 0, 0)), V1)
+        else:
+            zero = Constant((0,0,0))
+            
+        no_base_x_tran_bc = DirichletBC(V, zero, topbottom_marker)
         return no_base_x_tran_bc
 
     # Spring Constant for Robin Condition
-    spring = Constant(0.1, name ="spring_constant")
+    spring = Constant(0.0, name ="spring_constant")
 
     # Facet Normal
     N = FacetNormal(mesh)
@@ -287,7 +306,7 @@ def test_solver_cube():
     pressure = Expression("t", t = 0.1)
 
     # Fibers
-    V_f = VectorFunctionSpace(mesh, "Quadrature", 4)
+    V_f =QuadratureSpace(mesh, 4)
     # V_f = VectorFunctionSpace(mesh, "CG", 1)
     # Unit field in x-direction
     f0 = interpolate(Expression(("1.0", "0.0", "0.0")), V_f)
@@ -310,7 +329,7 @@ def test_solver_cube():
     params= {"mesh": mesh,
              "facet_function": ffun,
              "facet_normal": N,
-             "state_space": "P_2:P_1",
+             "elements": element_type, #"mini", #"taylor_hood", 
              "compressibility":{"type": "incompressible",
                                 "lambda":0.0},
              "material": material,
@@ -330,38 +349,16 @@ def test_solver_cube():
     postprocess = solver.postprocess()
 
     V_cg = FunctionSpace(mesh, "CG", 1)
-    V_quad = FunctionSpace(mesh, "Quadrature", 4)
-    # from IPython import embed; embed()
-    
-    
-    Work = postprocess.work()
-    plot(Work, title = "work")
-    
+    V_quad = QuadratureSpace(mesh, 4)
 
-    Work_f = postprocess.work_fiber()
-    plot(Work_f, title = "work_fiber")
-
-    Work_diff = Work - Work_f
-    plot(Work_diff, title = "work difference")
 
     fiber_stress = postprocess.fiber_stress()
     plot(fiber_stress, title = "fiber stress")
 
-    fiber_strain = postprocess.fiber_strain()
-    plot(fiber_strain, title = "fiber strain")
-
-    I1 = postprocess.I1()
-    plot(I1, title = "I1")
-
-    I4f = postprocess.I4f()
-    plot(I4f, title = "I4f")
-
-    plot(fiber_stress - p, title = "fibstress - p")
-    
     interactive()
 
 if __name__ == "__main__":
     # test_solver_cube()
-    # test_solver_heart()
+    test_solver_heart()
     # test_pressure_increase_passive()
-    test_pressure_increase_active()
+    # test_pressure_increase_active()

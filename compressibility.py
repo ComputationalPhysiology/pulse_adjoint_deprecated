@@ -44,19 +44,63 @@ class Compressibility(object):
 
     class Incompressible(object):
         def __init__(self, parameters):
+            
             mesh = parameters["mesh"]
             
-            V_str, Q_str = ("P_2", "P_1") if not parameters.has_key("state_space") \
-              else parameters["state_space"].split(":")
+            # V_str, Q_str = ("P_2", "P_1") if not parameters.has_key("state_space") \
+              # else parameters["state_space"].split(":")
 
-            # Displacemet Space
-            V = VectorFunctionSpace(mesh, V_str.split("_")[0], 
-                                    int(V_str.split("_")[1]))
+            element = "taylor_hood" if not parameters.has_key("elements") \
+                       else parameters["elements"]
+            
+            assert element in ["taylor_hood", "mini"]
 
-            # Lagrange Multiplier
-            Q = FunctionSpace(mesh, Q_str.split("_")[0], 
-                              int(Q_str.split("_")[1]))
-            self.W = MixedFunctionSpace([V, Q])
+            if DOLFIN_VERSION_MAJOR > 1.6:
+
+                if element == "taylor_hood":
+                    
+                    P2 = VectorElement("Lagrange", mesh.ufl_cell(), 2)
+                    P1 = FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+                    self.W = FunctionSpace(mesh, P2*P1)
+                else:
+                    bdim = 3 if mesh.ufl_domain().topological_dimension() == 2 else 4
+                    
+                    P1 = VectorElement("Lagrange", mesh.ufl_cell(), 1)
+                    B = VectorElement("Bubble",   mesh.ufl_cell(), bdim)
+                    Q = FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+                    # from IPython import embed; embed()
+                    # exit()
+                    self.W = FunctionSpace(mesh, (P1 + B) * Q)
+                    
+                # V = VectorElement(V_str.split("_")[0],
+                #                   mesh.ufl_cell(),
+                #                   int(V_str.split("_")[1]))
+                # Q = FiniteElement(Q_str.split("_")[0],
+                #                   mesh.ufl_cell(),
+                #                   int(Q_str.split("_")[1]))
+                
+                
+                
+            else:
+
+                if element == "mini":
+                    logger.warning("mini elements are not supported "
+                                   "for this version of fenics. "
+                                   "Consider upgrading to version 2016.1.0")
+                P2 = VectorFunctionSpace(mesh, "Lagrange", 2)
+                P1 = FunctionSpace(mesh, "Lagrange", 1)
+                self.W = FunctionSpace(mesh, P2*P1)
+                                    
+                # # Displacemet Space
+                # V = VectorFunctionSpace(mesh, V_str.split("_")[0], 
+                #                         int(V_str.split("_")[1]))
+
+                # # Lagrange Multiplier
+                # Q = FunctionSpace(mesh, Q_str.split("_")[0], 
+                #                   int(Q_str.split("_")[1]))
+                # self.W = MixedFunctionSpace([V, Q])
+
+            
             self.w = Function(self.W, name = "displacement-pressure")
             self.w_test = TestFunction(self.W)
             self.u_test, self.p_test = split(self.w_test)
