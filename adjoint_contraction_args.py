@@ -106,7 +106,7 @@ PHASES = ['passive_inflation', 'active_contraction', "all"]
 
 # Initial material parameters
 # INITIAL_MATPARAMS = [0.795, 6.855, 21.207, 40.545]
-INITIAL_MATPARAMS = [2.91, 2.582, 5,5] 
+INITIAL_MATPARAMS = [2.91, 2.582, 5.0,5.0] 
 
 # If true, Optimize material parameters, otherswise use the default material parameters
 OPTIMIZE_MATPARAMS = True
