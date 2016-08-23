@@ -104,7 +104,7 @@ def run_active_optimization(params, patient):
     # Loop over contract points
     i = 0
     # for i in range(patient.num_contract_points):
-    while i < patient.num_contract_points:
+    while i < patient.num_contract_points - 1:
         params["active_contraction_iteration_number"] = i
         if not contract_point_exists(params):
 
@@ -112,7 +112,9 @@ def run_active_optimization(params, patient):
             # to be able to change the pressure
             attempts = 0
             pressure_change = False
+            
             while (not pressure_change and attempts < 8):
+               
                 try:
                     rd, gamma = run_active_optimization_step(params, patient, 
                                                              solver_parameters, 
@@ -135,10 +137,11 @@ def run_active_optimization(params, patient):
                     logger.info("\nSolve optimization problem.......")
                     solve_oc_problem(params, rd, gamma)
                     adj_reset()
-                    i += 1
-                    
+         
             if not pressure_change:
                 raise RuntimeError("Unable to increasure")
+            
+        i += 1
 
 def run_active_optimization_step(params, patient, solver_parameters, measurements, p_lv, gamma):
 

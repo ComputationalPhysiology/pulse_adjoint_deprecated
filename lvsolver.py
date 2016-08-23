@@ -15,7 +15,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-
 from dolfinimport import *
 from compressibility import get_compressibility
 from adjoint_contraction_args import logger
@@ -65,10 +64,9 @@ class LVSolver(object):
         self._init_spaces()
         self._init_forms()
 
-        self._postprocess = Postprocess(self)
         
     def postprocess(self):
-        return self._postprocess
+        return Postprocess(self)
         
     def default_solver_parameters(self):
 
@@ -359,11 +357,8 @@ class Postprocess(object):
            \mathbf{P} = \frac{\partial \psi}{\partial \mathbf{F}}
         
         """
-        # Some numerical instabilities at first point
-        if assemble((self._F - self._I)**2*dx) == 0:
-            return self._F*Constant(0.0)
+        return self.chaucy_stress()*inv(self._F.T)
         
-        return diff(self.internal_energy(), self._F)
 
     def second_piola_stress(self):
         r"""
@@ -371,10 +366,10 @@ class Postprocess(object):
 
         .. math::
 
-           \mathbf{S} =  \mathbf{F}^{-1} \mathbf{P}
+           \mathbf{S} =  \mathbf{F}^{-1} \sigma \mathbf{F}^{-T}
 
         """
-        return inv(self._F)*self.first_piola_stress()
+        return inv(self._F)*self.chaucy_stress()*inv(self._F.T)
 
     def chaucy_stress(self):
         r"""
@@ -393,6 +388,7 @@ class Postprocess(object):
            \sigma = \mathbf{F} \frac{\partial \psi}{\partial \mathbf{F}}
         
         """
+        
         return self.solver.parameters["material"].CauchyStress(self._F, self._p)
 
     def work(self):

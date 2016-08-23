@@ -83,13 +83,13 @@ class Material(object):
 
         .. math::
 
-           \sigma = \mathbf{F} \frac{\partial \Psi}{\partial \mathbf{F}} - pI 
+           \sigma = \mathbf{F} \frac{\partial \Psi}{\partial \mathbf{F}} - p\mathbf{I}
 
         Since the strain energy depends on the invariants we can write
 
         .. math::
 
-           \sigma = \mathbf{F} \sum_{i = 1, i\neq3}^{N} \psi_i \frac{\partial \I1}{\partial \mathbf{F}} - pI 
+           \sigma = \mathbf{F} \sum_{i = 1, i\neq3}^{N} \psi_i \frac{\partial I1}{\partial \mathbf{F}} - p\mathbf{I} 
 
         Compressible:
 
@@ -101,7 +101,7 @@ class Material(object):
 
         .. math::
 
-           \sigma = J^{-1} \mathbf{F} \sum_{i = 1}^{N} \psi_i \frac{\partial \I1}{\partial \mathbf{F}}
+           \sigma = J^{-1} \mathbf{F} \sum_{i = 1}^{N} \psi_i \frac{\partial I1}{\partial \mathbf{F}}
         
         """
 
@@ -129,7 +129,7 @@ class Material(object):
         w1 = self.W_1(I1, diff = 1, dim = dim)
         w4f = self.W_4(I4f, diff = 1)
         wactive = self.Wactive(I4f, diff = 1)
-
+        
         return 2*w1*B + 2*w4f*ff + 2*wactive*ff - p*I
 
     def Wactive(self, I4f = 0, diff = 0):

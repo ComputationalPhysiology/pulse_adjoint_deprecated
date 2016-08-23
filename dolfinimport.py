@@ -5,7 +5,9 @@ be imported."""
 
 from dolfin import *
 import dolfin
-from ufl.domain import find_geometric_dimension
+
+if dolfin.DOLFIN_VERSION_MAJOR > 1.6:
+    from ufl.domain import find_geometric_dimension
 
 
 try:

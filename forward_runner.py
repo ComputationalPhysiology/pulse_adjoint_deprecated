@@ -475,6 +475,10 @@ class PassiveForwardRunner(BasicForwardRunner):
                                   self.p_lv, self.endo_lv_marker, 
                                   self.crl_basis, self.spaces)
 
+        # Do an initial solve for the initial point
+        parameters["adjoint"]["stop_annotating"] = True
+        phm.solver.solve()
+        parameters["adjoint"]["stop_annotating"] = not annotate
         
         forward_result = BasicForwardRunner.solve_the_forward_problem(self, annotate, phm, "passive")
 
