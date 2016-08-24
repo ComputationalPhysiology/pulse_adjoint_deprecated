@@ -39,12 +39,9 @@ class Material(object):
      
         # Activation
         if self.gamma.value_size() == 17:
-            from setup_optimization import RegionalGamma
-            assert self.strain_markers is not None, \
-              "Provide strain markers is using regional gamma"
-            RG = RegionalGamma(self.strain_markers)
-            RG.set(self.gamma)
-            gamma = RG.get_function()
+            # This means a regional gamma
+            # Could probably make this a bit more clean
+            gamma = self.gamma.get_function()
         else:
             gamma = self.gamma
 
@@ -59,8 +56,8 @@ class Material(object):
         # Active strain model
         else:
             # Invariants
-            I1  = self.I1e(F)
-            I4f = self.I4fe(F)
+            I1  = self.I1e(F, gamma)
+            I4f = self.I4fe(F, gamma)
             
         if DOLFIN_VERSION_MAJOR > 1.6:
             dim = find_geometric_dimension(F)
@@ -204,7 +201,7 @@ class Material(object):
         C = F.T * F
         return  inner(C*self.f0, self.s0)
 
-    def I1e(self, F):
+    def I1e(self, F, gamma):
         """
         First isotropic invariant in the elastic configuration
         """
@@ -212,7 +209,7 @@ class Material(object):
         I1  = self.I1(F)
         I4f = self.I4f(F)
         
-        gamma = self.gamma
+        
         
         if DOLFIN_VERSION_MAJOR > 1.6:
             d = find_geometric_dimension(F)
@@ -225,7 +222,8 @@ class Material(object):
         
         # Active strain model
         elif self._active_model == 'active_strain':
-            mgamma = 1 - gamma            
+            mgamma = 1 - gamma
+            
             return  pow(mgamma, 4-d) * I1 + (1/mgamma**2 - pow(mgamma, 4-d)) * I4f
             
         elif self._active_model == "active_strain_rossi":
@@ -233,19 +231,19 @@ class Material(object):
             I4s = self.I4s(F)
             I4n = self.I4n(F)
             
-            gamma_trans = pow((1+self.gamma), -float(1)/(d-1)) - 1
+            gamma_trans = pow((1+gamma), -float(1)/(d-1)) - 1
             
             return I1 - I4f*gamma*(gamma +2)/(1+gamma)**2 - (I1-I4f)*gamma_trans*(gamma_trans +2)/(1+gamma_trans)**2
 
         
 
-    def I4fe(self, F):
+    def I4fe(self, F, gamma):
         """
         First isotropic invariant in the elastic configuration
         """
 
         I4f = self.I4f(F)
-        gamma = self.gamma
+        
 
         if self._active_model == 'active_stress':
             

@@ -95,7 +95,7 @@ def setup_application_parameters():
     params.add("base_spring_k", BASE_K)
     params.add("reg_par", REG_PAR)
     params.add("active_model", "active_strain_rossi")
-    params.add("gamma_space", "CG_1", ["CG_1", "R_0", "regional"])
+    params.add("gamma_space", "regional", ["CG_1", "R_0", "regional"])
     params.add("state_space", "P_2:P_1")
     params.add("compressibility", "incompressible", ["incompressible", 
                                                      "stabalized_incompressible", 
@@ -107,7 +107,8 @@ def setup_application_parameters():
     # params.add("base_bc", "dirichlet_bcs_from_seg_base", ["dirichlet_bcs_from_seg_base",
     #                                                           "dirichlet_bcs_fix_base_x"])
     params.add("base_bc", "dirichlet_bcs_fix_base_x", ["dirichlet_bcs_from_seg_base",
-                                                              "dirichlet_bcs_fix_base_x"])
+                                                       "dirichlet_bcs_fix_base_x",
+                                                       "fixed"])
     
     params.add("synth_data", False)
     params.add("noise", False)
@@ -288,13 +289,12 @@ def make_solver_params(params, patient, measurements):
 
     # Contraction parameter
     if params["gamma_space"] == "regional":
-        # gamma = RegionalGamma(patient.strain_markers)
-        gamma_space = VectorFunctionSpace(patient.mesh, "R", 0, dim = 17)
+        gamma = RegionalGamma(patient.strain_markers)
     else:
         gamma_family, gamma_degree = params["gamma_space"].split("_")
         gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
 
-    gamma = Function(gamma_space, name = 'activation parameter')
+        gamma = Function(gamma_space, name = 'activation parameter')
 
 
     strain_weights = patient.strain_weights
@@ -370,6 +370,22 @@ def make_solver_params(params, patient, measurements):
                       DirichletBC(V.sub(1), base_bc_y, endoring, "pointwise"),
                       DirichletBC(V.sub(2), base_bc_z, endoring, "pointwise")]
             return bc
+
+    elif params["base_bc"] == "fixed":
+        
+        robin_bc = [None]
+        base_bc_y = None
+        base_bc_z = None
+        base_it = None
+        
+        def base_bc(W):
+            '''Fix the basal plane.
+            '''
+            V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
+            bc = [DirichletBC(V, Constant((0, 0, 0)), patient.BASE)]
+            return bc
+        
+        
     else:
         if not params["base_bc"] == "dirichlet_bcs_fix_base_x":
             if mesh_verts is None:
@@ -564,7 +580,7 @@ class MyReducedFunctional(ReducedFunctional):
 
         paramvec_new = Function(self.paramvec.function_space(), name = "new control")
 
-        if isinstance(value, Function):
+        if isinstance(value, Function) or isinstance(value, RegionalGamma):
             paramvec_new.assign(value)
         else:
             assign_to_vector(paramvec_new.vector(), value)
@@ -649,134 +665,31 @@ class RealValueProjector(object):
 
         return real_function
 
-class RegionalGamma(object):
-    """
-    A class for constructing a regional gamma,
-    with one value per segement
-    """
-    __name__="RegionalGamma"
-    def __init__(self, strain_markers, name = "Regional_gamma_coeffs"):
-        """Make regional gamma
-        *Arguments*
-          strain_markers (dolfin:Meshfunction)
-            Meshfunction with strain regions.
-            There is assumed to be 17, with markers
-            from 1 to 17.
-          
-        """  
-        assert isinstance(strain_markers, MeshFunctionSizet), \
-          "Strain markers must be a dolfin MeshFunction size_t"
 
-        strain_markers_arr = gather_broadcast(strain_markers.array())
-        assert set(strain_markers_arr) == set(range(1,18)), \
-          "Strain markers must be integers starting from 1, and ending at 17, with one increment" 
 
+
+class RegionalGamma(dolfin.Function):
+    def __init__(self, meshfunction):
         
-        self._meshfunction = strain_markers
-        self._mesh = strain_markers.mesh()
-
+        mesh = meshfunction.mesh()
+        
+        V  = dolfin.VectorFunctionSpace(mesh, "R", 0, dim = 17)
+        
+        dolfin.Function.__init__(self, V)
+        self._meshfunction = meshfunction
 
         # Functionspace for the indicator functions
-        self._IndSpace = FunctionSpace(strain_markers.mesh(), "DG", 0)
-        # Functionspace for the coefficents
-        self._CoeffSpace = VectorFunctionSpace(self._mesh, "R", 0, dim = 17)
-
-        # The coefficents
-        self._coeffs = Function(self._CoeffSpace, name = name)
-
+        self._IndSpace = dolfin.FunctionSpace(mesh, "DG", 0)
+       
         # Make indicator functions
         self._ind_functions = []
         for i in range(1,18):
             self._ind_functions.append(self._make_indicator_function(i))
 
-    def get_coefficients(self):
-        return self._coeffs
-
-    def get_meshfunction(self):
-        return self._meshfunction
-
-    def function_space(self):
-        return self._CoeffSpace
-
-    def vector(self):
-        return self._coeffs.vector()
-
-    def assign(self, vals, annotate = None):
-        """
-        Assign new coefficents. 
-        Note if vals is used as cotrols you
-        should use the function set.
-
-        *Arguments*
-          vals (list or np.array)
-            The value of gamma on all the 17 regions.
-        """
-
-        annotate = annotate if annotate is not None \
-          else not parameters["adjoint"]["stop_annotating"]
-        
-        if isinstance(vals, np.ndarray) or isinstance(vals, list):
-
-            assert len(vals) == 17, \
-              "Number of gamma_values must be 17. Number of given gamma_values are {}".format(len(gamma_values))
-              
-            coeffs = Function(self._CoeffSpace)
-            for i, v in enumerate(vals):
-                coeffs.vector()[i] = v
-
-            self._coeffs.assign(coeffs, annotate = annotate)
-
-        elif isinstance(vals, dolfin.Function):
-            self._coeffs.assign(vals, annotate = annotate)
-
-        elif isinstance(vals, dolfin.Constant):
-            val = float(vals)
-            coeffs = Function(self._CoeffSpace)
-            for i in range(17):
-                coeffs.vector()[i] = val
-
-            self._coeffs.assign(coeffs, annotate = annotate)
-
-        elif isinstance(vals, RegionalGamma):
-            self._coeffs.assign(vals.get_coefficients(), annotate = annotate)
-
-        else:
-            
-            raise ValueError("Unknown type {} for function assignment".format(type(vals)))
-            
-    def set(self, gamma):
-        """
-        Set gamma to the coeffiecients
-        Note, this is not an assignement but
-        rater using the given gamma as coefficients.
-        If given gamma is used by dolfin-adjoint
-        this function must be used to set gamma. 
-        """
-
-        assert isinstance(gamma, dolfin.Function) or \
-          isinstance(gamma, dolfin.Constant)
-
-        self._coeffs = gamma
-
-    def copy(self, *args):
-        
-        return self._coeffs.copy(*args)
-
-    def plot(self, V_str = "DG_0"):
-        """
-        Plot the regional gamma, by
-        first projecting it down to a 
-        suitable space given by V_str
-        """
-        
-        fun = self.project(V_str)
-        plot(fun, interactive = True)
-
     def get_function(self):
         """
         Return linear combination of coefficents
-        and basis functions, and project the 
-        sum to the given functionspace. 
+        and basis functions
 
         *Returns*
            fun (dolfin.Function)
@@ -784,13 +697,6 @@ class RegionalGamma(object):
              
         """
         return self._sum()
-    
-    def project(self, V_str = "DG_0"):
-        f = self.get_function()
-        family, degree = V_str.split("_")
-        V = FunctionSpace(self._mesh, family, int(degree))
-        fun =  project(f, V)
-        return fun
 
     def _make_indicator_function(self, marker):
         dm = self._IndSpace.dofmap()
@@ -798,12 +704,12 @@ class RegionalGamma(object):
                      np.where(self._meshfunction.array() == marker)[0]]
         dofs = np.unique(np.array(cell_dofs))
         
-        f = Function(self._IndSpace)
+        f = dolfin.Function(self._IndSpace)
         f.vector()[dofs] = 1.0    
         return f  
 
     def _sum(self):
-        coeffs = split(self._coeffs)
+        coeffs = dolfin.split(self)
         fun = coeffs[0]*self._ind_functions[0]
 
         for c,f in zip(coeffs[1:], self._ind_functions[1:]):
