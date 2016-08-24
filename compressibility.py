@@ -89,7 +89,7 @@ class Compressibility(object):
                                    "Consider upgrading to version 2016.1.0")
                 P2 = VectorFunctionSpace(mesh, "Lagrange", 2)
                 P1 = FunctionSpace(mesh, "Lagrange", 1)
-                self.W = FunctionSpace(mesh, P2*P1)
+                self.W = P2*P1
                                     
                 # # Displacemet Space
                 # V = VectorFunctionSpace(mesh, V_str.split("_")[0], 
