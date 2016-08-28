@@ -66,8 +66,8 @@ class Material(object):
             
         W1   = self.W_1(I1, diff = 0, dim = dim)
         W4f  = self.W_4(I4f, diff = 0)
-        Wactive = self.Wactive(I4f, diff = 0)
-       
+        Wactive = self.Wactive(gamma, I4f, diff = 0)
+              
         W = W1 + W4f + Wactive 
         
         return W
@@ -129,13 +129,13 @@ class Material(object):
         
         return 2*w1*B + 2*w4f*ff + 2*wactive*ff - p*I
 
-    def Wactive(self, I4f = 0, diff = 0):
+    def Wactive(self, gamma, I4f = 0, diff = 0):
         if self._active_model == 'active_stress':
 
             if diff == 0:
-                return self.gamma*I4f
+                return gamma*I4f
             elif diff == 1:
-                return self.gamma 
+                return gamma 
             
         else:
             # No active stress
@@ -221,19 +221,16 @@ class Material(object):
             return I1
         
         # Active strain model
-        elif self._active_model == 'active_strain':
-            mgamma = 1 - gamma
+        else:
             
+            if self._active_model == 'active_strain':
+                mgamma = 1 - gamma
+            
+                       
+            elif self._active_model == "active_strain_rossi":
+                mgamma = 1+gamma
+          
             return  pow(mgamma, 4-d) * I1 + (1/mgamma**2 - pow(mgamma, 4-d)) * I4f
-            
-        elif self._active_model == "active_strain_rossi":
-            
-            I4s = self.I4s(F)
-            I4n = self.I4n(F)
-            
-            gamma_trans = pow((1+gamma), -float(1)/(d-1)) - 1
-            
-            return I1 - I4f*gamma*(gamma +2)/(1+gamma)**2 - (I1-I4f)*gamma_trans*(gamma_trans +2)/(1+gamma_trans)**2
 
         
 
@@ -250,15 +247,16 @@ class Material(object):
             return I4f
         
         # Active strain model
-        elif self._active_model == 'active_strain':
+        else:
+            if self._active_model == 'active_strain':
             
-            mgamma = 1 - gamma
+                mgamma = 1 - gamma
 
-            return   1/mgamma**2 * I4f
             
-        elif self._active_model == "active_strain_rossi":
             
-            mgamma = 1 + gamma
+            elif self._active_model == "active_strain_rossi":
+            
+                mgamma = 1 + gamma
             
             return   1/mgamma**2 * I4f
     
