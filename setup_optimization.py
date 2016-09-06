@@ -197,6 +197,7 @@ def setup_optimization_parameters():
     params.add("gamma_max", MAX_GAMMA)
     params.add("matparams_min", 0.1)
     params.add("matparams_max", 50.0)
+    params.add("fixed_matparams_exp", False)
     params.add("disp", False)
 
     return params

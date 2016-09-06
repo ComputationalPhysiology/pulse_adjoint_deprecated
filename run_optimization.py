@@ -104,7 +104,7 @@ def run_active_optimization(params, patient):
     # Loop over contract points
     i = 0
     # for i in range(patient.num_contract_points):
-    while i < patient.num_contract_points - 1:
+    while i < patient.num_contract_points:
         params["active_contraction_iteration_number"] = i
         if not contract_point_exists(params):
 
@@ -243,6 +243,10 @@ def solve_oc_problem(params, rd, paramvec):
             lb = np.array([opt_params["matparams_min"]]*nvar)
             ub = np.array([opt_params["matparams_max"]]*nvar)
 
+            if opt_params["fixed_matparams_exp"]:
+                # Set the upper and lower bounds equal
+                lb[2:] = ub[2:] = paramvec_arr[2:]
+                
             tol = opt_params["passive_opt_tol"]
             max_iter = opt_params["passive_maxiter"]
 
