@@ -101,6 +101,13 @@ class Material(object):
            \sigma = J^{-1} \mathbf{F} \sum_{i = 1}^{N} \psi_i \frac{\partial I1}{\partial \mathbf{F}}
         
         """
+        # Activation
+        if self.gamma.value_size() == 17:
+            # This means a regional gamma
+            # Could probably make this a bit more clean
+            gamma = self.gamma.get_function()
+        else:
+            gamma = self.gamma
 
         # Left Cauchy green
         B = F*F.T
@@ -125,7 +132,7 @@ class Material(object):
         
         w1 = self.W_1(I1, diff = 1, dim = dim)
         w4f = self.W_4(I4f, diff = 1)
-        wactive = self.Wactive(I4f, diff = 1)
+        wactive = self.Wactive(gamma, diff = 1)
         
         return 2*w1*B + 2*w4f*ff + 2*wactive*ff - p*I
 
