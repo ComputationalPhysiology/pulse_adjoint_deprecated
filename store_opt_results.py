@@ -109,9 +109,18 @@ def write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt,
             yaml.dump(params.to_dict(), parfile, default_flow_style=False)
 
         # Optimization results
-        if opt_result and isinstance(opt_result, dict):
-            dump_parameters_to_attributes(opt_result, h5group)
-        
+        if opt_result is not None:
+            controls = opt_result.pop("controls", [0])
+            for it, c in enumerate(controls):
+                h5file.write(c, h5group + "/controls/{}".format(it))
+
+            func_vals= np.array(opt_result.pop("func_vals", [0]))
+            save_data(func_vals, h5group + "/funtion_values")
+            
+            if opt_result and isinstance(opt_result, dict):
+                dump_parameters_to_attributes(opt_result, h5group)
+                
+
 
         # States
         for i, w in enumerate(for_result_opt.states):

@@ -366,6 +366,19 @@ def solve_oc_problem(params, rd, paramvec):
 
             cons = ({"type": "ineq", "fun": lowerbound_constraint},
                     {"type": "ineq", "fun": upperbound_constraint})
+
+            if params["phase"] == PHASES[0] and \
+               params["linear_matparams_ratio"] is not None:
+
+                # We put a constaint on the ration between a and a_f
+                def ratio_constraint(m):
+                    return m[0]/m[1] - float(params["linear_matparams_ratio"])
+                cons = (cons + ({"type": "eq",
+                                "fun": ratio_constraint}, {}))[:-1]
+
+                logger.info("Force ratio a/a_f = {}".format(params["linear_matparams_ratio"]))
+                
+                
             
             kwargs = {"method": method,
                       "constraints": cons, 
@@ -385,6 +398,8 @@ def solve_oc_problem(params, rd, paramvec):
             run_time = t.stop()
             opt_result["ncrash"] = rd.nr_crashes
             opt_result["run_time"] = run_time
+            opt_result["controls"] = rd.controls_lst
+            opt_result["func_vals"] = rd.func_values_lst
             x = opt_result.x
 
         assign_to_vector(paramvec.vector(), x)

@@ -88,36 +88,28 @@ def setup_patient_parameters():
 def setup_application_parameters():
 
     params = Parameters("Application_parmeteres")
-    params.add("sim_file", DEFAULT_SIMULATION_FILE)
-    
-    params.add("outdir", os.path.dirname(DEFAULT_SIMULATION_FILE))
-    params.add("alpha", ALPHA)
-    params.add("base_spring_k", BASE_K)
-    params.add("reg_par", REG_PAR)
-    params.add("active_model", "active_strain_rossi")
-    params.add("gamma_space", "regional", ["CG_1", "R_0", "regional"])
-    params.add("state_space", "P_2:P_1")
-    params.add("compressibility", "incompressible", ["incompressible", 
-                                                     "stabalized_incompressible", 
-                                                     "penalty", "hu_washizu"])
-    params.add("incompressibility_penalty", 0.0)
-    params.add("use_deintegrated_strains", False)
-    params.add("optimize_matparams", True)
-    params.add("nonzero_initial_guess", True)
-    # params.add("base_bc", "dirichlet_bcs_from_seg_base", ["dirichlet_bcs_from_seg_base",
-    #                                                           "dirichlet_bcs_fix_base_x"])
-    params.add("base_bc", "dirichlet_bcs_fix_base_x", ["dirichlet_bcs_from_seg_base",
-                                                       "dirichlet_bcs_fix_base_x",
-                                                       "fixed"])
-    
-    params.add("synth_data", False)
-    params.add("noise", False)
-    
-    # Set material parameter estimation as default
-    params.add("phase", PHASES[0], PHASES)
-    params.add("alpha_matparams", ALPHA_MATPARAMS)
-    params.add("active_contraction_iteration_number", 0)
 
+    ## Output ##
+    
+    # Location of output
+    params.add("sim_file", DEFAULT_SIMULATION_FILE)
+    params.add("outdir", os.path.dirname(DEFAULT_SIMULATION_FILE))
+
+    ## Parameters ##
+    
+    ## Weight of strain vs volume match
+    # Active phase
+    params.add("alpha", ALPHA)
+    # Passive phase
+    params.add("alpha_matparams", ALPHA_MATPARAMS)
+
+    # Regularization parameter
+    params.add("reg_par", REG_PAR)
+    
+    # Spring constant at base (Note: works one for base_bc = fix_x)
+    params.add("base_spring_k", BASE_K)
+
+    # Material parameters
     material_parameters = Parameters("Material_parameters")
     material_parameters.add("a", INITIAL_MATPARAMS[0])
     material_parameters.add("a_f", INITIAL_MATPARAMS[1])
@@ -125,6 +117,70 @@ def setup_application_parameters():
     material_parameters.add("b_f", INITIAL_MATPARAMS[3])
     params.add(material_parameters)
 
+    # Ratio a/a_f used to constrain the passive optimization
+    # if None then no constraint are put on the optimization
+    params.add("linear_matparams_ratio", 1.0)
+    
+
+    ## Models ##
+
+    # Active model
+    params.add("active_model", "active_stress", ["active_strain",
+                                                       "active_strain_rossi",
+                                                       "active_stress"])
+
+
+    # State space
+    params.add("state_space", "P_2:P_1")
+
+    # Model for compressibiliy
+    params.add("compressibility", "incompressible", ["incompressible", 
+                                                     "stabalized_incompressible", 
+                                                     "penalty", "hu_washizu"])
+    # Incompressibility penalty (applicable if model is not incompressible)
+    params.add("incompressibility_penalty", 0.0)
+
+    # Boundary condition at base
+    params.add("base_bc", "fix_x", ["from_seg_base",
+                                    "fix_x",
+                                    "fixed"])
+
+
+    ## Iterators ##
+
+    # Active of passive phase
+    params.add("phase", PHASES[0], PHASES)
+
+    # Iteration for active phase
+    params.add("active_contraction_iteration_number", 0)
+    
+
+    ## Additional setup ##
+    
+    # Space for active parameter
+    params.add("gamma_space", "regional", ["CG_1", "R_0", "regional"])
+
+    # Passive parameters to used for optimization
+    passive_parameters = Parameters("Passive_parameters")
+    passive_lst = ["a", "a_f", "b", "b_f", "base_spring_k"]
+    for i,p in enumerate(passive_lst):
+        passive_parameters.add("param{}".format(i), p, passive_lst)
+    params.add(passive_parameters)
+
+    # If you want to use pointswise strains as input (only synthetic)
+    params.add("use_deintegrated_strains", False)
+
+    # If you want to optimize passive parameters
+    params.add("optimize_matparams", True)
+
+    # If you want to use a zero initial guess for gamma (False),
+    # or use gamma from previous iteration as initial guess (True)
+    params.add("nonzero_initial_guess", True)
+
+    # Use synthetic data
+    params.add("synth_data", False)
+    # Noise is added to synthetic data
+    params.add("noise", False)
 
 
     return params
@@ -316,7 +372,7 @@ def make_solver_params(params, patient, measurements):
         mesh_verts = None
 
 
-    if params["base_bc"] == "dirichlet_bcs_from_seg_base" and (mesh_verts is not None):
+    if params["base_bc"] == "from_seg_base" and (mesh_verts is not None):
 
         endoring = VertexDomain(mesh_verts)
         base_it = Expression("t", t = 0.0, name = "base_iterator")
@@ -387,7 +443,7 @@ def make_solver_params(params, patient, measurements):
         
         
     else:
-        if not params["base_bc"] == "dirichlet_bcs_fix_base_x":
+        if not params["base_bc"] == "fix_x":
             if mesh_verts is None:
                 logger.warning("No mesh vertices found. This must be set in the patient class")
             else:
@@ -572,6 +628,8 @@ class MyReducedFunctional(ReducedFunctional):
         self.nr_crashes = 0
         self.iter = 0
         self.nr_der_calls = 0
+        self.func_values_lst = []
+        self.controls_lst = []
         self.initial_paramvec = gather_broadcast(paramvec.vector().array())
 
     def __call__(self, value):
@@ -617,6 +675,9 @@ class MyReducedFunctional(ReducedFunctional):
         else:
             func_value = self.for_res.func_value
 
+        self.func_values_lst.append(func_value)
+        self.controls_lst.append(Vector(paramvec_new.vector()))
+        
         logger.debug(Text.yellow("Stop annotating"))
         parameters["adjoint"]["stop_annotating"] = True
 
