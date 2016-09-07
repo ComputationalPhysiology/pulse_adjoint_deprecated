@@ -119,7 +119,7 @@ def setup_application_parameters():
 
     # Ratio a/a_f used to constrain the passive optimization
     # if None then no constraint are put on the optimization
-    params.add("linear_matparams_ratio", 1.0)
+    params.add("linear_matparams_ratio", 0.0)
     
 
     ## Models ##
@@ -160,13 +160,6 @@ def setup_application_parameters():
     # Space for active parameter
     params.add("gamma_space", "regional", ["CG_1", "R_0", "regional"])
 
-    # Passive parameters to used for optimization
-    passive_parameters = Parameters("Passive_parameters")
-    passive_lst = ["a", "a_f", "b", "b_f", "base_spring_k"]
-    for i,p in enumerate(passive_lst):
-        passive_parameters.add("param{}".format(i), p, passive_lst)
-    params.add(passive_parameters)
-
     # If you want to use pointswise strains as input (only synthetic)
     params.add("use_deintegrated_strains", False)
 
@@ -197,7 +190,12 @@ def setup_optimization_parameters():
     params.add("gamma_max", MAX_GAMMA)
     params.add("matparams_min", 0.1)
     params.add("matparams_max", 50.0)
-    params.add("fixed_matparams_exp", False)
+    params.add("fix_a", False)
+    params.add("fix_a_f", False)
+    params.add("fix_b", False)
+    params.add("fix_b_f", False)
+   
+    
     params.add("disp", False)
 
     return params

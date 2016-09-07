@@ -243,9 +243,15 @@ def solve_oc_problem(params, rd, paramvec):
             lb = np.array([opt_params["matparams_min"]]*nvar)
             ub = np.array([opt_params["matparams_max"]]*nvar)
 
-            if opt_params["fixed_matparams_exp"]:
-                # Set the upper and lower bounds equal
-                lb[2:] = ub[2:] = paramvec_arr[2:]
+            if opt_params["fix_a"]:
+                lb[0] = ub[0] = paramvec_arr[0]
+            if opt_params["fix_a_f"]:
+                lb[1] = ub[1] = paramvec_arr[1]
+            if opt_params["fix_b"]:
+                lb[2] = ub[2] = paramvec_arr[2]
+            if opt_params["fix_b_f"]:
+                lb[3] = ub[3] = paramvec_arr[3]
+
                 
             tol = opt_params["passive_opt_tol"]
             max_iter = opt_params["passive_maxiter"]
@@ -372,7 +378,7 @@ def solve_oc_problem(params, rd, paramvec):
                     {"type": "ineq", "fun": upperbound_constraint})
 
             if params["phase"] == PHASES[0] and \
-               params["linear_matparams_ratio"] is not None:
+               params["linear_matparams_ratio"] > 0:
 
                 # We put a constaint on the ration between a and a_f
                 def ratio_constraint(m):
