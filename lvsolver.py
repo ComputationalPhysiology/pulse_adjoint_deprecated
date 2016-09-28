@@ -232,7 +232,7 @@ class LVSolver(object):
         J = det(self._F)
 
 
-        # If model is not compressible remove volumetric strains
+        # If model is compressible remove volumetric strains
         if self.is_incompressible():
             F_iso = self._F
         else:
@@ -482,7 +482,15 @@ class Postprocess(object):
         f =  self._F*f0
         
         return inner((self.chaucy_stress()*f)/f**2, f)
-       
+    
+    def stress_component(self, n0):
+
+        # Push forward to current configuration
+        n = self._F*n0
+        return inner((self.chaucy_stress()*n)/n**2, n)
+
+    def strain_component(self, n0):
+        return inner(self.GreenLagrange()*n0/n0**2, n0)
 
     def _localproject(self, fun, V) :
         a = inner(TestFunction(V), TrialFunction(V)) * dx
