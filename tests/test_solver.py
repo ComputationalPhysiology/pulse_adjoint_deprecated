@@ -200,10 +200,12 @@ def test_solver_heart():
 
     # Spring
     spring = Constant(0.0)
-    
+
+    matparams = {"a":1.0, "a_f":1.0, 
+                 "b":5.0, "b_f":5.0}
     # Set up material model
     # material = HolzapfelOgden(f0, gamma, active_model = "active_stress")
-    material = HolzapfelOgden(f0, gamma, active_model = "active_strain")
+    material = HolzapfelOgden(f0, gamma, matparams, active_model = "active_strain")
     # material = NeoHookean(f0, gamma, active_model = "active_stress")
 
     # Solver parameters
@@ -243,6 +245,11 @@ def test_solver_heart():
     # u = solver.get_state().split()
     plot(u, mode="displacement", title = "displacement")
     plot(p, title = "hydrostatic pressure")
+
+    postprocess = solver.postprocess()
+
+    fiber_stress = postprocess.fiber_stress()
+    plot(fiber_stress, title = "fiber stress")
     
     interactive()
 

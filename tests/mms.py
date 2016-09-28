@@ -23,6 +23,7 @@ import math
 import pulse_adjoint.material as mat
 from pulse_adjoint.lvsolver import LVSolver
 from pulse_adjoint.compressibility import Compressibility
+from pulse_adjoint.utils import QuadratureSpace
 from pulse_adjoint.setup_optimization import setup_general_parameters
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -280,7 +281,7 @@ def setup_neohookean_2d(active_model, material_model):
     
     B = F * F.transpose()
     I = Matrix([[1,0],[0, 1]])
-    
+
     Tsym = mu*B + 2*Ta*ff - p*I
     T = convert(Tsym)
     Tff = f.dot(T*f) 
@@ -525,7 +526,7 @@ def test_neohookean_3d():
 
 
         # Fibers
-        V_f = df.VectorFunctionSpace(mesh, "Quadrature", 4)
+        V_f = V_f = QuadratureSpace(mesh, 4)
         f0 = df.interpolate(df.Expression(("0.0", "1.0", "0.0")), V_f)
 
         # Activation
@@ -652,17 +653,19 @@ def test_neohookean_2d():
 
     # Convert sympy code into dolfin expressions
     P_df = df.Expression(((ccode(P_sym[0]), ccode(P_sym[1]) ),
-                        (ccode(P_sym[2]), ccode(P_sym[3]) )),
-                        gamma =gamma, Ta = Ta, alpha = alpha, **matparams)
+                          (ccode(P_sym[2]), ccode(P_sym[3]) )),
+                         gamma =gamma, Ta = Ta, alpha = alpha, **matparams)
     T_df = df.Expression(((ccode(T_sym[0]), ccode(T_sym[1]) ),
-                        (ccode(T_sym[2]), ccode(T_sym[3]) )),
-                        gamma =gamma, Ta = Ta, alpha = alpha, **matparams)
+                          (ccode(T_sym[2]), ccode(T_sym[3]) )),
+                         gamma =gamma, Ta = Ta, alpha = alpha, **matparams)
 
     Tff_df = df.Expression(ccode(Tff_sym),
-                            gamma =gamma, Ta = Ta, alpha = alpha, **matparams)
+                           gamma =gamma, Ta = Ta,
+                           alpha = alpha, **matparams)
         
     divP_df = df.Expression((ccode(divP_sym[0]), ccode(divP_sym[1])),
                             gamma = gamma, Ta = Ta, alpha = alpha, **matparams)
+    
     u_df = df.Expression((ccode(u_sym[0]), ccode(u_sym[1])), alpha = alpha)
     p_df = df.Expression(ccode(p_sym), gamma =gamma, Ta = Ta, alpha = alpha, **matparams)
     
@@ -675,7 +678,7 @@ def test_neohookean_2d():
     err_p = []
     err_J = []
     err_Tf = []
-    ndivs = [2,4,8,16, 32]#, 64, 128]
+    ndivs = [2,4,8,16, 32, 64, 128]
     # ndivs = [16]
     plot = False
     
@@ -698,7 +701,7 @@ def test_neohookean_2d():
 
 
         # Fibers
-        V_f = df.VectorFunctionSpace(mesh, "Quadrature", 4)
+        V_f = QuadratureSpace(mesh, 4)
         f0 = df.interpolate(df.Expression(("0.0", "1.0")), V_f)
         
         # Activation
@@ -778,12 +781,17 @@ def test_neohookean_2d():
     
     
     fig = plt.figure()
-    plt.loglog(1.0/np.array(ndivs), err_u, "b-o", label = r"$\|u - u_h\|_{H^1}$")
-    plt.loglog(1.0/np.array(ndivs), err_p, "r-o", label = r"$\|p - p_h\|_{L^2}$")
-    plt.loglog(1.0/np.array(ndivs), err_J, "g-o", label = r"$\|J - 1\|_{L^2}$")
-    plt.loglog(1.0/np.array(ndivs), err_Tf, "k-.o", label = r"$\|Tf - Tf_h\|_{L^2}$")
+    h  = 1.0/np.array(ndivs)
+    plt.loglog(h, err_u, "b-o", label = r"$\|u - u_h\|_{H^1}$")
+    plt.loglog(h, err_p, "r-o", label = r"$\|p - p_h\|_{L^2}$")
+    plt.loglog(h, err_J, "g-o", label = r"$\|J - 1\|_{L^2}$")
+    plt.loglog(h, err_Tf, "c-o", label = r"$\|Tf - Tf_h\|_{L^2}$")
+    plt.loglog(h, 3e-3*h**2, "k-.o", label = r"$Ch^{2}$")
+    plt.loglog(h, 0.5e-3*h**(2.6), "k-.x", label = r"$Ch^{2.6}$")
+    # plt.loglog(h, h**(2.5), "k-.o", label = r"$Ch^{2.5}$")
+    # plt.loglog(h, h**(3.5), "k-.o", label = r"$Ch^{3.5}$")
     plt.legend(loc = "best")
-    fig.savefig("test_doc/figures/mms2d_{}_qinc.pdf".format(active_model))
+    fig.savefig("test_doc/figures/mms2d_{}.pdf".format(active_model))
     plt.show()
 
 if __name__ == "__main__":
