@@ -37,22 +37,26 @@ class RegionalStrainTarget(OptimizationTarget):
     """Class for regional strain optimization
     target
     """
-    def __init__(self, mesh, weights):
+    def __init__(self, mesh, target_data, weights):
         """Initialize the functions
 
         :param mesh: The mesh
-        :param weights: Function for weights 
+        :param target_data: The target data
+        :param weights: Strain weights 
         """
-        target_space = VectorFuntionSpace(mesh, "R", 0, dim = 17)
-        realspace = FunctionSpace(mesh, "R", 0)
+        self.target_space = VectorFuntionSpace(mesh, "R", 0, dim = 17)
+        self.realspace = FunctionSpace(mesh, "R", 0)
+        self.weigths_arr = weigths
+
+    def set_target_functions(self):
         self.target_fun = [Function(target_space,name = "Target Strains_{}".format(i)) \
                            for i in range(1,18)]
         self.diff = [Function(realspace, name = "Strain Difference_{}".format(i)) \
                      for i in range(1,18)]
 
-        self.weigths = weigths
+        
+        
 
-        self.projector = 
 
         
     def assign_target(self, target, annotate=False):
@@ -90,13 +94,15 @@ class VolumeTarget(OptimizationTarget):
     """Class for volume optimization
     target
     """
-    def __init__(self, mesh):
+    def __init__(self, mesh, traget_data):
         """Initialize the functions
 
         :param mesh: The mesh
         """
-        realspace = VectorFuntionSpace(mesh, "R", 0, dim = 17)
-        
+        self.realspace = FuntionSpace(mesh, "R", 0)
+        self.target_space = self.realspace
+
+    def set_target_functions(self)
         self.target_fun = Function(realspace, name = "Target Volume")
         self.diff = Function(realspace, name = "Volume Difference")
 

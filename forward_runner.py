@@ -18,6 +18,7 @@
 from heart_problem import PassiveHeartProblem, ActiveHeartProblem
 from setup_optimization import RealValueProjector
 from dolfinimport import *
+from optimization_targets import *
 from adjoint_contraction_args import *
 import numpy as np
 from numpy_mpi import *
@@ -42,7 +43,6 @@ class BasicForwardRunner(object):
     
     def __init__(self, solver_parameters,
                  p_lv,
-                 target_data,
                  endo_lv_marker,
                  crl_basis,
                  params, 
@@ -52,62 +52,10 @@ class BasicForwardRunner(object):
         self.p_lv = p_lv 
 
         
-        self.use_deintegrated_strains = params["use_deintegrated_strains"]
-
+        
         #Circumferential, radial, longtitudal basis.
         self.crl_basis = crl_basis
         self.endo_lv_marker = endo_lv_marker
-
-        self._set_target_data(target_data)
-        self._init_functions(spaces)
-
-        
-    def _set_target_data(self, target_data):
-
-        self.target_strains = target_data.target_strains
-        self.target_vols = target_data.target_vols
-        self.pressures = target_data.target_pressure
-
-    def _init_functions(self, spaces):
-
-        self.spaces = spaces
-
-        self.V_sim = Function(spaces.r_space, name = "Simulated Volume")
-        self.V_diff = Function(spaces.r_space, name = "Volume Difference")
-        self.V_meas = Function(spaces.r_space, name = "Target Volume")
-
-        
-        self.strain_weights = [Function(spaces.strain_weight_space, \
-                                        name = "Strains Weights_{}".format(i)) for i in STRAIN_REGION_NUMS]
-        self.strain_weights_deintegrated = self.solver_parameters["strain_weights_deintegrated"]
-        
-
-        if self.use_deintegrated_strains:
-            self.u_tar = Function(spaces.strainfieldspace, name = "Target Strains")
-            self.strain_diffs = Function(spaces.r_space, name = "Strain_Difference")
-            
-        else:
-            self.u_tar = [Function(spaces.strainspace, name = "Target Strains_{}".format(i)) for i in STRAIN_REGION_NUMS]
-            self.strain_diffs = [Function(spaces.r_space, name = "Strain_Difference_{}".format(i)) for i in STRAIN_REGION_NUMS]
-           
-            for i in STRAIN_REGION_NUMS:
-                strain_weight = np.zeros(9)
-                strain_weight[0] = self.solver_parameters["strain_weights"][i-1][0]#/51.0
-                strain_weight[4] = self.solver_parameters["strain_weights"][i-1][1]#/51.0
-                strain_weight[8] = self.solver_parameters["strain_weights"][i-1][2]#/51.0
-                assign_to_vector(self.strain_weights[i-1].vector(), strain_weight)
-
-            
-            
-        v = TestFunction(spaces.r_space)
-        
-        # Volume of the myocardium
-        meshvol = gather_broadcast(assemble(Constant(1.0)*v*dx).array())[0]
-        self.mesh_vol = Constant(meshvol)
-
-        self.projector = RealValueProjector(TrialFunction(spaces.r_space), v,
-                                            self.mesh_vol)
-        
         
        
     

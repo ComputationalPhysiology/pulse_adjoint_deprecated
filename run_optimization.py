@@ -19,7 +19,7 @@ from dolfinimport import *
 from setup_optimization import setup_simulation, logger, MyReducedFunctional, get_measurements
 from utils import Text, Object, pformat, print_optimization_report, contract_point_exists, get_spaces,  UnableToChangePressureExeption
 from forward_runner import ActiveForwardRunner, PassiveForwardRunner
-
+from optimization_targets import *
 from numpy_mpi import *
 from adjoint_contraction_args import *
 from scipy.optimize import minimize as scipy_minimize
@@ -61,7 +61,7 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     parameters["adjoint"]["stop_annotating"] = True
     
     # Load target data
-    target_data = load_target_data(measurements, params, spaces)
+    optimization_targets = load_target_data(measurements, params, mesh)
 
     
     # Start recording for dolfin adjoint 
@@ -423,8 +423,32 @@ def solve_oc_problem(params, rd, paramvec):
 
 
 
-def load_target_data(measurements, params, spaces):
+def load_target_data(measurements, params, mesh):
+    """Create optimization targets and load the 
+    target data into the targets
+
+    :param measurements: The target measurements
+    :param params: Application parameters
+    :param mesh: The mesh
+    :returns: Dictionary of optimzation targets
+    :rtype: dict
+    """
+    
     logger.debug(Text.blue("Loading Target Data"))
+
+    # Load target pressure
+    if params["phase"] == PHASES[0]:
+        pressures = measurements.pressure
+        seg_verts = measurements.seg_verts
+    else:
+        pressures = measurements.pressure[acin: 2 + acin]
+        seg_verts = measurements.seg_verts[acin: 2 + acin]
+
+    # Load target volumes
+
+    
+    # Load target strains
+    
         
     def get_strain(newfunc, i, it):
         assign_to_vector(newfunc.vector(), np.array(measurements.strain[i][it]))
