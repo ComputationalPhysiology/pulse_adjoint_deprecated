@@ -457,10 +457,10 @@ def load_target_data(measurements, params, spaces):
         
         if params["use_deintegrated_strains"]:
             newfunc = Function(spaces.strainfieldspace, name = \
-                               "strain_{}".format(args.active_contraction_iteration_number+it))
+                               "strain_{}".format(acin+it))
           
             assign_to_vector(newfunc.vector(), \
-                             gather_broadcast(measurements.strain_deintegrated[acin+it].array()))
+                             gather_broadcast(measurements.strainfield[acin+it].array()))
             
             target_strains.append(newfunc)
             

@@ -179,10 +179,7 @@ class BasicHeartProblem(collections.Iterator):
         Initialze spaces and functions used for strain calculations
         """
         
-        
-        self.strainfieldspace = spaces.strainfieldspace
-        self.strainfield = Function(self.strainfieldspace, name = "Simulated StrainField")
-        
+        # Regional strains
         self.strainspace = spaces.strainspace
         self.strains = [Function(self.strainspace,
                                      name = "Simulated Strain_{}".format(i)) for i in STRAIN_REGION_NUMS]
@@ -190,6 +187,9 @@ class BasicHeartProblem(collections.Iterator):
         self.strain_u = TrialFunction(self.strainspace)
         self.strain_v = TestFunction(self.strainspace)
 
+        # Complete strain fields
+        self.strainfieldspace = spaces.strainfieldspace
+        self.strainfield = Function(self.strainfieldspace, name = "Simulated StrainField")
         self.strainfield_u = TrialFunction(self.strainfieldspace)
         self.strainfield_v = TestFunction(self.strainfieldspace)
         
@@ -247,7 +247,8 @@ class BasicHeartProblem(collections.Iterator):
         # Somehow this does not work with LU solver when base is fixed according to the
         # segemental surfaces
         solve(inner(self.strainfield_u, self.strainfield_v)*dx == \
-                  inner(self.strainfield_v, grad_u_diag)*dx,self.strainfield, solver_parameters={"linear_solver": "gmres"})
+              inner(self.strainfield_v, grad_u_diag)*dx,self.strainfield,
+              solver_parameters={"linear_solver": "gmres"})
     
         # Solve for the regional strains
         for i in STRAIN_REGION_NUMS:

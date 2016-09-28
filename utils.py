@@ -218,9 +218,18 @@ class TablePrint(object):
 
     """
 
-    def __init__(self, fldmap):
+    def __init__(self, fldmap, fancyhead = False):
 
-        self.head = '\n'+'\t'.join(fldmap[0:len(fldmap):2]) 
+        if fancyhead:
+            q = [int(a.split(".")[0]) for a in fldmap[1::2]]
+            
+            fmt  = '\t'.join(['{:' + '{}'.format(fmt) + '}' \
+                              for fmt in q ])
+
+            self.head = fmt.format(*fldmap[0::2])
+        else:
+            self.head = '\n'+'\t'.join(fldmap[0:len(fldmap):2]) 
+        
         self.fmt  = '\t'.join(['{' + '{0}:{1}'.format(col,fmt) + '}' \
                           for col, fmt in zip(
                               fldmap[0:len(fldmap):2], \
