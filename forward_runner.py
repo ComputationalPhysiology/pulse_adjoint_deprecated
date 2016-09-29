@@ -1,3 +1,8 @@
+"""
+This file contains the module for solving the 
+forward problem. It also records the forwards solve, 
+so that dolfin-adjoint can run the backward solve.
+"""
 #!/usr/bin/env python
 # Copyright (C) 2016 Henrik Finsberg
 #
@@ -41,30 +46,39 @@ class BasicForwardRunner(object):
         ))
     
     
-    def __init__(self, solver_parameters,
-                 p_lv,
-                 endo_lv_marker,
-                 crl_basis,
-                 params, 
-                 spaces):
-        
-        self.solver_parameters = solver_parameters
-        self.p_lv = p_lv 
-
-        
-        
-        #Circumferential, radial, longtitudal basis.
-        self.crl_basis = crl_basis
-        self.endo_lv_marker = endo_lv_marker
-        
-       
+    def __init__(self,
+                 solver_parameters,
+                 p_lv, 
+                 target_data,
+                 optimization_targets,
+                 params):
     
-    def _save_state(self, state, lv_pressure, volume, strain, strainfield):
+        self.solver_parameters = solver_parameters
+        self.p_lv = p_lv
+        
+        self._set_target_data(target_data)
+        self.meshvol = Constant(assemble(Constant(1.0)*dx(solver_parameters["mesh"])),
+                                name = "mesh volume")
+
+        # Initialize target functions
+        for target in optimization_targets.values():
+            target.set_target_functions()
+
+        self.optimization_targets = optimization_targets
+
+    def _set_target_data(self, target_data):
+
+        self.target_strains = target_data.target_strains
+        self.target_vols = target_data.target_vols
+        self.pressures = target_data.target_pressure
+        
+    
+    def _save_state(self, state, lv_pressure, volume, strain):
         self.states.append(state)
         self.lv_pressures.append(lv_pressure)
         self.volumes.append(volume)
 
-        self.strainfields.append(Vector(strainfield.vector()))
+        # self.strainfields.append(Vector(strainfield.vector()))
 
         for region in STRAIN_REGION_NUMS:
             self.strains[region-1].append(Vector(strain[region-1].vector()))
@@ -89,14 +103,6 @@ class BasicForwardRunner(object):
         self.strains = [[] for i in STRAIN_REGION_NUMS]
         self.strainfields = []
 	
-        dx = phm.dx
-        
-        if self.use_deintegrated_strains:
-            strain_matches = (dot(self.strain_weights_deintegrated,phm.strainfield - self.u_tar))**2
-            get_strain_error = lambda : assemble(strain_matches*dx)
-        else:
-            strain_matches = [(dot(self.strain_weights[i-1],phm.strains[i - 1] - self.u_tar[i - 1]))**2 for i in STRAIN_REGION_NUMS]
-            get_strain_error = lambda : sum([assemble(sm*dx(i)) for i,sm in zip(STRAIN_REGION_NUMS, strain_matches)])
 
         functional_values_strain = []
         functional_values_volume = []
@@ -104,28 +110,29 @@ class BasicForwardRunner(object):
         
 
         if phase == "passive":
-            # We must record the initial state
-            if self.use_deintegrated_strains:
-                self.u_tar.assign(self.target_strains[0], annotate = annotate)
-            else:
-                for target, strain in zip(self.u_tar, self.target_strains[0]):
-                    target.assign(strain, annotate = annotate)
+            self.optimization_targets["volume"].assign_target(self.target_vols[0],
+                                                              annotate=annotate)
+            self.optimization_targets["regional_strain"].assign_target(self.target_strains[0],
+                                                                       annotate=annotate)
+            
 
             # And we save it for later reference
-            self._save_state(Vector(phm.solver.get_state().vector()), self._get_exprval(phm.p_lv, phm.mesh),
-                             float(phm.get_inner_cavity_volume()), phm.strains, phm.strainfield)
+            phm.solver.solve()
+            self._save_state(Vector(phm.solver.get_state().vector()),
+                             self._get_exprval(phm.p_lv, self.solver_parameters["mesh"]),
+                             self.optimization_targets["volume"].get_simulated(),
+                             self.optimization_targets["regional_strain"].get_simulated())
 
         
         logger.debug("Volume - Strain interpolation {}".format(self.alpha))
         logger.info(self.output_str.print_head())
-	
-        strain_diff = list_sum(self.strain_diffs)
 	    
         count = 1.0
         
-        functional = self.alpha*self.V_diff/self.mesh_vol*dx + (1 - self.alpha)*strain_diff/self.mesh_vol*dx
+        functional = self.alpha*self.optimization_targets["volume"].get_functional() \
+                     + (1 - self.alpha)*self.optimization_targets["regional_strain"].get_functional()
         
-        
+       
         if phase == "active":
             # Add regulatization term to the functional
             m = phm.solver.parameters['material'].gamma
@@ -153,38 +160,22 @@ class BasicForwardRunner(object):
         
         for strains_at_pressure, target_vol in zip(self.target_strains[1:], self.target_vols[1:]):
 
-            sol, model_strain = phm.next()
-	    
-            # Assign the target strain 
-            if self.use_deintegrated_strains:
-                self.u_tar.assign(strains_at_pressure, annotate = annotate)
-            else:
-                for target, strain in zip(self.u_tar, strains_at_pressure):
-                    target.assign(strain, annotate = annotate)
+            sol = phm.next()
 
-            # Assign the target volume
-            self.V_meas.assign(target_vol, annotate = annotate)
+            self.optimization_targets["volume"].assign_target(self.target_vols[0],
+                                                              annotate=annotate)
+            self.optimization_targets["regional_strain"].assign_target(self.target_strains[0],
+                                                                       annotate=annotate)
+            
+            self.optimization_targets["volume"].assign_simulated(split(sol)[0])
+            self.optimization_targets["regional_strain"].assign_simulated(split(sol)[0])
 
-            # Compute the strain misfit
-            strain_error = get_strain_error()
             
-            #Volume Projections to get dolfin-adjoint to record.            
-            self.projector.project(phm.vol, phm.ds, self.V_sim)
-            self.projector.project(((self.V_sim - self.V_meas)/self.V_meas)**2, 
-                                   dx, self.V_diff, False)
-            
-            #Strain projections to get dolfin-adjoint to record.
-            if self.use_deintegrated_strains:
-                self.projector.project(strain_matches, dx, self.strain_diffs)
-            else:
-                for i,sm in zip(STRAIN_REGION_NUMS, strain_matches):
-                    self.projector.project(sm, dx(i), self.strain_diffs[i - 1])
-                
-            
-            # Gathering the vector if running in parallell
-            v_diff = gather_broadcast(self.V_diff.vector().array())[0]
+            strain_error = self.optimization_targets["regional_strain"].get_value()
+            v_diff = self.optimization_targets["volume"].get_value()
             
             self.print_solve_line(phm, strain_error, v_diff, reg_term)
+
 
             if phase == "active":
                 # There is only on step, so we are done
@@ -202,8 +193,10 @@ class BasicForwardRunner(object):
             functional_values_volume.append(v_diff)
             
             # Save the state
-            self._save_state(Vector(phm.solver.get_state().vector()), self._get_exprval(phm.p_lv, phm.mesh),
-                             float(phm.get_inner_cavity_volume()), phm.strains, phm.strainfield)
+            self._save_state(Vector(phm.solver.get_state().vector()),
+                             self._get_exprval(phm.p_lv, self.solver_parameters["mesh"]),
+                             self.optimization_targets["volume"].get_simulated(),
+                             self.optimization_targets["regional_strain"].get_simulated())
             
             
         forward_result = self._make_forward_result(functional_values_strain, functional_values_volume, functionals_time, phm)
@@ -225,10 +218,11 @@ class BasicForwardRunner(object):
         logger.info("Weighted \t{:.5f}\t\t{:.5f}\t\t{:.5f}".format(forward_result.weighted_func_value_strain,forward_result.weighted_func_value_volume, forward_result.gamma_gradient*forward_result.reg_par))
     
     def print_solve_line(self, phm, strain_error, v_diff, reg_term):
-        v_sim = gather_broadcast(self.V_sim.vector().array())[0]
-        v_meas = gather_broadcast(self.V_meas.vector().array())[0]
+        
+        v_sim = gather_broadcast(self.optimization_targets["volume"].get_simulated().vector().array())[0]
+        v_meas = gather_broadcast(self.optimization_targets["volume"].get_target().vector().array())[0]
 
-        logger.info(self.output_str.print_line(LVP=self._get_exprval(phm.p_lv, phm.mesh), 
+        logger.info(self.output_str.print_line(LVP=self._get_exprval(phm.p_lv, self.solver_parameters["mesh"]), 
                                                LV_Volume=v_sim, 
                                                Target_Volume=v_meas, 
                                                I_strain=strain_error, 
@@ -398,14 +392,17 @@ class ActiveForwardRunner(BasicForwardRunner):
 
 class PassiveForwardRunner(BasicForwardRunner):
     def __init__(self, solver_parameters, p_lv, 
-                 target_data, endo_lv_marker,
-                 crl_basis, params, spaces, paramvec):
+                 target_data, optimization_targets,
+                 params, paramvec):
 
         self.alpha = params["alpha_matparams"]
         self.paramvec = paramvec
-        BasicForwardRunner.__init__(self, solver_parameters, p_lv, 
-                                   target_data, endo_lv_marker,
-                                   crl_basis, params, spaces)
+        BasicForwardRunner.__init__(self,
+                                    solver_parameters,
+                                    p_lv, 
+                                    target_data,
+                                    optimization_targets,
+                                    params)
 
     def __call__(self, m, annotate = False, phm=None):
 
@@ -420,8 +417,7 @@ class PassiveForwardRunner(BasicForwardRunner):
      
         phm = PassiveHeartProblem(self.pressures, 
                                   self.solver_parameters,
-                                  self.p_lv, self.endo_lv_marker, 
-                                  self.crl_basis, self.spaces)
+                                  self.p_lv)
 
         # Do an initial solve for the initial point
         parameters["adjoint"]["stop_annotating"] = True

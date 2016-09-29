@@ -61,8 +61,11 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     parameters["adjoint"]["stop_annotating"] = True
     
     # Load target data
-    optimization_targets = load_target_data(measurements, params, mesh)
+    target_data = load_target_data(measurements, params, spaces)
 
+    # Load optimization targets
+    optimization_targets = get_optimization_targets(params, solver_parameters)
+    
     
     # Start recording for dolfin adjoint 
     logger.debug(Text.yellow("Start annotating"))
@@ -72,11 +75,9 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     #Initialize the solver for the Forward problem
     for_run = PassiveForwardRunner(solver_parameters, 
                                    p_lv, 
-                                   target_data,  
-                                   patient.ENDO,
-                                   crl_basis,
+                                   target_data,
+                                   optimization_targets,
                                    params, 
-                                   spaces, 
                                    paramvec)
 
     #Solve the forward problem with guess results (just for printing)
@@ -423,32 +424,18 @@ def solve_oc_problem(params, rd, paramvec):
 
 
 
-def load_target_data(measurements, params, mesh):
+def load_target_data(measurements, params, spaces):
     """Create optimization targets and load the 
     target data into the targets
 
     :param measurements: The target measurements
     :param params: Application parameters
-    :param mesh: The mesh
-    :returns: Dictionary of optimzation targets
-    :rtype: dict
+    :param spaces: An object with function spaces
+    :returns: object with target data
+    :rtype: object
     """
-    
+
     logger.debug(Text.blue("Loading Target Data"))
-
-    # Load target pressure
-    if params["phase"] == PHASES[0]:
-        pressures = measurements.pressure
-        seg_verts = measurements.seg_verts
-    else:
-        pressures = measurements.pressure[acin: 2 + acin]
-        seg_verts = measurements.seg_verts[acin: 2 + acin]
-
-    # Load target volumes
-
-    
-    # Load target strains
-    
         
     def get_strain(newfunc, i, it):
         assign_to_vector(newfunc.vector(), np.array(measurements.strain[i][it]))
@@ -481,10 +468,10 @@ def load_target_data(measurements, params, mesh):
         
         if params["use_deintegrated_strains"]:
             newfunc = Function(spaces.strainfieldspace, name = \
-                               "strain_{}".format(acin+it))
+                               "strain_{}".format(args.active_contraction_iteration_number+it))
           
             assign_to_vector(newfunc.vector(), \
-                             gather_broadcast(measurements.strainfield[acin+it].array()))
+                             gather_broadcast(measurements.strain_deintegrated[acin+it].array()))
             
             target_strains.append(newfunc)
             
@@ -513,3 +500,36 @@ def load_target_data(measurements, params, mesh):
 
 
     return target_data
+
+
+def get_optimization_targets(params, solver_parameters):
+
+    p = params["Optimization_targets"]
+    mesh = solver_parameters["mesh"]
+
+    targets = {}
+
+    if p["volume"]:
+        
+        dS = Measure("exterior_facet",
+                     subdomain_data = solver_parameters["facet_function"],
+                     domain = mesh)(solver_parameters["markers"]["ENDO"][0])
+        
+        targets["volume"] = VolumeTarget(mesh,dS)
+
+    if p["regional_strain"]:
+
+        dX = Measure("dx",
+                     subdomain_data = solver_parameters["mesh_function"],
+                     domain = mesh)
+        
+        targets["regional_strain"] = \
+            RegionalStrainTarget(mesh,
+                                 solver_parameters["crl_basis"],
+                                 dX,
+                                 solver_parameters["strain_weights"])
+        
+
+    return targets
+        
+    

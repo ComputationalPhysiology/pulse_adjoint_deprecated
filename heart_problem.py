@@ -28,20 +28,19 @@ class BasicHeartProblem(collections.Iterator):
     """
     This is a basic class for the heart problem.
     """
-    def __init__(self, pressure, solver_parameters, p_lv, 
-                 endo_lv_marker, crl_basis, spaces):
+    def __init__(self, pressure, solver_parameters, p_lv):
 
         self._init_pressures(pressure, p_lv)
         
-        self._init_measures_and_markers(endo_lv_marker, 
-                                        solver_parameters)
+        # self._init_measures_and_markers(endo_lv_marker, 
+                                        # solver_parameters)
 
         #Objects needed for Volume calculation
-        self._init_strain_functions(spaces)
+        # self._init_strain_functions(spaces)
         
         # Basis function in the circumferential, 
         # radial and longitudinal direction
-        self.crl_basis = crl_basis
+        # self.crl_basis = crl_basis
 
         # Mechanical solver Active strain Holzapfel and Ogden
         self.solver = LVSolver(solver_parameters)
@@ -264,8 +263,8 @@ class BasicHeartProblem(collections.Iterator):
         """
         out = self.solver.solve()
 	
-        strains = self.project_to_strains(self.u)
-        return out, strains
+        # strains = self.project_to_strains(self.u)
+        return out#, strains
 
 
 
@@ -530,13 +529,11 @@ class PassiveHeartProblem(BasicHeartProblem):
     Runs a biventricular simulation of the diastolic phase of the cardiac
     cycle. The simulation is driven by LV pressures and is quasi-static.
     """
-    def __init__(self, pressure, solver_parameters, p_lv, 
-                 endo_lv_marker, crl_basis, spaces):
+    def __init__(self, pressure, solver_parameters, p_lv):
        
-        BasicHeartProblem.__init__(self, pressure, solver_parameters, p_lv, 
-                                    endo_lv_marker, crl_basis, spaces)
+        BasicHeartProblem.__init__(self, pressure, solver_parameters, p_lv)
 
-        BasicHeartProblem._init_volume_forms(self)
+        # BasicHeartProblem._init_volume_forms(self)
 
         
     def next(self):
@@ -545,9 +542,9 @@ class PassiveHeartProblem(BasicHeartProblem):
         """
         
         out = self.increase_pressure()
-        strains = self.project_to_strains(self.u)
+        # strains = self.project_to_strains(self.u)
         
-        return out, strains
+        return out#, strains
 
 
 

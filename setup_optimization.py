@@ -34,6 +34,9 @@ def setup_adjoint_contraction_parameters():
     # Optimization parameters
     opt_parameters = setup_optimization_parameters()
     params.add(opt_parameters)
+
+    opttarget_parameters = setup_optimizationtarget_parameters()
+    params.add(opttarget_parameters)
     
     return params
     
@@ -85,6 +88,16 @@ def setup_patient_parameters():
 
     return params
 
+def setup_optimizationtarget_parameters():
+
+    params = Parameters("Optimization_targets")
+    params.add("volume", True)
+    params.add("regional_strain", True)
+    params.add("full_strain", False)
+    params.add("GL_strain", False)
+    params.add("displacement", False)
+    return params
+    
 def setup_application_parameters():
 
     params = Parameters("Application_parmeteres")
@@ -475,14 +488,18 @@ def make_solver_params(params, patient, measurements):
     else:
         material = HolzapfelOgden(patient.e_f, gamma, matparams,
                                       params["active_model"], patient.strain_markers)
+
+    crl_basis = (patient.e_circ, patient.e_rad, patient.e_long)
     
     solver_parameters = {"mesh": patient.mesh,
                          "facet_function": patient.facets_markers,
                          "facet_normal": N,
+                         "crl_basis":crl_basis,
                          "mesh_function": patient.strain_markers,
                          "base_bc_y":base_bc_y,
                          "base_bc_z":base_bc_z,
                          "base_it":base_it,
+                         "markers":patient.markers,
                          "strain_weights": strain_weights, 
                          "strain_weights_deintegrated": strain_weights_deintegrated,
                          "state_space": "P_2:P_1",
