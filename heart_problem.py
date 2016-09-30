@@ -261,7 +261,7 @@ class BasicHeartProblem(collections.Iterator):
         """
         Solve the system as it is
         """
-        out = self.solver.solve()
+        out, crash = self.solver.solve()
 	
         # strains = self.project_to_strains(self.u)
         return out#, strains
@@ -360,21 +360,14 @@ class ActiveHeartProblem(BasicHeartProblem):
                  pressure,
                  solver_parameters,
                  p_lv,
-                 endo_lv_marker,
-                 crl_basis,
-                 spaces,
-                 passive_filling_duration, 
                  params,
                  annotate = False):
                    
         
         self.alpha = params["alpha"]
-        self.passive_filling_duration = passive_filling_duration
-       
-        
-
-        BasicHeartProblem.__init__(self, pressure, solver_parameters, p_lv, 
-                                    endo_lv_marker, crl_basis, spaces)
+        passive_filling_duration = solver_parameters["passive_filling_duration"]
+    
+        BasicHeartProblem.__init__(self, pressure, solver_parameters, p_lv)
 
         # Load the state from the previous iteration
         w_temp = Function(self.solver.get_state_space(), name = "w_temp")
@@ -391,7 +384,7 @@ class ActiveHeartProblem(BasicHeartProblem):
 
 
         self.solver.get_state().assign(w_temp, annotate = annotate)
-        BasicHeartProblem._init_volume_forms(self)
+        # BasicHeartProblem._init_volume_forms(self)
        
     
     def next_active(self, gamma_current, gamma, assign_prev_state=True, steps = None):

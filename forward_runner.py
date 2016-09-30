@@ -137,20 +137,8 @@ class BasicForwardRunner(object):
             # Add regulatization term to the functional
             m = phm.solver.parameters['material'].gamma
 
-            
-            if m.ufl_element().family == "Real":
-
-                if m.value_size() > 1:
-                    m_arr = gather_broadcast(m.vector().array())
-                    m_mean = Constant([m_arr.mean()]*17)
-                    reg_term = assemble(inner(m-m_mean, m-m_mean)*dx)
-                    functional += self.reg_par*inner(m-m_mean, m-m_mean)/self.mesh_vol*dx
-                else:    
-                    reg_term = 0.0
-            else:
-                reg_term = assemble(self.reg_par*inner(grad(m), grad(m))*dx)
-                functional += self.reg_par*inner(grad(m), grad(m))/self.mesh_vol*dx
-            
+            functional += self.optimization_targets["regularization"].get_functional(m)
+            reg_term =  self.optimization_targets["regularization"].get_value(m)
 
         else:
             # Add the initial state to the recording
@@ -161,7 +149,7 @@ class BasicForwardRunner(object):
         for strains_at_pressure, target_vol in zip(self.target_strains[1:], self.target_vols[1:]):
 
             sol = phm.next()
-
+            
             self.optimization_targets["volume"].assign_target(self.target_vols[0],
                                                               annotate=annotate)
             self.optimization_targets["regional_strain"].assign_target(self.target_strains[0],
@@ -169,6 +157,9 @@ class BasicForwardRunner(object):
             
             self.optimization_targets["volume"].assign_simulated(split(sol)[0])
             self.optimization_targets["regional_strain"].assign_simulated(split(sol)[0])
+
+            self.optimization_targets["volume"].assign_functional()
+            self.optimization_targets["regional_strain"].assign_functional()
 
             
             strain_error = self.optimization_targets["regional_strain"].get_value()
@@ -233,6 +224,8 @@ class BasicForwardRunner(object):
 
     def _make_forward_result(self, functional_values_strain, functional_values_volume, functionals_time, phm):
         fr = Object()
+        phm.mesh = self.solver_parameters["mesh"]
+        phm.strains = self.optimization_targets["regional_strain"].simulated_fun
         fr.phm = phm
 
         fr.total_functional = list_sum(functionals_time)
@@ -262,10 +255,9 @@ class ActiveForwardRunner(BasicForwardRunner):
                  solver_parameters, 
                  p_lv, 
                  target_data,
+                 optimization_targets,
                  params,
-                 gamma_previous,
-                 patient,
-                 spaces):
+                 gamma_previous):
 
 
 
@@ -277,16 +269,13 @@ class ActiveForwardRunner(BasicForwardRunner):
         self.reg_par = Constant(params["reg_par"])
         self.alpha = params["alpha"]
 
-        self.passive_filling_duration = patient.passive_filling_duration
-        self.strain_markers = patient.strain_markers
-        self.endo_lv_marker = patient.ENDO
-        self.crl_basis = (patient.e_circ, patient.e_rad, patient.e_long)
-
-
+        # self.passive_filling_duration = patient.passive_filling_duration
         
-        BasicForwardRunner.__init__(self, solver_parameters, p_lv, 
-                                    target_data, self.endo_lv_marker,
-                                    self.crl_basis, params, spaces)
+        
+        BasicForwardRunner.__init__(self, solver_parameters,
+                                    p_lv, target_data,
+                                    optimization_targets,
+                                    params)
 
         
         
@@ -296,16 +285,12 @@ class ActiveForwardRunner(BasicForwardRunner):
         self.cphm = ActiveHeartProblem(self.pressures,
                                        self.solver_parameters,
                                        self.p_lv,
-                                       self.endo_lv_marker,
-                                       self.crl_basis,
-                                       spaces,
-                                       self.passive_filling_duration, 
                                        params,
                                        annotate = False)
 	
-        logger.debug("\nVolume before pressure change: {:.3f}".format(self.cphm.get_inner_cavity_volume()))
+        # logger.debug("\nVolume before pressure change: {:.3f}".format(self.cphm.get_inner_cavity_volume()))
         self.cphm.increase_pressure()
-        logger.debug("Volume after pressure change: {:.3f}".format(self.cphm.get_inner_cavity_volume()))
+        # logger.debug("Volume after pressure change: {:.3f}".format(self.cphm.get_inner_cavity_volume()))
 
     def __call__(self, m,  annotate = False):
 	    

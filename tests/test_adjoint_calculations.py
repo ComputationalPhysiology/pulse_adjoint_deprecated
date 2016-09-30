@@ -25,9 +25,11 @@ from test_utils import setup_params, my_taylor_test, store_results, plot_displac
 def test_passive():
     # dolfin.parameters["adjoint"]["fussy_replay"] = True
     params = setup_params()
-    params["base_bc"] =  "dirichlet_bcs_fix_base_x"
+    # params["base_bc"] =  "fix_x"
+    
     patient = initialize_patient_data(params["Patient_parameters"], 
                                       params["synth_data"])
+    
     
     logger.info(Text.blue("\nTest Passive Optimization"))
 
@@ -62,7 +64,7 @@ def test_passive():
 def test_active():
 
     params = setup_params()
-    params["base_bc"] =  "dirichlet_bcs_from_seg_base"#"dirichlet_bcs_fix_base_x"
+    # params["base_bc"] =  "fix_x"
     
     patient = initialize_patient_data(params["Patient_parameters"], 
                                       params["synth_data"])

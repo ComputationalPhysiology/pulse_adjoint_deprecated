@@ -25,6 +25,8 @@ from pulse_adjoint.utils import Text
 def setup_params():
     setup_general_parameters()
     params = setup_adjoint_contraction_parameters()
+
+    params["gamma_space"] = "CG_1"
     params["Patient_parameters"]["patient"] = "test"
     params["Patient_parameters"]["patient_type"] = "test"
     params["sim_file"] = "data/test.h5"

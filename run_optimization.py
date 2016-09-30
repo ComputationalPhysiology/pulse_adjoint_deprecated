@@ -175,6 +175,8 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     parameters["adjoint"]["stop_annotating"] = True
     
     target_data = load_target_data(measurements, params, spaces)
+    # Load optimization targets
+    optimization_targets = get_optimization_targets(params, solver_parameters)
 
     logger.debug(Text.yellow("Start annotating"))
     parameters["adjoint"]["stop_annotating"] = False
@@ -182,10 +184,9 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     for_run = ActiveForwardRunner(solver_parameters,
                                   p_lv,
                                   target_data,
+                                  optimization_targets,
                                   params,
-                                  gamma, 
-                                  patient, 
-                                  spaces)
+                                  gamma)
 
     #Solve the forward problem with guess results (just for printing)
     logger.info(Text.blue("\nForward solution at guess parameters"))
@@ -507,7 +508,9 @@ def get_optimization_targets(params, solver_parameters):
     p = params["Optimization_targets"]
     mesh = solver_parameters["mesh"]
 
-    targets = {}
+    targets = {"regularization": Regularization(mesh,
+                                                params["gamma_space"],
+                                                params["reg_par"])}
 
     if p["volume"]:
         
@@ -528,6 +531,7 @@ def get_optimization_targets(params, solver_parameters):
                                  solver_parameters["crl_basis"],
                                  dX,
                                  solver_parameters["strain_weights"])
+    
         
 
     return targets

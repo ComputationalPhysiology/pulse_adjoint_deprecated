@@ -495,6 +495,7 @@ def make_solver_params(params, patient, measurements):
                          "facet_function": patient.facets_markers,
                          "facet_normal": N,
                          "crl_basis":crl_basis,
+                         "passive_filling_duration": patient.passive_filling_duration, 
                          "mesh_function": patient.strain_markers,
                          "base_bc_y":base_bc_y,
                          "base_bc_z":base_bc_z,

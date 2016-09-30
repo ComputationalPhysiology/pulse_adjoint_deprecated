@@ -19,7 +19,7 @@ import numpy as np
 from numpy_mpi import *
 
 __all__ = ["RegionalStrainTarget", "FullStrainTarget",
-           "VolumeTarget"]
+           "VolumeTarget", "Regularization"]
 
 
 class OptimizationTarget(object):
@@ -187,18 +187,12 @@ class FullStrainTarget(OptimizationTarget):
     """Class for full strain field
     optimization target
     """
-    def __init__(self):
+    def __init__(self, mesh, crl_basis):
         self._name = "Full Strain"
+        self.dmu = dx
+        self.crl_basis = crl_basis
+        self.target_space = VectorFunctionSpace(mesh, "CG", 1, dim = 3)
     
-        
-
-class GLStrainTarget(OptimizationTarget):
-    """Class for global longitudinal
-    strain optimization target
-    """
-    def __init__(self):
-        self._name = "GL Strain"
-
 
 class VolumeTarget(OptimizationTarget):
     """Class for volume optimization
@@ -238,13 +232,84 @@ class VolumeTarget(OptimizationTarget):
     def _set_form(self):
         self._form =  ((self.target_fun - self.simulated_fun)/self.target_fun)**2
         
+class GLStrainTarget(OptimizationTarget):
+    """Class for global longitudinal
+    strain optimization target
+    """
+    def __init__(self):
+        self._name = "GL Strain"
 
 
 class Regularization(object):
     """Class for regularization
     of the control parameter
     """
-    pass
+    def __init__(self, mesh, space = "CG_1", lmbda = 0.0):
+        """Initialize regularization object
+
+        :param space: The mesh
+        :param space: Space for the regularization
+        :param lmbda: regularization parameter
+        
+        """
+        assert space in ["CG_1", "regional", "R_0"], \
+            "Unknown regularization space {}".format(space)
+        
+        self.space = space
+        self.lmbda = lmbda
+        self.meshvol = Constant(assemble(Constant(1.0)*dx(mesh)),
+                                name = "mesh volume")
+        self.dx = dx(mesh)
+
+    def set_target_functions(self):
+        pass
+
+    def get_form(self, m):
+        """Get the ufl form
+
+        :param m: The function to be regularized
+        :returns: The functional form
+        :rtype: (:py:class:`ufl.Form`)
+
+        """
+
+        if self.space == "CG_1":
+            return (inner(grad(m), grad(m))/self.meshvol)*self.dx
+        
+        elif self.space == "regional":
+            m_arr = gather_broadcast(m.vector().array())
+            m_mean = Constant([m_arr.mean()]*17)
+            return (inner(m-m_mean, m-m_mean)/self.mesh_vol)*self.dx
+        else:
+            return Constant(0.0)*self.dx
+
+        
+    def get_functional(self, m):
+        """Get the functional form 
+        (included regularization parameter)
+
+        :param m: The function to be regularized
+        :returns: The functional form
+        :rtype: (:py:class:`ufl.Form`)
+
+        """
+        form = self.get_form(m)
+        return self.lmbda*form
+
+        
+    def get_value(self, m):
+        """Get the value of the regularization term
+        without regularization parameter
+
+        :param m: The function to be regularized
+        :returns: The value of the regularization term
+        :rtype: float
+
+        """
+        form = self.get_form(m)
+        return assemble(form)
+        
+        
 
 class RealValueProjector(object):
     """
