@@ -46,18 +46,22 @@ def test_passive():
                                                  patient, 
                                                  solver_parameters, 
                                                  measurements, 
-                                                 p_lv, paramvec)
-    store_results(params, rd, paramvec)
+                                                 p_lv, paramvec)    
+   
     
     # Dump html visualization of the forward and adjoint system
     adj_html("passive_forward.html", "forward")
     adj_html("passive_adjoint.html", "adjoint")
 
     # Replay the forward run, i.e make sure that the recording is correct.
+    logger.info("Replay dolfin")
     assert replay_dolfin(tol=1e-12)
     
     # Test that the gradient is correct
+    logger.info("Taylor test")
     my_taylor_test(rd, paramvec)
+
+    store_results(params, rd, paramvec)
     
 
 
@@ -100,9 +104,11 @@ def test_active():
     adj_html("active_adjoint.html", "adjoint")
 
     # Replay the forward run, i.e make sure that the recording is correct.
+    logger.info("Replay dolfin")
     assert replay_dolfin(tol=1e-12)
     
     # Test that the gradient is correct
+    logger.info("Taylor test")
     my_taylor_test(rd, gamma)
 
     
@@ -112,5 +118,5 @@ def test_active():
 if __name__ == "__main__":
     # plot_displacements()
     # exit()
-    test_passive()
+    # test_passive()
     test_active()

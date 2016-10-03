@@ -40,9 +40,8 @@ def setup_params():
 
 def my_taylor_test(Jhat, m0_fun):
     m0 = gather_broadcast(m0_fun.vector().array())
-
+      
     Jm0 = Jhat(m0)
-
     DJm0 = Jhat.derivative(forget=False)
 
     d = np.array([1.0]*len(m0)) #perturbation direction
@@ -50,14 +49,13 @@ def my_taylor_test(Jhat, m0_fun):
     no_grad_errors = []
    
     epsilons = [0.05, 0.025, 0.0125]
-
-    
+        
     for eps in epsilons:
-        m_new = np.array(m0 + eps*d)
-       
-        Jm = Jhat(m_new)
+        m = np.array(m0 + eps*d)
+        
+        Jm = Jhat(m)
         no_grad_errors.append(abs(Jm - Jm0))
-        grad_errors.append(abs(Jm - Jm0 - np.dot(DJm0, m_new - m0)))
+        grad_errors.append(abs(Jm - Jm0 - np.dot(DJm0, m - m0)))
        
     logger.info("Errors without gradient: {}".format(no_grad_errors))
     logger.info("Convergence orders without gradient (should be 1)")
@@ -73,16 +71,14 @@ def my_taylor_test(Jhat, m0_fun):
 
 def store_results(params, rd, control):
     from pulse_adjoint.store_opt_results import write_opt_results_to_h5
-
-    rd(control)
     
     if params["phase"] == "passive_inflation":
-        h5group =  PASSIVE_INFLATION_GROUP.format(params["alpha_matparams"])
+        h5group =  PASSIVE_INFLATION_GROUP
         write_opt_results_to_h5(h5group, params, rd.ini_for_res, 
                                     rd.for_res, opt_matparams = control)
         
     else:
-        h5group =  ACTIVE_CONTRACTION_GROUP.format(0.5, 0)
+        h5group =  ACTIVE_CONTRACTION_GROUP.format(0)
         write_opt_results_to_h5(h5group, params, rd.ini_for_res, 
                                     rd.for_res, opt_gamma = control)
 
