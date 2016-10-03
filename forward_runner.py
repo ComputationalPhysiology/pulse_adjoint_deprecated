@@ -47,15 +47,7 @@ class BasicForwardRunner(object):
         self.solver_parameters = solver_parameters
         self.p_lv = p_lv
         self.target_params = params["Optimization_targets"]
-        self.output_str = TablePrint((
-            'LVP',  '0.5f',
-            'LV_Volume', '0.5f',
-            'Target_LV_Volume', '0.5f',
-            'I_strain', '0.2e',
-            'I_volume', '0.2e',
-            'I_reg', '0.2e',
-        ))
-        
+
         self.meshvol = Constant(assemble(Constant(1.0)*dx(solver_parameters["mesh"])),
                                 name = "mesh volume")
 
@@ -66,25 +58,7 @@ class BasicForwardRunner(object):
 
         self.optimization_targets = optimization_targets
         
-        
-    # def _save_state(self, state, lv_pressure, volume, strain):
-        
-        # self.states.append(Vector(state.vector()))
-        # self.lv_pressures.append(lv_pressure)
-        # self.volumes.append(Vector(volume.vector()))
 
-        # self.strainfields.append(Vector(strainfield.vector()))
-
-        # for region in STRAIN_REGION_NUMS:
-            # self.strains[region-1].append(Vector(strain[region-1].vector()))
-        
-
-    
-    def _get_exprval(self, expr, mesh):
-        return float(interpolate(expr, FunctionSpace(mesh, "R", 0)))
-	
-		    
-    
     def solve_the_forward_problem(self, annotate = False, phm=None, phase = "passive"):
 	
         # Start the clock
@@ -102,15 +76,20 @@ class BasicForwardRunner(object):
             for key,val in self.target_params.iteritems():
                 if val: self.optimization_targets[key].next_target(0, annotate=annotate)
             
-            
-
             # And we save it for later reference
             phm.solver.solve()
             self.states.append(Vector(phm.solver.get_state().vector()))
 
-        
+
+        # Print the head
         logger.debug("Volume - Strain interpolation {}".format(self.alpha))
-        logger.info(self.output_str.print_head())
+        head = "{:<10}".format("Pressure")
+        for key,val in self.target_params.iteritems():
+                if val: head+= self.optimization_targets[key].print_head()
+
+        head += self.regularization.print_head()
+        logger.info(head)
+       
 	    
         
         functional = self.alpha*self.optimization_targets["volume"].get_functional() \
@@ -145,12 +124,15 @@ class BasicForwardRunner(object):
                     
             self.regularization.save()
 
-            
-            strain_error = self.optimization_targets["regional_strain"].get_value()
-            v_diff = self.optimization_targets["volume"].get_value()
-            
-            self.print_solve_line(p, strain_error, v_diff)
 
+            # Print the values
+            line= "{:<10.2f}".format(p)
+            for key,val in self.target_params.iteritems():
+                if val: line+= self.optimization_targets[key].print_line()
+
+            line += self.regularization.print_line()
+            logger.info(line)
+            
 
             if phase == "active":
                 # There is only on step, so we are done
@@ -188,19 +170,6 @@ class BasicForwardRunner(object):
         logger.info("\nMismatch functional values:")
         logger.info("\t"+(n*"{:10}\t").format(*keys))
         logger.info("\t"+(n*"{:10.4e}\t").format(*values))
-
-    def print_solve_line(self, pressure, strain_error, v_diff):
-        
-        v_sim = gather_broadcast(self.optimization_targets["volume"].get_simulated().vector().array())[0]
-        v_meas = gather_broadcast(self.optimization_targets["volume"].get_target().vector().array())[0]
-
-        logger.info(self.output_str.print_line(LVP=pressure, 
-                                               LV_Volume=v_sim, 
-                                               Target_LV_Volume=v_meas, 
-                                               I_strain=strain_error, 
-                                               I_volume=v_diff, 
-                                               I_reg=0.0))
-
 
 
     def _make_forward_result(self, functional_values, functionals_time):

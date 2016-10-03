@@ -138,12 +138,17 @@ class RegionalStrainTarget(OptimizationTarget):
         
         """
         self._name = "Regional Strain"
-        self.weight_space = TensorFunctionSpace(mesh, "R", 0)
         self.target_space = VectorFunctionSpace(mesh, "R", 0, dim = 3)
         self.weights_arr = weights
         self.crl_basis = crl_basis
         self.dmu = dmu
         OptimizationTarget.__init__(self, mesh)
+
+    def print_head(self):
+        return "\t{:<10}".format("I_strain")
+    def print_line(self):
+        I = self.get_value()
+        return "\t{:<10.2e}".format(I)
 
     def save(self):
         
@@ -188,14 +193,12 @@ class RegionalStrainTarget(OptimizationTarget):
                                     name = "Strains_{} Functional".format(i)) \
                            for i in range(1,18)]
         
-        self.weights = [Function(self.weight_space, \
+        self.weights = [Function(self.target_space, \
                                  name = "Strains Weights_{}".format(i)) \
                         for i in range(1,18)]
-        strain_weight = np.zeros(9)
-        strain_weight[0] = self.weights_arr[i-1][0]
-        strain_weight[4] = self.weights_arr[i-1][1]
-        strain_weight[8] = self.weights_arr[i-1][2]
-        assign_to_vector(self.weights[i-1].vector(), strain_weight)
+
+        for i in range(17):
+            assign_to_vector(self.weights[i].vector(), self.weights_arr[i])
                 
         self._set_form()
 
@@ -314,6 +317,17 @@ class VolumeTarget(OptimizationTarget):
         self.target_space = FunctionSpace(mesh, "R", 0)
         OptimizationTarget.__init__(self, mesh)
 
+    def print_head(self):
+        return "\t{:<15}\t{:<18}\t{:<10}".format("Target Volume",
+                                                 "Simulated Volume",
+                                                 "I_volume")
+    def print_line(self):
+        v_sim = gather_broadcast(self.simulated_fun.vector().array())[0]
+        v_meas = gather_broadcast(self.target_fun.vector().array())[0]
+        I = self.get_value()
+        
+        return "\t{:<15.2f}\t{:<18.2f}\t{:<10.2e}".format(v_meas, v_sim, I)
+        
     def load_target_data(self, target_data, n):
         """Load the target data
 
@@ -373,6 +387,12 @@ class Regularization(object):
                                 name = "mesh volume")
         self.dx = dx(mesh)
         self.results = {"func_value":[]}
+
+    def print_head(self):
+        return "\t{:<10}".format("I_reg")
+    def print_line(self):
+        I = self.get_value()
+        return "\t{:<10.2e}".format(I)
 
     def save(self):
         self.results["func_value"].append(self._value)
