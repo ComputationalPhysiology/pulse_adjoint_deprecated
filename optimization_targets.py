@@ -315,6 +315,8 @@ class VolumeTarget(OptimizationTarget):
         self.dmu = dmu
         
         self.target_space = FunctionSpace(mesh, "R", 0)
+        self.endoarea = Constant(assemble(Constant(1.0)*dmu),
+                                 name = "endo area")
         OptimizationTarget.__init__(self, mesh)
 
     def print_head(self):
@@ -351,7 +353,7 @@ class VolumeTarget(OptimizationTarget):
         vol = (-1.0/3.0)*dot(self._X + u, J*inv(F).T*self._N)
 
         # Make a project for dolfin-adjoint recording
-        solve(inner(self._trial, self._test)*self.dmu == \
+        solve(inner(self._trial, self._test)/self.endoarea*self.dmu == \
               inner(vol, self._test)*self.dmu, self.simulated_fun)
     
     def _set_form(self):
