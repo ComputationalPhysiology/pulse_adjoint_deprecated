@@ -79,17 +79,16 @@ def print_optimization_report(params, opt_controls, init_controls,
 
 def passive_inflation_exists(params):
     import h5py, os
-    from adjoint_contraction_args import ALPHA_STR, PASSIVE_INFLATION
+    from adjoint_contraction_args import PASSIVE_INFLATION_GROUP
 
     if not os.path.exists(params["sim_file"]):
         return False
     
     h5file = h5py.File(params["sim_file"])
-    key1 = ALPHA_STR.format(params["alpha_matparams"])
-    key2 = PASSIVE_INFLATION
+    key = PASSIVE_INFLATION_GROUP
 
     # Check if pv point is already computed
-    if key1 in h5file.keys() and key2 in h5file[key1].keys():
+    if key in h5file.keys():
         logger.info(Text.green("Passive inflation, alpha = {} {}".format(params["alpha_matparams"],"fetched from database")))
         h5file.close()
         return True
@@ -100,7 +99,7 @@ def passive_inflation_exists(params):
 def contract_point_exists(params):
     import h5py, os
     import numpy as np
-    from adjoint_contraction_args import ALPHA_STR, ACTIVE_CONTRACTION, CONTRACTION_POINT, PASSIVE_INFLATION, PHASES
+    from adjoint_contraction_args import ACTIVE_CONTRACTION, CONTRACTION_POINT, PASSIVE_INFLATION_GROUP, PHASES
     
     if not os.path.exists(params["sim_file"]):
         logger.info(Text.red("Run passive inflation before systole"))
@@ -108,13 +107,12 @@ def contract_point_exists(params):
         return False
 
     h5file = h5py.File(params["sim_file"])
-    key1 = ALPHA_STR.format(params["alpha"])
-    key2 = ACTIVE_CONTRACTION
-    key3  = CONTRACTION_POINT.format(params["active_contraction_iteration_number"])
-    key4 = PASSIVE_INFLATION
-    key5 = ALPHA_STR.format(params["alpha_matparams"])
+    key1 = ACTIVE_CONTRACTION
+    key2  = CONTRACTION_POINT.format(params["active_contraction_iteration_number"])
+    key3 = PASSIVE_INFLATION_GROUP
+    
 	
-    if not key5 in h5file.keys() or key4 not in h5file[key5].keys():
+    if not key3 in h5file.keys():
         logger.info(Text.red("Run passive inflation before systole"))
         raise IOError("Need state from passive inflation")
 
@@ -131,8 +129,8 @@ def contract_point_exists(params):
     try:
 
         # Check if pv point is already computed
-        if key2 in h5file[key1].keys() and key3 in h5file[key1][key2].keys():
-            pressure = np.array(h5file[key1][key2][key3]["lv_pressures"])[0]
+        if key1 in h5file.keys() and key2 in h5file[key1].keys():
+            pressure = np.array(h5file[key1][key2]["lv_pressures"])[0]
             logger.info(Text.green("Contract point {}, alpha = {} pressure = {:.3f} {}".format(params["active_contraction_iteration_number"],
                                                                            params["alpha"], pressure, "fetched from database")))
             h5file.close()

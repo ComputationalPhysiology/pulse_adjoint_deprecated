@@ -28,19 +28,9 @@ class BasicHeartProblem(collections.Iterator):
     """
     This is a basic class for the heart problem.
     """
-    def __init__(self, pressure, solver_parameters, p_lv):
+    def __init__(self, bcs, solver_parameters, p_lv):
 
-        self._init_pressures(pressure, p_lv)
-        
-        # self._init_measures_and_markers(endo_lv_marker, 
-                                        # solver_parameters)
-
-        #Objects needed for Volume calculation
-        # self._init_strain_functions(spaces)
-        
-        # Basis function in the circumferential, 
-        # radial and longitudinal direction
-        # self.crl_basis = crl_basis
+        self._init_pressures(bcs["pressure"], p_lv)
 
         # Mechanical solver Active strain Holzapfel and Ogden
         self.solver = LVSolver(solver_parameters)
@@ -173,98 +163,12 @@ class BasicHeartProblem(collections.Iterator):
         self.p_lv = p_lv
         
 
-    def _init_strain_functions(self, spaces):
-        """
-        Initialze spaces and functions used for strain calculations
-        """
-        
-        # Regional strains
-        self.strainspace = spaces.strainspace
-        self.strains = [Function(self.strainspace,
-                                     name = "Simulated Strain_{}".format(i)) for i in STRAIN_REGION_NUMS]
-
-        self.strain_u = TrialFunction(self.strainspace)
-        self.strain_v = TestFunction(self.strainspace)
-
-        # Complete strain fields
-        self.strainfieldspace = spaces.strainfieldspace
-        self.strainfield = Function(self.strainfieldspace, name = "Simulated StrainField")
-        self.strainfield_u = TrialFunction(self.strainfieldspace)
-        self.strainfield_v = TestFunction(self.strainfieldspace)
-        
-       
-    def _init_measures_and_markers(self, endo_lv_marker, solver_parameters):
-        """
-        Load mesh, measures and boundary markers
-        """
-        # Boundary markers
-        ffun = solver_parameters["facet_function"]
-        # Mesh
-        self.mesh = solver_parameters["mesh"]
-        # Surface measure
-        self.ds = Measure("exterior_facet", subdomain_data = ffun, domain = self.mesh)(endo_lv_marker)
-        # Volume measure, with each index corresponding to a strain region
-        self.dx = Measure("dx", subdomain_data = solver_parameters["mesh_function"],
-                                domain = solver_parameters["mesh"])
-        
-        self.strain_markers = solver_parameters["mesh_function"]
-        
-
-    def _init_volume_forms(self):
-        """
-        UFL form form computing inner cavity volume
-        """
-        # Reference coordinates
-        X = SpatialCoordinate(self.mesh)
-
-        # Facet Normal 
-        N = self.solver.parameters["facet_normal"]
-
-        # Collect displacement u
-        self.u = self.solver.get_u() 
-
-        # Deformation gradient
-        F = grad(self.u) + Identity(3)
-        J = det(F)
-
-        # Compute volume
-        self.vol = (-1.0/3.0)*dot(X + self.u, J*inv(F).T*N)
-        self.vol_form = self.vol*self.ds
-
-    def project_to_strains(self, u):
-        """
-        In order for dolfin-adjoint to record that the
-        strain functional changes during the opimization, 
-        we need to solve an eaqation that makes the recording. 
-        """
-
-        # Take of the correct components of the displacement gradient
-        gradu = grad(u)
-        grad_u_diag = as_vector([inner(e,gradu*e) for e in self.crl_basis])
-
-        # Solve for the strain fields
-        # Somehow this does not work with LU solver when base is fixed according to the
-        # segemental surfaces
-        solve(inner(self.strainfield_u, self.strainfield_v)*dx == \
-              inner(self.strainfield_v, grad_u_diag)*dx,self.strainfield,
-              solver_parameters={"linear_solver": "gmres"})
-    
-        # Solve for the regional strains
-        for i in STRAIN_REGION_NUMS:
-            solve(inner(self.strain_u, self.strain_v)*self.dx(i) == \
-                  inner(self.strain_v, grad_u_diag)*self.dx(i), \
-                  self.strains[i - 1])
-
-        return self.strains
-
     def next(self):
-        """
-        Solve the system as it is
+        """Solve the system as it is
         """
         out, crash = self.solver.solve()
 	
-        # strains = self.project_to_strains(self.u)
-        return out#, strains
+        return out
 
 
 
@@ -287,14 +191,15 @@ class SyntheticHeartProblem(BasicHeartProblem):
     """
     I already have gamma. Now run a simulation using the list of gamma.
     """
-    def __init__(self, pressure, solver_parameters, p_lv, endo_lv_marker, crl_basis, spaces, gamma_list):
+    def __init__(self, bcs,
+                 solver_parameters,
+                 p_lv,
+                 gamma_list):
         
         self.gamma_gen = (g for g in gamma_list)
         self.gamma = gamma_list[0]
         
-        BasicHeartProblem.__init__(self, pressure, solver_parameters, p_lv, endo_lv_marker, crl_basis, spaces)
-
-        BasicHeartProblem._init_volume_forms(self)
+        BasicHeartProblem.__init__(self, bcs, solver_parameters, p_lv)
 
     def next(self):
 
@@ -357,7 +262,7 @@ class ActiveHeartProblem(BasicHeartProblem):
     A heart problem for the regional contracting gamma.
     """
     def __init__(self,
-                 pressure,
+                 bcs,
                  solver_parameters,
                  p_lv,
                  params,
@@ -367,24 +272,23 @@ class ActiveHeartProblem(BasicHeartProblem):
         self.alpha = params["alpha"]
         passive_filling_duration = solver_parameters["passive_filling_duration"]
     
-        BasicHeartProblem.__init__(self, pressure, solver_parameters, p_lv)
+        BasicHeartProblem.__init__(self, bcs, solver_parameters, p_lv)
 
         # Load the state from the previous iteration
         w_temp = Function(self.solver.get_state_space(), name = "w_temp")
         with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
         
-            # Get previous regional gamma and state
+            # Get previous state
             if params["active_contraction_iteration_number"] == 0:
-                h5file.read(w_temp, PASSIVE_INFLATION_GROUP.format(params["alpha_matparams"]) + \
-                            "/states/{}".format(passive_filling_duration - 1))
+                h5file.read(w_temp.vector(), PASSIVE_INFLATION_GROUP + \
+                            "/states/{}".format(passive_filling_duration - 1), True)
             else:
-                h5file.read(w_temp, ACTIVE_CONTRACTION_GROUP.
-                            format(params["alpha"],
-                                   params["active_contraction_iteration_number"] - 1) + "/states/0")
+                h5file.read(w_temp.vector(), ACTIVE_CONTRACTION_GROUP.
+                            format(params["active_contraction_iteration_number"] - 1) + "/states/0", True)
 
 
         self.solver.get_state().assign(w_temp, annotate = annotate)
-        # BasicHeartProblem._init_volume_forms(self)
+      
        
     
     def next_active(self, gamma_current, gamma, assign_prev_state=True, steps = None):
@@ -522,11 +426,11 @@ class PassiveHeartProblem(BasicHeartProblem):
     Runs a biventricular simulation of the diastolic phase of the cardiac
     cycle. The simulation is driven by LV pressures and is quasi-static.
     """
-    def __init__(self, pressure, solver_parameters, p_lv):
+    def __init__(self, bcs, solver_parameters, p_lv):
        
-        BasicHeartProblem.__init__(self, pressure, solver_parameters, p_lv)
-
-        # BasicHeartProblem._init_volume_forms(self)
+        BasicHeartProblem.__init__(self, bcs,
+                                   solver_parameters,
+                                   p_lv)
 
         
     def next(self):
@@ -535,9 +439,8 @@ class PassiveHeartProblem(BasicHeartProblem):
         """
         
         out = self.increase_pressure()
-        # strains = self.project_to_strains(self.u)
         
-        return out#, strains
+        return out
 
 
 

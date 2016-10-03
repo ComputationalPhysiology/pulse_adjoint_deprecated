@@ -28,18 +28,37 @@ class OptimizationTarget(object):
     """
     def __init__(self, mesh):
 
+        # A real space for projecting the functional
         self.realspace = FunctionSpace(mesh, "R", 0)
         
-                                     
+        # The volume of the mesh
         self.meshvol = Constant(assemble(Constant(1.0)*dx(mesh)),
                                 name = "mesh volume")
-        
+
+        # Test and trial functions for the target space
         self._trial = TrialFunction(self.target_space)
         self._test = TestFunction(self.target_space)
 
+        # Test and trial functions for the real space
         self._trial_r = TrialFunction(self.realspace)
         self._test_r = TestFunction(self.realspace)
-    
+
+        # List for the target data
+        self.data = []
+
+        # List for saved data
+        self.results = {"func_value": [],
+                        "target": [],
+                        "simulated":[]}
+
+    def save(self):
+        self.results["func_value"].append(self.get_value())
+        self.results["target"].append(Vector(self.target_fun.vector()))
+        self.results["simulated"].append(Vector(self.simulated_fun.vector()))
+        
+    def next_target(self, it, annotate=False):
+        self.assign_target(self.data[it], annotate)
+        
     def set_target_functions(self):
         """Initialize the functions
         """
@@ -51,8 +70,22 @@ class OptimizationTarget(object):
         self.functional = Function(self.realspace,
                                    name = "{} Functional".format(self._name))
         self._set_form()
+
+    def load_target_data(self, target_data, n):
+        """Load the target data
+
+        :param target_data: The data
+        :param n: Index
+
+        """
+        f = Function(self.target_space)
+        assign_to_vector(f.vector(), np.array(target_data[n]))
+        self.data.append(f)
         
     def _set_form(self):
+        """The default form is just the least square
+        difference
+        """
         self._form = (self.target_fun - self.simulated_fun)**2
 
     
@@ -70,6 +103,11 @@ class OptimizationTarget(object):
             self.functional)
 
     def get_functional(self):
+        """Return the integral form of the functional
+        We devide by the volume, so that when integrated
+        the value of the functional is the value of the
+        integral.
+        """
         return (self.functional/self.meshvol)*dx
 
 
@@ -106,6 +144,33 @@ class RegionalStrainTarget(OptimizationTarget):
         self.crl_basis = crl_basis
         self.dmu = dmu
         OptimizationTarget.__init__(self, mesh)
+
+    def save(self):
+        
+        self.results["func_value"].append(self.get_value())
+        target = []
+        simulated = []
+        for i in range(17):
+            target.append(Vector(self.target_fun[i].vector()))
+            simulated.append(Vector(self.simulated_fun[i].vector()))
+            
+        self.results["target"].append(target)
+        self.results["simulated"].append(simulated)
+
+    def load_target_data(self, target_data, n):
+        """Load the target data
+
+        :param target_data: The data
+        :param n: Index
+
+        """
+        strains = []
+        for i in range(17):
+            f = Function(self.target_space)
+            assign_to_vector(f.vector(), np.array(target_data[i+1][n]))
+            strains.append(f)
+            
+        self.data.append(strains)
 
     def set_target_functions(self):
         """Initialize the functions
@@ -182,16 +247,51 @@ class RegionalStrainTarget(OptimizationTarget):
         return (list_sum(self.functional)/self.meshvol)*dx
                                     
         
+class DisplacementTarget(OptimizationTarget):
+    def __init__(self, mesh):
+        self._name = "Displacement"
+        self.dmu = dx(mesh)
+        self.target_space = VectorFunctionSpace(mesh, "CG", 2)
+        OptimizationTarget.__init__(self, mesh)
 
+    def assign_simulated(self, u):
+        """Assing simulated regional strain
+
+        :param u: New displacement
+        """
+
+        # Make a project for dolfin-adjoint recording
+        solve(inner(self._trial, self._test)*self.dmu == \
+              inner(u, self._test)*self.dmu, \
+              self.simulated_fun)
+
+        
+    
 class FullStrainTarget(OptimizationTarget):
     """Class for full strain field
     optimization target
     """
     def __init__(self, mesh, crl_basis):
         self._name = "Full Strain"
-        self.dmu = dx
+        self.dmu = dx(mesh)
         self.crl_basis = crl_basis
         self.target_space = VectorFunctionSpace(mesh, "CG", 1, dim = 3)
+        OptimizationTarget.__init__(self, mesh)
+
+    def assign_simulated(self, u):
+        """Assing simulated strain
+
+        :param u: New displacement
+        """
+        
+        # Compute the strains
+        gradu = grad(u)
+        grad_u_diag = as_vector([inner(e,gradu*e) for e in self.crl_basis])
+
+        # Make a project for dolfin-adjoint recording
+        solve(inner(self._trial, self._test)*self.dmu == \
+              inner(grad_u_diag, self._test)*self.dmu, \
+              self.simulated_fun)
     
 
 class VolumeTarget(OptimizationTarget):
@@ -207,12 +307,23 @@ class VolumeTarget(OptimizationTarget):
         
         """
         self._name = "Volume"
-        self.X = SpatialCoordinate(mesh)
-        self.N = FacetNormal(mesh)
+        self._X = SpatialCoordinate(mesh)
+        self._N = FacetNormal(mesh)
         self.dmu = dmu
         
         self.target_space = FunctionSpace(mesh, "R", 0)
         OptimizationTarget.__init__(self, mesh)
+
+    def load_target_data(self, target_data, n):
+        """Load the target data
+
+        :param target_data: The data
+        :param n: Index
+
+        """
+        f = Function(self.target_space)
+        assign_to_vector(f.vector(), np.array([target_data[n]]))
+        self.data.append(f)
 
     def assign_simulated(self, u):
         """Assign simulated volume
@@ -223,7 +334,7 @@ class VolumeTarget(OptimizationTarget):
         # Compute volume
         F = grad(u) + Identity(3)
         J = det(F)
-        vol = (-1.0/3.0)*dot(self.X + u, J*inv(F).T*self.N)
+        vol = (-1.0/3.0)*dot(self._X + u, J*inv(F).T*self._N)
 
         # Make a project for dolfin-adjoint recording
         solve(inner(self._trial, self._test)*self.dmu == \
@@ -257,9 +368,14 @@ class Regularization(object):
         
         self.space = space
         self.lmbda = lmbda
+        self._value = 0.0
         self.meshvol = Constant(assemble(Constant(1.0)*dx(mesh)),
                                 name = "mesh volume")
         self.dx = dx(mesh)
+        self.results = {"func_value":[]}
+
+    def save(self):
+        self.results["func_value"].append(self._value)
 
     def set_target_functions(self):
         pass
@@ -294,10 +410,11 @@ class Regularization(object):
 
         """
         form = self.get_form(m)
+        self._value = assemble(form)
         return self.lmbda*form
 
         
-    def get_value(self, m):
+    def get_value(self):
         """Get the value of the regularization term
         without regularization parameter
 
@@ -306,30 +423,5 @@ class Regularization(object):
         :rtype: float
 
         """
-        form = self.get_form(m)
-        return assemble(form)
+        return self._value
         
-        
-
-class RealValueProjector(object):
-    """
-    Projects onto a real valued function in order to force dolfin-adjoint to
-    create a recording.
-    """
-    def __init__(self, u,v, mesh_vol):
-        self.u_trial = u
-        self.v_test = v
-        self.mesh_vol = mesh_vol
-    
-        
-    def project(self, expr, measure, real_function, mesh_vol_divide = True):
-
-        if mesh_vol_divide:
-            solve((self.u_trial*self.v_test/self.mesh_vol)*dx == \
-                  self.v_test*expr*measure,real_function)
-            
-        else:
-            solve((self.u_trial*self.v_test)*dx == \
-              self.v_test*expr*measure,real_function)
-
-        return real_function

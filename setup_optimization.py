@@ -347,8 +347,8 @@ def make_solver_params(params, patient, measurements):
         
                 # Get material parameter from passive phase file
                 paramvec = Function(VectorFunctionSpace(patient.mesh, "R", 0, dim = 4), name = "matparam vector")
-                h5file.read(paramvec, PASSIVE_INFLATION_GROUP.format(params["alpha_matparams"]) +
-                            "/parameters/optimal_material_parameters_function")
+                h5file.read(paramvec.vector(), PASSIVE_INFLATION_GROUP.format(params["alpha_matparams"]) +
+                            "/parameters/optimal_material_parameters", True)
 
     
 
@@ -372,7 +372,7 @@ def make_solver_params(params, patient, measurements):
     
         
 
-    p_lv = Expression("t", t = measurements.pressure[0], name = "LV_endo_pressure")
+    p_lv = Expression("t", t = measurements["pressure"][0], name = "LV_endo_pressure")
     N = FacetNormal(patient.mesh)
 
     # Direchlet BC at the Base
@@ -532,51 +532,17 @@ def make_solver_params(params, patient, measurements):
         return solver_parameters, p_lv
 
 def get_measurements(params, patient):
+    """Get the measurement or the synthetic data
+    to be used as BC or targets in the optimization
 
-    # FIXME
-    if params["synth_data"]:
+    :param params: Application parameter
+    :param patient: class with the patient data
+    :returns: The target data
+    :rtype: dict
 
-        # if hasattr(patient, "datafile"):
-        #     synth_output = patient.datafile
-        #     pressure, volume, strain = load_synth_data(patient.mesh, synth_output, patient.num_points, params["use_deintegrated_strains"])
-        # else:
-        synth_output =  params["outdir"] +  "/synth_data.h5"
-        num_points = SYNTH_PASSIVE_FILLING + NSYNTH_POINTS + 1
-            
-        pressure, volume, strain = load_synth_data(patient.mesh, synth_output, num_points, params["use_deintegrated_strains"])
-        
-            
-    else:
-        pressure = np.array(patient.pressure)
-        # Compute offsets
-
-        # Calculate difference bwtween calculated volume, and volume given from echo
-        volume_offset = get_volume_offset(patient)
-        logger.info("Volume offset = {} cm3".format(volume_offset))
-
-        # Subtract this offset from the volume data
-        volume = np.subtract(patient.volume,volume_offset)
-
-        #Convert pressure to centipascal (the mesh is in cm)
-        # pressure = np.multiply(KPA_TO_CPA, pressure)
-
-        # Choose the pressure at the beginning as reference pressure
-        reference_pressure = pressure[0] 
-        logger.info("Pressure offset = {} kPa".format(reference_pressure))
-
-        #Here the issue is that we do not have a stress free reference mesh. 
-        #The reference mesh we use is already loaded with a certain amount of pressure, which we remove.    
-        pressure = np.subtract(pressure,reference_pressure)
-
-        if params["use_deintegrated_strains"]:
-            patient.load_deintegrated_strains(STRAIN_FIELDS_PATH)
-            strain = (patient.strain, patient.strain_deintegrated)
-
-        else:
-            strain = patient.strain
-
-
-
+    """
+    
+    # Find the start and end of the measurements
     if params["phase"] == PHASES[0]: #Passive inflation
         # We need just the points from the passive phase
         start = 0
@@ -585,35 +551,90 @@ def get_measurements(params, patient):
     elif params["phase"] == PHASES[1]: #Scalar contraction
         # We need just the points from the active phase
         start = patient.passive_filling_duration -1
-        end = len(pressure)
+        end = patient.num_points
       
     else:
         # We need all the points 
         start = 0
-        end = len(pressure)
+        end = patient.num_points
     
-    measurements = Object()
-    # Volume
-    measurements.volume = volume[start:end]
-    
-    # Pressure
-    measurements.pressure = pressure[start:end]
+    # Parameters for the targets
+    p = params["Optimization_targets"]
+    measurements = {}
 
-    # Endoring vertex coordinates from segementation
-    measurements.seg_verts = None if not hasattr(patient, 'seg_verts') else patient.seg_verts[start:end]
-    
-    # Strain 
-    if  params["use_deintegrated_strains"]:
-        strain, strain_deintegrated = strain
-        measurements.strain_deintegrated = strain_deintegrated[start:end] 
+
+    # !! FIX THIS LATER !!
+    if params["synth_data"]:
+
+        synth_output =  params["outdir"] +  "/synth_data.h5"
+        num_points = SYNTH_PASSIVE_FILLING + NSYNTH_POINTS + 1
+            
+        pressure, volume, strain = load_synth_data(patient.mesh, synth_output, num_points, params["use_deintegrated_strains"])
+        
+            
     else:
-        measurements.strain_deintegrated = None
+
+        ## Pressure
+        
+        # We need the pressure as a BC
+        pressure = np.array(patient.pressure)
+   
+        # Compute offsets
+        # Choose the pressure at the beginning as reference pressure
+        reference_pressure = pressure[0] 
+        logger.info("Pressure offset = {} kPa".format(reference_pressure))
+
+        #Here the issue is that we do not have a stress free reference mesh. 
+        #The reference mesh we use is already loaded with a certain
+        #amount of pressure, which we remove.
+        pressure = np.subtract(pressure,reference_pressure)
+        
+        measurements["pressure"] = pressure[start:end]
+        
+        
+        ## Volume
+        if p["volume"]:
+            # Calculate difference bwtween calculated volume, and volume given from echo
+            volume_offset = get_volume_offset(patient)
+            logger.info("Volume offset = {} cm3".format(volume_offset))
+
+            # Subtract this offset from the volume data
+            volume = np.subtract(patient.volume,volume_offset)
+
+            measurements["volume"] = volume[start:end]
+
+        if p["regional_strain"]:
+
+            strain = {}
+            for region in STRAIN_REGION_NUMS:
+                strain[region] = patient.strain[region][start:end]
+                
+            measurements["regional_strain"] = strain
+        
+       
+    
+    # measurements = Object()
+    # # Volume
+    # measurements.volume = volume[start:end]
+    
+    # # Pressure
+    # measurements.pressure = pressure[start:end]
+
+    # # Endoring vertex coordinates from segementation
+    # measurements.seg_verts = None if not hasattr(patient, 'seg_verts') else patient.seg_verts[start:end]
+    
+    # # Strain 
+    # if  params["use_deintegrated_strains"]:
+    #     strain, strain_deintegrated = strain
+    #     measurements.strain_deintegrated = strain_deintegrated[start:end] 
+    # else:
+    #     measurements.strain_deintegrated = None
 
 
-    strains = {}
-    for region in STRAIN_REGION_NUMS:
-        strains[region] = strain[region][start:end]
-    measurements.strain = strains
+    # strains = {}
+    # for region in STRAIN_REGION_NUMS:
+    #     strains[region] = strain[region][start:end]
+    # measurements.strain = strains
     
 
     return measurements
@@ -672,13 +693,13 @@ class MyReducedFunctional(ReducedFunctional):
             # Store initial results 
             self.ini_for_res = self.for_res
             self.first_call = False
-            logger.info("Iter\tI_tot\t\tI_vol\t\tI_strain\tI_reg")
+            # logger.info("Iter\tI_tot\t\tI_vol\t\tI_strain\tI_reg")
 	 
         
         control = Control(self.paramvec)
             
 
-        ReducedFunctional.__init__(self, Functional(self.for_res.total_functional), control)
+        ReducedFunctional.__init__(self, Functional(self.for_res["total_functional"]), control)
 
         if crash:
             # This exection is thrown if the solver uses more than x steps.
@@ -690,7 +711,7 @@ class MyReducedFunctional(ReducedFunctional):
             self.nr_crashes += 1
     
         else:
-            func_value = self.for_res.func_value
+            func_value = self.for_res["func_value"]
 
         self.func_values_lst.append(func_value)
         self.controls_lst.append(Vector(paramvec_new.vector()))
@@ -698,11 +719,11 @@ class MyReducedFunctional(ReducedFunctional):
         logger.debug(Text.yellow("Stop annotating"))
         parameters["adjoint"]["stop_annotating"] = True
 
-        logger.info("{}\t{:.3e}\t{:.3e}\t{:.3e}\t{:.3e}".format(self.iter, 
-                                                               func_value, 
-                                                               self.for_res.func_value_volume, 
-                                                               self.for_res.func_value_strain, 
-                                                               self.for_res.gamma_gradient))
+        # logger.info("{}\t{:.3e}\t{:.3e}\t{:.3e}\t{:.3e}".format(self.iter, 
+        #                                                        func_value, 
+        #                                                        self.for_res.func_value_volume, 
+        #                                                        self.for_res.func_value_strain, 
+        #                                                        self.for_res.gamma_gradient))
 
         return self.scale*func_value
 
@@ -717,33 +738,6 @@ class MyReducedFunctional(ReducedFunctional):
         gathered_out = gather_broadcast(out[0].vector().array())
         
         return self.scale*gathered_out
-
-
-
-class RealValueProjector(object):
-    """
-    Projects onto a real valued function in order to force dolfin-adjoint to
-    create a recording.
-    """
-    def __init__(self, u,v, mesh_vol):
-        self.u_trial = u
-        self.v_test = v
-        self.mesh_vol = mesh_vol
-    
-        
-    def project(self, expr, measure, real_function, mesh_vol_divide = True):
-
-        if mesh_vol_divide:
-            solve((self.u_trial*self.v_test/self.mesh_vol)*dx == \
-                  self.v_test*expr*measure,real_function)
-            
-        else:
-            solve((self.u_trial*self.v_test)*dx == \
-              self.v_test*expr*measure,real_function)
-
-        return real_function
-
-
 
 
 class RegionalGamma(dolfin.Function):

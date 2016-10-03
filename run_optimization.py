@@ -59,12 +59,16 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     #Solve calls are not registred by libajoint
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
-    
-    # Load target data
-    target_data = load_target_data(measurements, params, spaces)
 
+    
     # Load optimization targets
     optimization_targets = get_optimization_targets(params, solver_parameters)
+
+    # Load target data
+    optimization_targets, bcs = \
+        load_target_data(measurements, params, optimization_targets)
+
+    
     
     
     # Start recording for dolfin adjoint 
@@ -75,7 +79,7 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     #Initialize the solver for the Forward problem
     for_run = PassiveForwardRunner(solver_parameters, 
                                    p_lv, 
-                                   target_data,
+                                   bcs,
                                    optimization_targets,
                                    params, 
                                    paramvec)
@@ -91,6 +95,12 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
 
     # Initialize MyReducedFuctional
     rd = MyReducedFunctional(for_run, paramvec)
+
+    
+    # Evaluate the reduced functional in case the solver chrashes at the first point.
+    # If this is not done, and the solver crashes in the first point
+    # then Dolfin adjoit has no recording and will raise an exception.
+    rd(paramvec)
     
     return rd, paramvec
 
@@ -174,16 +184,19 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
     
-    target_data = load_target_data(measurements, params, spaces)
     # Load optimization targets
     optimization_targets = get_optimization_targets(params, solver_parameters)
+
+    # Load target data
+    optimization_targets, bcs = \
+        load_target_data(measurements, params, optimization_targets)
 
     logger.debug(Text.yellow("Start annotating"))
     parameters["adjoint"]["stop_annotating"] = False
    
     for_run = ActiveForwardRunner(solver_parameters,
                                   p_lv,
-                                  target_data,
+                                  bcs,
                                   optimization_targets,
                                   params,
                                   gamma)
@@ -199,12 +212,13 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     # Compute the functional as a pure function of gamma
     rd = MyReducedFunctional(for_run, gamma)
 
+    
     # Evaluate the reduced functional in case the solver chrashes at the first point.
     # If this is not done, and the solver crashes in the first point
     # then Dolfin adjoit has no recording and will raise an exception.
     rd(gamma)
 
-            
+    
     return rd, gamma
 
  
@@ -215,13 +229,13 @@ def store(params, rd, opt_controls, opt_result=None):
 
     if params["phase"] == PHASES[0]:
 
-        h5group =  PASSIVE_INFLATION_GROUP.format(params["alpha_matparams"])
+        h5group =  PASSIVE_INFLATION_GROUP
         write_opt_results_to_h5(h5group, params, rd.ini_for_res, rd.for_res, 
                                 opt_matparams = opt_controls, 
                                 opt_result = opt_result)
     else:
         
-        h5group =  ACTIVE_CONTRACTION_GROUP.format(params["alpha"], params["active_contraction_iteration_number"])
+        h5group =  ACTIVE_CONTRACTION_GROUP.format(params["active_contraction_iteration_number"])
         write_opt_results_to_h5(h5group, params, rd.ini_for_res, rd.for_res, 
                                 opt_gamma = opt_controls, opt_result = opt_result)
 
@@ -425,82 +439,44 @@ def solve_oc_problem(params, rd, paramvec):
 
 
 
-def load_target_data(measurements, params, spaces):
-    """Create optimization targets and load the 
-    target data into the targets
+def load_target_data(measurements, params, optimization_targets):
+    """Load the target data into dolfin functions.
+    The target data will be loaded into the optiization_targets
 
     :param measurements: The target measurements
     :param params: Application parameters
-    :param spaces: An object with function spaces
+    :param optimization_targer: A dictionary with the targets
     :returns: object with target data
     :rtype: object
     """
 
     logger.debug(Text.blue("Loading Target Data"))
-        
-    def get_strain(newfunc, i, it):
-        assign_to_vector(newfunc.vector(), np.array(measurements.strain[i][it]))
 
-
-    def get_volume(newvol, it):
-        assign_to_vector(newvol.vector(), np.array([measurements.volume[it]]))
-
-    # The target data is put into functions so that Dolfin-adjoint can properly record it.
- 
-    # Store target strains and volumes
-    target_strains = []
-    target_vols = []
-
+    # The point in the acitve phase (0 if passive)
     acin = params["active_contraction_iteration_number"]
 
+    # Load boundary conditions
+    bcs = {}
     if params["phase"] == PHASES[0]:
-        pressures = measurements.pressure
-        seg_verts = measurements.seg_verts
+        pressure = measurements["pressure"]
+        # seg_verts = measurements.seg_verts
     else:
-        pressures = measurements.pressure[acin: 2 + acin]
-        seg_verts = measurements.seg_verts[acin: 2 + acin]
-       
-
-    logger.info(Text.blue("Load target data"))
-    logger.info("\tLV Pressure (kPa) \tLV Volume (mL)")
-
-
-    for it, p in enumerate(pressures):
+        pressure = measurements["pressure"][acin: 2 + acin]
+        # seg_verts = measurements.seg_verts[acin: 2 + acin]
         
-        if params["use_deintegrated_strains"]:
-            newfunc = Function(spaces.strainfieldspace, name = \
-                               "strain_{}".format(args.active_contraction_iteration_number+it))
-          
-            assign_to_vector(newfunc.vector(), \
-                             gather_broadcast(measurements.strain_deintegrated[acin+it].array()))
-            
-            target_strains.append(newfunc)
-            
-        else:
-            strains_at_pressure = []
-            for i in STRAIN_REGION_NUMS:
-                newfunc = Function(spaces.strainspace, name = "strain_{}_{}".format(acin+it, i))
-                get_strain(newfunc, i, acin+it)
-                strains_at_pressure.append(newfunc)
+    bcs["pressure"] = pressure
+    # bcs["seg_verts"] = seg_verts
 
-            target_strains.append(strains_at_pressure)
+    # Load the target data into dofin functions
+    for key, val in params["Optimization_targets"].iteritems():
 
-        newvol = Function(spaces.r_space, name = "newvol")
-        get_volume(newvol, acin+it)
-        target_vols.append(newvol)
+        # If target is included in the optimization
+        if val:
+            # Load the target data
+            for it,p in enumerate(pressure):
+                optimization_targets[key].load_target_data(measurements[key], it+acin)
 
-        logger.info("\t{:.3f} \t\t\t{:.3f}".format(p,gather_broadcast(target_vols[-1].vector().array())[0]))
-
-
-
-    target_data = Object()
-    target_data.target_strains = target_strains
-    target_data.target_vols = target_vols
-    target_data.target_pressure = pressures
-    target_data.target_seg_verts = seg_verts
-
-
-    return target_data
+    return optimization_targets, bcs
 
 
 def get_optimization_targets(params, solver_parameters):

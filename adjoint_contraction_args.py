@@ -172,12 +172,11 @@ STRAIN_NUM_TO_KEY = {0:"circumferential",
 
 
 
-PASSIVE_INFLATION_GROUP = "alpha_{}/passive_inflation" 
-ACTIVE_CONTRACTION_GROUP = "alpha_{}/active_contraction/contract_point_{}" #.format(alpha, iteration number)
+PASSIVE_INFLATION_GROUP = "passive_inflation"
 CONTRACTION_POINT = "contract_point_{}"
-ALPHA_STR = "alpha_{}"
 ACTIVE_CONTRACTION = "active_contraction"
-PASSIVE_INFLATION = "passive_inflation"
+ACTIVE_CONTRACTION_GROUP = "/".join([ACTIVE_CONTRACTION, CONTRACTION_POINT])
+# PASSIVE_INFLATION = "passive_inflation"
 
 ############## DIRECTORIES AND PATHS #################3
 

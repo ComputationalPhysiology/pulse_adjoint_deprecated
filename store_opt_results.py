@@ -23,8 +23,13 @@ from numpy_mpi import *
 
 
 
-def write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt, 
-                            opt_matparams = None, opt_gamma = None, opt_result = None):
+def write_opt_results_to_h5(h5group,
+                            params,
+                            ini_for_res,
+                            for_result_opt, 
+                            opt_matparams = None,
+                            opt_gamma = None,
+                            opt_result = None):
 
     filename = params["sim_file"]
     filedir = os.path.abspath(os.path.dirname(params["sim_file"]))
@@ -61,7 +66,7 @@ def write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt,
                 f = Function(FunctionSpace(UnitSquareMesh(100,100), "R", 0))
 
             f.assign(Constant(data))
-            h5file.write(f.vector(), h5group + name)
+            h5file.write(f.vector(), name)
 
         def dump_parameters_to_attributes(params, group):
 
@@ -80,20 +85,23 @@ def write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt,
 
         # Parameters
         if opt_matparams:
-            h5file.write(opt_matparams, h5group + "/parameters/optimal_material_parameters_function")
-            h5file.write(opt_matparams.vector(), h5group + "/parameters/optimal_material_parameters")
-            save_data(params["Material_parameters"].values(), "/parameters/initial_material_parameters")
+            group = "/".join([h5group, "parameters"])
+            
+            h5file.write(opt_matparams.vector(),
+                         "/".join([group, "optimal_material_parameters"]))
+            
+            save_data(params["Material_parameters"].values(),
+                      "/".join([group, "initial_material_parameters"]))
 
-            h5file.write(Function(FunctionSpace(for_result_opt.phm.mesh, 'R', 0)), 
-                         h5group + "/parameters/activation_parameter_function")
-            save_data(0.0, "/parameters/activation_parameter")
+            
+            save_data(0.0, "/".join([group, "activation_parameter"]))
             
 
         if opt_gamma:
-            h5file.write(opt_gamma, h5group  + "/parameters/activation_parameter_function")
-            h5file.write(opt_gamma.vector(), h5group  + "/parameters/activation_parameter")
-            save_data(for_result_opt.gamma_gradient, "/parameters/activation_parameter_gradient_size")
-            save_data(for_result_opt.reg_par, "/input/regularization_parameter")
+            group = "/".join([h5group, "parameters"])
+            
+            h5file.write(opt_gamma.vector(), "/".join([group, "activation_parameter"]))
+           
                 
 
 
@@ -104,6 +112,7 @@ def write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt,
         h5file.attributes(h5group + "/parameters")["activation parameter"] = \
           "Active contraction in fiber direction. Value between 0 and 1 where 0 (starting value) is no contraction and 1 (infeasable) is full contraction"
         dump_parameters_to_attributes(params, h5group)
+        
         # Dump parameters to yaml file as well
         with open(filedir+"/parameters.yml", 'w') as parfile:
             yaml.dump(params.to_dict(), parfile, default_flow_style=False)
@@ -121,49 +130,46 @@ def write_opt_results_to_h5(h5group, params, ini_for_res, for_result_opt,
                 dump_parameters_to_attributes(opt_result, h5group)
                 
 
-
         # States
-        for i, w in enumerate(for_result_opt.states):
-            assign_to_vector(for_result_opt.phm.solver.get_state().vector(), gather_broadcast(w.array()))
-            h5file.write(for_result_opt.phm.solver.get_state(), h5group + "/states/{}".format(i))
+        for i, w in enumerate(for_result_opt["states"]):
+            h5file.write(w, "/".join([h5group, "states/{}".format(i)]))
 
 
-        # Strain traces
-        for i, s in enumerate(for_result_opt.strainfields):
-            assign_to_vector(for_result_opt.phm.strainfield.vector(), gather_broadcast(s.array()))
-            h5file.write(for_result_opt.phm.strainfield,  h5group + "/strainfields/{}".format(i))
+        # Store the optimization targets:
+        for k, v in for_result_opt["optimization_targets"].iteritems():
+            group = "/".join([h5group, "optimization_targets", k])
 
-        try:
-            h5file.write(for_result_opt.strain_weights_deintegrated, h5group + "/input/strain_weights_deintegrated")
-        except: pass
-        
-        for region in STRAIN_REGION_NUMS:
-            for i, s in enumerate(for_result_opt.strains[region-1]):
-                assign_to_vector(for_result_opt.phm.strains[region-1].vector(), gather_broadcast(s.array()))
-                h5file.write(for_result_opt.phm.strains[region-1].vector(),  h5group + "/strains/{}/region_{}".format(i,region))
+            # Save the results
+            save_data(np.array(v.results["func_value"]), "/".join([group, "func_value"]))
             
+            # Save weights if applicable
+            if hasattr(v, 'weights'):
+                for l,w in enumerate(v.weights):
+                    h5file.write(w.vector(), "/".join([group, "weigths", str(l)]))
+                
+                
+            
+            n = len(v.results["func_value"])
+            for k1 in ["simulated", "target"]:
 
-        # Strain weights
-        save_data(np.array(for_result_opt.strain_weights).T[:][0],  "/input/strain_weights/circumferential")
-        save_data(np.array(for_result_opt.strain_weights).T[:][1], "/input/strain_weights/radial")
-        save_data(np.array(for_result_opt.strain_weights).T[:][2], "/input/strain_weights/longitidunal")
+                for i in range(n):
+                    if k == "regional_strain":
+                        for j,s in enumerate(v.results[k1][i]):
+                            h5file.write(s, "/".join([group, k1, str(i), "region_{}".format(j)]))
 
+                    else:
+                        h5file.write(v.results[k1][i], "/".join([group, k1, str(i)]))
 
+        # Store the regularization
+        if for_result_opt.has_key("regularization"):
+            save_data(for_result_opt["regularization"].results["func_value"],
+                      "/".join([h5group, "regularization", "func_value"]))
+                                                      
+        
 
-        # Functional, initial and optimal
-        save_data(ini_for_res.func_value_strain,  "/misfit/misfit_functional/initial/strain")
-        save_data(ini_for_res.func_value_volume,  "/misfit/misfit_functional/initial/volume")
-        save_data(for_result_opt.func_value_strain, "/misfit/misfit_functional/optimal/strain")
-        save_data(for_result_opt.func_value_volume, "/misfit/misfit_functional/optimal/volume")
-
-        save_data(ini_for_res.weighted_func_value_strain, "/misfit/weighted_misfit_functional/initial/strain")
-        save_data(ini_for_res.weighted_func_value_volume, "/misfit/weighted_misfit_functional/initial/volume")
-        save_data(for_result_opt.weighted_func_value_strain, "/misfit/weighted_misfit_functional/optimal/strain")
-        save_data(for_result_opt.weighted_func_value_volume, "/misfit/weighted_misfit_functional/optimal/volume")
-
-        # Pressure and volume
-        save_data(for_result_opt.lv_pressures, "/lv_pressures")
-        save_data(for_result_opt.volumes, "/volume")
+        # Save boundary conditions
+        for k,v in for_result_opt["bcs"].iteritems():
+            save_data(np.array(v), "/".join([h5group, "bcs", k]))
 
 
 
