@@ -51,11 +51,6 @@ def run_passive_optimization(params, patient):
 
 def run_passive_optimization_step(params, patient, solver_parameters, measurements, p_lv, paramvec):
     
-    mesh = solver_parameters["mesh"]
-    spaces = get_spaces(mesh)
-    crl_basis = (patient.e_circ, patient.e_rad, patient.e_long)
-     
-    
     #Solve calls are not registred by libajoint
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
@@ -155,15 +150,6 @@ def run_active_optimization(params, patient):
         i += 1
 
 def run_active_optimization_step(params, patient, solver_parameters, measurements, p_lv, gamma):
-
-    
-    # Circumferential, radial and logitudinal basis vectors
-    crl_basis = (patient.e_circ, patient.e_rad, patient.e_long)
-    mesh = solver_parameters["mesh"]
-
-    # Initialize spaces
-    spaces = get_spaces(mesh)
-    
 
     #Get initial guess for gamma
     if not params["nonzero_initial_guess"] or params["active_contraction_iteration_number"] == 0:
