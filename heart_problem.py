@@ -269,7 +269,7 @@ class ActiveHeartProblem(BasicHeartProblem):
                  annotate = False):
                    
         
-        self.alpha = params["alpha"]
+        
         passive_filling_duration = solver_parameters["passive_filling_duration"]
     
         BasicHeartProblem.__init__(self, bcs, solver_parameters, p_lv)

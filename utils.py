@@ -89,10 +89,10 @@ def passive_inflation_exists(params):
 
     # Check if pv point is already computed
     if key in h5file.keys():
-        logger.info(Text.green("Passive inflation, alpha = {} {}".format(params["alpha_matparams"],"fetched from database")))
+        logger.info(Text.green("Passive inflation, {}".format("fetched from database")))
         h5file.close()
         return True
-    logger.info(Text.blue("Passive inflation, alpha = {} {}".format(params["alpha_matparams"],"Run Optimization")))
+    logger.info(Text.blue("Passive inflation, {}".format("Run Optimization")))
     h5file.close()
     return False
 
@@ -131,11 +131,11 @@ def contract_point_exists(params):
         # Check if pv point is already computed
         if key1 in h5file.keys() and key2 in h5file[key1].keys():
             pressure = np.array(h5file[key1][key2]["lv_pressures"])[0]
-            logger.info(Text.green("Contract point {}, alpha = {} pressure = {:.3f} {}".format(params["active_contraction_iteration_number"],
-                                                                           params["alpha"], pressure, "fetched from database")))
+            logger.info(Text.green("Contract point {}, pressure = {:.3f} {}".format(params["active_contraction_iteration_number"],
+                                                                                    pressure, "fetched from database")))
             h5file.close()
             return True
-        logger.info(Text.blue("Contract point {}, alpha = {} {}".format(params["active_contraction_iteration_number"], params["alpha"], "Run Optimization")))
+        logger.info(Text.blue("Contract point {}, {}".format(params["active_contraction_iteration_number"],"Run Optimization")))
         h5file.close()
         return False
     except:

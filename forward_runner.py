@@ -82,7 +82,12 @@ class BasicForwardRunner(object):
 
 
         # Print the head
-        logger.debug("Volume - Strain interpolation {}".format(self.alpha))
+       
+        logger.info("\nFuncional = {}\n".format((len(self.opt_weights.keys())*" {{}}*I_{} +").\
+                                            format(*self.opt_weights.keys())[:-1].\
+                                            format(*self.opt_weights.values())))
+                                            
+        
         head = "{:<10}".format("Pressure")
         for key,val in self.target_params.iteritems():
                 if val: head+= self.optimization_targets[key].print_head()
@@ -90,10 +95,15 @@ class BasicForwardRunner(object):
         head += self.regularization.print_head()
         logger.info(head)
        
-	    
-        
-        functional = self.alpha*self.optimization_targets["volume"].get_functional() \
-                     + (1 - self.alpha)*self.optimization_targets["regional_strain"].get_functional()
+
+        func_lst = []
+        for key,val in self.target_params.iteritems():
+            if val:
+                func_lst.append(self.opt_weights[key]*self.optimization_targets[key].get_functional())
+                
+        functional = list_sum(func_lst)
+        # functional = self.alpha*self.optimization_targets["volume"].get_functional() \
+                     # + (1 - self.alpha)*self.optimization_targets["regional_strain"].get_functional()
         
        
         if phase == "active":
@@ -200,10 +210,7 @@ class ActiveForwardRunner(BasicForwardRunner):
         self.outdir = params["outdir"]
         self.active_contraction_iteration_number = params["active_contraction_iteration_number"]
         self.gamma_previous = gamma_previous
-        self.reg_par = Constant(params["reg_par"])
-        self.alpha = params["alpha"]
-
-        # self.passive_filling_duration = patient.passive_filling_duration
+        self.opt_weights = params["Passive_optimization_weigths"]
         
         
         BasicForwardRunner.__init__(self,
@@ -316,7 +323,7 @@ class PassiveForwardRunner(BasicForwardRunner):
                  bcs, optimization_targets,
                  params, paramvec):
 
-        self.alpha = params["alpha_matparams"]
+        self.opt_weights = params["Passive_optimization_weigths"]
         self.paramvec = paramvec
         BasicForwardRunner.__init__(self,
                                     solver_parameters,

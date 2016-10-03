@@ -35,8 +35,15 @@ def setup_adjoint_contraction_parameters():
     opt_parameters = setup_optimization_parameters()
     params.add(opt_parameters)
 
+    # Optimization targets
     opttarget_parameters = setup_optimizationtarget_parameters()
     params.add(opttarget_parameters)
+
+    # Weigths for each optimization target
+    optweigths_active_parameters = setup_active_optimization_weigths(opttarget_parameters)
+    params.add(optweigths_active_parameters)
+    optweigths_passive_parameters = setup_passive_optimization_weigths(opttarget_parameters)
+    params.add(optweigths_passive_parameters)
     
     return params
     
@@ -97,6 +104,44 @@ def setup_optimizationtarget_parameters():
     params.add("GL_strain", False)
     params.add("displacement", False)
     return params
+
+def setup_active_optimization_weigths(targets):
+    
+    params = Parameters("Active_optimization_weigths")
+    
+    if targets["volume"]:
+        params.add("volume", 0.95)
+    if targets["regional_strain"]:
+        params.add("regional_strain", 0.05)
+    if targets["full_strain"]:
+        params.add("full_strain", 1.0)
+    if targets["GL_strain"]:
+        params.add("GL_strain", 0.05)
+    if targets["displacement"]:
+        params.add("displacement", 1.0)
+
+    params.add("regularization", 0.0)
+        
+    return params
+
+def setup_passive_optimization_weigths(targets):
+    
+    params = Parameters("Passive_optimization_weigths")
+    
+    if targets["volume"]:
+        params.add("volume", 1.0)
+    if targets["regional_strain"]:
+        params.add("regional_strain", 0.0)
+    if targets["full_strain"]:
+        params.add("full_strain", 1.0)
+    if targets["GL_strain"]:
+        params.add("GL_strain", 0.05)
+    if targets["displacement"]:
+        params.add("displacement", 1.0)
+
+    params.add("regularization", 0.0)
+    
+    return params
     
 def setup_application_parameters():
 
@@ -109,15 +154,6 @@ def setup_application_parameters():
     params.add("outdir", os.path.dirname(DEFAULT_SIMULATION_FILE))
 
     ## Parameters ##
-    
-    ## Weight of strain vs volume match
-    # Active phase
-    params.add("alpha", ALPHA)
-    # Passive phase
-    params.add("alpha_matparams", ALPHA_MATPARAMS)
-
-    # Regularization parameter
-    params.add("reg_par", REG_PAR)
     
     # Spring constant at base (Note: works one for base_bc = fix_x)
     params.add("base_spring_k", BASE_K)
@@ -347,7 +383,7 @@ def make_solver_params(params, patient, measurements):
         
                 # Get material parameter from passive phase file
                 paramvec = Function(VectorFunctionSpace(patient.mesh, "R", 0, dim = 4), name = "matparam vector")
-                h5file.read(paramvec.vector(), PASSIVE_INFLATION_GROUP.format(params["alpha_matparams"]) +
+                h5file.read(paramvec.vector(), PASSIVE_INFLATION_GROUP +
                             "/parameters/optimal_material_parameters", True)
 
     
@@ -519,9 +555,9 @@ def make_solver_params(params, patient, measurements):
     logger.info("\ta_f   = {:.3f}".format(pararr[1]))
     logger.info("\tb     = {:.3f}".format(pararr[2]))
     logger.info("\tb_f   = {:.3f}".format(pararr[3]))
-    logger.info('\talpha = {}'.format(params["alpha"]))
-    logger.info('\talpha_matparams = {}'.format(params["alpha_matparams"]))
-    logger.info('\treg_par = {}\n'.format(params["reg_par"]))
+    # logger.info('\talpha = {}'.format(params["alpha"]))
+    # logger.info('\talpha_matparams = {}'.format(params["alpha_matparams"]))
+    # logger.info('\treg_par = {}\n'.format(params["reg_par"]))
 
 
     if params["phase"] in [PHASES[0], PHASES[2]]:
