@@ -81,13 +81,12 @@ class BasicForwardRunner(object):
             self.states.append(Vector(phm.solver.get_state().vector()))
 
 
-        # Print the head
-       
+        # Print the functional
         logger.info("\nFuncional = {}\n".format((len(self.opt_weights.keys())*" {{}}*I_{} +").\
                                             format(*self.opt_weights.keys())[:-1].\
                                             format(*self.opt_weights.values())))
                                             
-        
+        # Print the head
         head = "{:<10}".format("Pressure")
         for key,val in self.target_params.iteritems():
                 if val: head+= self.optimization_targets[key].print_head()
@@ -102,9 +101,7 @@ class BasicForwardRunner(object):
                 func_lst.append(self.opt_weights[key]*self.optimization_targets[key].get_functional())
                 
         functional = list_sum(func_lst)
-        # functional = self.alpha*self.optimization_targets["volume"].get_functional() \
-                     # + (1 - self.alpha)*self.optimization_targets["regional_strain"].get_functional()
-        
+              
        
         if phase == "active":
             # Add regulatization term to the functional
