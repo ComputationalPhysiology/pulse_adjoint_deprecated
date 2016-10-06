@@ -302,7 +302,7 @@ class VolumeTarget(OptimizationTarget):
     target
     """
     
-    def __init__(self, mesh, dmu):
+    def __init__(self, mesh, dmu, chamber = "LV"):
         """Initialize the functions
 
         :param mesh: The mesh
@@ -313,6 +313,7 @@ class VolumeTarget(OptimizationTarget):
         self._X = SpatialCoordinate(mesh)
         self._N = FacetNormal(mesh)
         self.dmu = dmu
+        self.chamber = chamber
         
         self.target_space = FunctionSpace(mesh, "R", 0)
         self.endoarea = Constant(assemble(Constant(1.0)*dmu),
@@ -320,15 +321,15 @@ class VolumeTarget(OptimizationTarget):
         OptimizationTarget.__init__(self, mesh)
 
     def print_head(self):
-        return "\t{:<15}\t{:<18}\t{:<10}".format("Target Volume",
-                                                 "Simulated Volume",
-                                                 "I_volume")
+        return "\t{:<18}\t{:<20}\t{:<10}".format("Target {} Volume".format(self.chamber),
+                                                 "Simulated {} Volume".format(self.chamber),
+                                                 "I_{}".format(self.chamber))
     def print_line(self):
         v_sim = gather_broadcast(self.simulated_fun.vector().array())[0]
         v_meas = gather_broadcast(self.target_fun.vector().array())[0]
         I = self.get_value()
         
-        return "\t{:<15.2f}\t{:<18.2f}\t{:<10.2e}".format(v_meas, v_sim, I)
+        return "\t{:<18.2f}\t{:<20.2f}\t{:<10.2e}".format(v_meas, v_sim, I)
         
     def load_target_data(self, target_data, n):
         """Load the target data
@@ -417,7 +418,7 @@ class Regularization(object):
         elif self.space == "regional":
             m_arr = gather_broadcast(m.vector().array())
             m_mean = Constant([m_arr.mean()]*17)
-            return (inner(m-m_mean, m-m_mean)/self.mesh_vol)*self.dx
+            return (inner(m-m_mean, m-m_mean)/self.meshvol)*self.dx
         else:
             return Constant(0.0)*self.dx
 
