@@ -43,7 +43,9 @@ class BasicForwardRunner(object):
                  optimization_targets,
                  params):
 
+        
         self.bcs = bcs
+        self.mesh_type = params["Patient_parameters"]["mesh_type"]
         self.solver_parameters = solver_parameters
         self.p_lv = p_lv
         self.target_params = params["Optimization_targets"]
@@ -57,6 +59,34 @@ class BasicForwardRunner(object):
             target.set_target_functions()
 
         self.optimization_targets = optimization_targets
+
+    def _print_head(self):
+        
+        head = "{:<12}".format("LV Pressure")
+        if self.mesh_type == "biv":
+            head += "{:<12}".format("RV Pressure") 
+        for key,val in self.target_params.iteritems():
+                if val: head+= self.optimization_targets[key].print_head()
+
+        head += self.regularization.print_head()
+        return head
+
+    def _print_line(self, it):
+        
+        line= "{:<12.2f}".format(self.bcs["pressure"][it])
+        if self.mesh_type == "biv":
+            line += "{:<12.2f}".format(self.bcs["rv_pressure"][it]) 
+        for key,val in self.target_params.iteritems():
+            if val: line+= self.optimization_targets[key].print_line()
+
+        line += self.regularization.print_line()
+        return line
+
+    def _print_functional(self):
+        return "\nFuncional = {}\n".format((len(self.opt_weights.keys())*" {{}}*I_{} +").\
+                                            format(*self.opt_weights.keys())[:-1].\
+                                            format(*self.opt_weights.values()))
+        
         
 
     def solve_the_forward_problem(self, annotate = False, phm=None, phase = "passive"):
@@ -82,17 +112,9 @@ class BasicForwardRunner(object):
 
 
         # Print the functional
-        logger.info("\nFuncional = {}\n".format((len(self.opt_weights.keys())*" {{}}*I_{} +").\
-                                            format(*self.opt_weights.keys())[:-1].\
-                                            format(*self.opt_weights.values())))
-                                            
-        # Print the head
-        head = "{:<10}".format("Pressure")
-        for key,val in self.target_params.iteritems():
-                if val: head+= self.optimization_targets[key].print_head()
-
-        head += self.regularization.print_head()
-        logger.info(head)
+        logger.info(self._print_functional())                               
+        # Print the head of table 
+        logger.info(self._print_head())
        
 
         func_lst = []
@@ -133,12 +155,7 @@ class BasicForwardRunner(object):
 
 
             # Print the values
-            line= "{:<10.2f}".format(p)
-            for key,val in self.target_params.iteritems():
-                if val: line+= self.optimization_targets[key].print_line()
-
-            line += self.regularization.print_line()
-            logger.info(line)
+            logger.info(self._print_line(it))
             
 
             if phase == "active":
@@ -158,10 +175,10 @@ class BasicForwardRunner(object):
                                                    functionals_time)
 
         
-        self.print_finished_report(forward_result)
+        # self._print_finished_report(forward_result)
         return forward_result
     
-    def print_finished_report(self, forward_result):
+    def _print_finished_report(self, forward_result):
 
         # from IPython import embed; embed()
         # exit()
@@ -186,7 +203,7 @@ class BasicForwardRunner(object):
               "states": self.states,
               "bcs": self.bcs,
               "total_functional": list_sum(functionals_time),
-              "func_value": sum(functional_values) }
+              "func_value": sum(functional_values)}
              
         return fr
 

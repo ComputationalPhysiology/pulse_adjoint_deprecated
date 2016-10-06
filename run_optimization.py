@@ -17,7 +17,7 @@
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfinimport import *
 from setup_optimization import setup_simulation, logger, MyReducedFunctional, get_measurements
-from utils import Text, Object, pformat, print_optimization_report, contract_point_exists, get_spaces,  UnableToChangePressureExeption
+from utils import Text, Object, pformat, print_line, print_head, contract_point_exists, get_spaces,  UnableToChangePressureExeption
 from forward_runner import ActiveForwardRunner, PassiveForwardRunner
 from optimization_targets import *
 from numpy_mpi import *
@@ -162,11 +162,12 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     else:
         # Use gamma from the previous point as initial guess
         # Load gamma from previous point
+        g_temp = Function(gamma.function_space())
         with HDF5File(mpi_comm_world(), params["sim_file"], "r") as h5file:
-            h5file.read(gamma, "alpha_{}/active_contraction/contract_point_{}/parameters/activation_parameter_function/".format(params["alpha"], params["active_contraction_iteration_number"]-1))
-  
+            h5file.read(g_temp.vector(), "active_contraction/contract_point_{}/parameters/activation_parameter/".format(params["active_contraction_iteration_number"]-1), True)
+        gamma.assign(g_temp)
         
-
+    
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
     
@@ -227,6 +228,14 @@ def store(params, rd, opt_controls, opt_result=None):
 
 
 def solve_oc_problem(params, rd, paramvec):
+    """Solve the optimal control problem
+
+    :param params: Application parameters
+    :param rd: The reduced functional
+    :param paramvec: The control parameter(s)
+
+    """
+    
 
     paramvec_arr = gather_broadcast(paramvec.vector().array())
     opt_params = params["Optimization_parmeteres"]
@@ -268,7 +277,7 @@ def solve_oc_problem(params, rd, paramvec):
                 ub = np.array([0.0]*nvar)
             else: # Active stress
                 lb = np.array([0.0]*nvar)
-                ub = np.array([1.0]*nvar)
+                ub = np.array([10.0]*nvar)
 
             tol= opt_params["active_opt_tol"]
             max_iter = opt_params["active_maxiter"]
@@ -419,10 +428,45 @@ def solve_oc_problem(params, rd, paramvec):
         
         print_optimization_report(params, rd.paramvec, rd.initial_paramvec,
                                   rd.ini_for_res, rd.for_res, opt_result)
+        
         logger.info(Text.blue("\nForward solution at optimal parameters"))
         val = rd.for_run(paramvec, False)
         store(params, rd, paramvec, opt_result)
 
+def print_optimization_report(params, opt_controls, init_controls, 
+                              ini_for_res, opt_for_res, opt_result = None):
+
+    from numpy_mpi import gather_broadcast
+
+    if opt_result:
+        logger.info("\nOptimization terminated...")
+        logger.info("\tExit status {}".format(opt_result["status"]))
+        logger.info("\tMessage: {}".format(opt_result["message"]))
+        logger.info("\tFunction Evaluations: {}".format(opt_result["nfev"]))
+        logger.info("\tGradient Evaluations: {}".format(opt_result["njev"]))
+        logger.info("\tNumber of iterations: {}".format(opt_result["nit"]))
+        logger.info("\tNumber of crashes: {}".format(opt_result["ncrash"]))
+        logger.info("\tRun time: {:.2f} seconds".format(opt_result["run_time"]))
+
+    logger.info("\nFunctional Values")
+    logger.info(" "*7+"\t"+print_head(ini_for_res, False))
+    logger.info("{:7}\t{}".format("Initial", print_line(ini_for_res)))
+    logger.info("{:7}\t{}".format("Optimal", print_line(opt_for_res)))
+
+    if params["phase"] == PHASES[0]:
+        logger.info("\nMaterial Parameters")
+        logger.info("Initial {}".format(init_controls))
+        logger.info("Optimal {}".format(gather_broadcast(opt_controls.vector().array())))
+    else:
+        logger.info("\nContraction Parameter")
+        logger.info("\tMin\tMean\tMax")
+        logger.info("Initial\t{:.5f}\t{:.5f}\t{:.5f}".format(init_controls.min(), 
+                                                             init_controls.mean(), 
+                                                             init_controls.max()))
+        opt_controls_arr = gather_broadcast(opt_controls.vector().array())
+        logger.info("Optimal\t{:.5f}\t{:.5f}\t{:.5f}".format(opt_controls_arr.min(), 
+                                                             opt_controls_arr.mean(), 
+                                                             opt_controls_arr.max()))
 
 
 def load_target_data(measurements, params, optimization_targets):
@@ -440,18 +484,26 @@ def load_target_data(measurements, params, optimization_targets):
 
     # The point in the acitve phase (0 if passive)
     acin = params["active_contraction_iteration_number"]
+    biv = params["Patient_parameters"]["mesh_type"] == "biv"
 
     # Load boundary conditions
     bcs = {}
-    if params["phase"] == PHASES[0]:
-        pressure = measurements["pressure"]
-        # seg_verts = measurements.seg_verts
-    else:
-        pressure = measurements["pressure"][acin: 2 + acin]
-        # seg_verts = measurements.seg_verts[acin: 2 + acin]
+
+    pressure = measurements["pressure"]
+    if biv:
+        rv_pressure = measurements["rv_pressure"]
+        
+    
+    if params["phase"] == PHASES[1]:
+        pressure = pressure[acin: 2 + acin]
+        if biv:
+            rv_pressure = rv_pressure[acin: 2 + acin]
         
     bcs["pressure"] = pressure
-    # bcs["seg_verts"] = seg_verts
+    if biv:
+        bcs["rv_pressure"] = rv_pressure
+    
+
 
     # Load the target data into dofin functions
     for key, val in params["Optimization_targets"].iteritems():
@@ -461,7 +513,7 @@ def load_target_data(measurements, params, optimization_targets):
             # Load the target data
             for it,p in enumerate(pressure):
                 optimization_targets[key].load_target_data(measurements[key], it+acin)
-
+                
     return optimization_targets, bcs
 
 
@@ -480,11 +532,24 @@ def get_optimization_targets(params, solver_parameters):
 
     if p["volume"]:
         
+        if params["Patient_parameters"]["mesh_type"] == "biv":
+            marker = "ENDO_LV"
+        else:
+            marker = "ENDO"
+            
         dS = Measure("exterior_facet",
                      subdomain_data = solver_parameters["facet_function"],
-                     domain = mesh)(solver_parameters["markers"]["ENDO"][0])
+                     domain = mesh)(solver_parameters["markers"][marker][0])
         
-        targets["volume"] = VolumeTarget(mesh,dS)
+        targets["volume"] = VolumeTarget(mesh,dS, "LV")
+
+    if p["rv_volume"]:
+            
+        dS = Measure("exterior_facet",
+                     subdomain_data = solver_parameters["facet_function"],
+                     domain = mesh)(solver_parameters["markers"]["ENDO_RV"][0])
+        
+        targets["rv_volume"] = VolumeTarget(mesh,dS, "RV")
 
     if p["regional_strain"]:
 

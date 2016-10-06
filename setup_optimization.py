@@ -17,11 +17,27 @@
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfinimport import *
 import numpy as np
-from utils import Object, Text
+from utils import Object, Text, print_line, print_head
 from adjoint_contraction_args import *
 from numpy_mpi import *
 
 
+def check_parameters(params):
+    """Check that parameters are consistent.
+    If not change the parameters and print out
+    a warning
+
+    :param params: Application parameters
+
+    """
+
+    mesh_type = params["Patient_parameters"]
+
+    if mesh_type == "lv":
+
+        if params["Optimization_targets"]["rv_volume"]:
+            logger.Warning("Cannot optimize RV volume using an LV geometry")
+            params["Optimization_targets"]["rv_volume"] = False
 
 def setup_adjoint_contraction_parameters():
 
@@ -44,6 +60,8 @@ def setup_adjoint_contraction_parameters():
     params.add(optweigths_active_parameters)
     optweigths_passive_parameters = setup_passive_optimization_weigths(opttarget_parameters)
     params.add(optweigths_passive_parameters)
+
+    check_parameters(params)
     
     return params
     
@@ -83,15 +101,15 @@ def setup_general_parameters():
 
 def setup_patient_parameters():
     params = Parameters("Patient_parameters")
-    params.add("patient", DEFAULT_PATIENT)
-    params.add("patient_type", DEFAULT_PATIENT_TYPE)
+    params.add("patient", "CRT02")
+    params.add("patient_type", "full")
     params.add("weight_rule", DEFAULT_WEIGHT_RULE, WEIGHT_RULES)
     params.add("weight_direction", DEFAULT_WEIGHT_DIRECTION, WEIGHT_DIRECTIONS) 
     params.add("resolution", "low_res")
     params.add("fiber_angle_epi", 50)
     params.add("fiber_angle_endo", 40)
-    params.add("mesh_type", "lv", ["lv", "biv"])
-    params.add("include_sheets", True)
+    params.add("mesh_type", "biv", ["lv", "biv"])
+    params.add("include_sheets", False)
 
     return params
 
@@ -99,7 +117,8 @@ def setup_optimizationtarget_parameters():
 
     params = Parameters("Optimization_targets")
     params.add("volume", True)
-    params.add("regional_strain", True)
+    params.add("rv_volume", True)
+    params.add("regional_strain", False)
     params.add("full_strain", False)
     params.add("GL_strain", False)
     params.add("displacement", False)
@@ -111,6 +130,8 @@ def setup_active_optimization_weigths(targets):
     
     if targets["volume"]:
         params.add("volume", 0.95)
+    if targets["rv_volume"]:
+        params.add("rv_volume", 0.95)
     if targets["regional_strain"]:
         params.add("regional_strain", 0.05)
     if targets["full_strain"]:
@@ -130,6 +151,8 @@ def setup_passive_optimization_weigths(targets):
     
     if targets["volume"]:
         params.add("volume", 1.0)
+    if targets["rv_volume"]:
+        params.add("rv_volume", 1.0)
     if targets["regional_strain"]:
         params.add("regional_strain", 0.0)
     if targets["full_strain"]:
@@ -174,9 +197,9 @@ def setup_application_parameters():
     ## Models ##
 
     # Active model
-    params.add("active_model", "active_stress", ["active_strain",
-                                                       "active_strain_rossi",
-                                                       "active_stress"])
+    params.add("active_model", "active_strain", ["active_strain",
+                                                 "active_strain_rossi",
+                                                 "active_stress"])
 
 
     # State space
@@ -213,7 +236,7 @@ def setup_application_parameters():
     params.add("use_deintegrated_strains", False)
 
     # If you want to optimize passive parameters
-    params.add("optimize_matparams", True)
+    params.add("optimize_matparams", False)
 
     # If you want to use a zero initial guess for gamma (False),
     # or use gamma from previous iteration as initial guess (True)
@@ -271,35 +294,19 @@ def save_patient_data_to_simfile(patient, sim_file):
     file_format = "a" if os.path.isfile(sim_file) else "w"
     from mesh_generation.mesh_utils import save_geometry_to_h5
 
-    if hasattr(patient, "e_s"):
-        fields = [patient.e_f, patient.e_s, patient.e_sn]
-    else:
-        fields = [patient.e_f]
+    fields = []
+    for att in ["e_f", "e_s", "e_sn"]:
+        if hasattr(patient, att):
+            fields.append(getattr(patient, att))
 
-    local_basis = [patient.e_circ, patient.e_rad, patient.e_long]
-        
+    local_basis = []
+    for att in ["e_circ", "e_rad", "e_long"]:
+        if hasattr(patient, att):
+            local_basis.append(getattr(patient, att))
+    
     save_geometry_to_h5(patient.mesh, sim_file, "", patient.markers,
                             fields, local_basis)
-    
-    
-    # with HDF5File(mpi_comm_world(), sim_file, file_format) as h5file:
-    #     h5file.write(patient.mesh, 'geometry/mesh')
 
-        
-    #     fgroup = "microstructure"
-    #     names = []
-    #     for field in [patient.e_f, patient.e_s, patient.e_sn]:
-    #         name = "{}_{}".format(str(field), field.label())
-    #         fsubgroup = "{}/{}".format(fgroup, name)
-    #         h5file.write(field, fsubgroup)
-    #         h5file.attributes(fsubgroup)['name'] = field.name()
-    #         names.append(name)
-
-    #     elm = field.function_space().ufl_element()
-    #     family, degree = elm.family(), elm.degree()
-    #     fspace = '{}_{}'.format(family, degree)
-    #     h5file.attributes(fgroup)['space'] = fspace
-    #     h5file.attributes(fgroup)['names'] = ":".join(names)
 
 def load_synth_data(mesh, synth_output, num_points, use_deintegrated_strains = False):
     pressure = []
@@ -401,15 +408,30 @@ def make_solver_params(params, patient, measurements):
         gamma = Function(gamma_space, name = 'activation parameter')
 
 
-    strain_weights = patient.strain_weights
+    strain_weights = None if not hasattr(patient, "strain_weights") else patient.strain_weights
     
     strain_weights_deintegrated = patient.strain_weights_deintegrated \
       if params["use_deintegrated_strains"] else None
     
         
 
-    p_lv = Expression("t", t = measurements["pressure"][0], name = "LV_endo_pressure")
+    # Neumann BC
+    neuman_bc = []
+    
+    p_lv = Expression("t", t = measurements["pressure"][0],
+                      name = "LV_endo_pressure")
     N = FacetNormal(patient.mesh)
+
+    if patient.mesh_type == "biv":
+        p_rv = Expression("t", t = measurements["rv_pressure"][0],
+                          name = "RV_endo_pressure")
+        
+        neumann_bc = [[p_lv, patient.ENDO_LV],
+                     [p_rv, patient.ENDO_RV]]
+    else:
+        neumann_bc = [[p_lv, patient.ENDO]]
+
+    
 
     # Direchlet BC at the Base
     try:
@@ -427,41 +449,10 @@ def make_solver_params(params, patient, measurements):
         
         robin_bc = [None]
        
-        
         # Expression for defining the boundary conditions
         base_bc_y = BaseExpression(mesh_verts, seg_verts, "y", base_it, name = "base_expr_y")
         base_bc_z = BaseExpression(mesh_verts, seg_verts, "z", base_it, name = "base_expr_z")
-        
-
-        if 0:
-            # Plot the points on the endoring
-            sub_domains = MeshFunction("size_t", patient.mesh, 0)
-            sub_domains.set_all(0)
-            endoring.mark(sub_domains, 1)
-            plot(sub_domains, interactive=True)
             
-            base_it.t = 1.0
-            V = FunctionSpace(patient.mesh, "CG", 1)
-            VV = VectorFunctionSpace(patient.mesh, "CG", 1, dim = 3)
-
-            funy = interpolate(base_bc_y, V)
-            funz = interpolate(base_bc_z, V)
-
-            u_dir_weak = Function(VV)
-    
-            fa = [FunctionAssigner(VV.sub(i+1), V) for i in range(2)]
-            fa[0].assign(u_dir_weak.split()[1], funy)
-            fa[1].assign(u_dir_weak.split()[2], funz)
-        
-            plot(funy, title = "y")
-            plot(funz, title = "z")
-            plot(u_dir_weak, title = "y+z")
-            interactive()
-            exit()
-
-            
-            
-   
         def base_bc(W):
             """
             Fix base in the x = 0 plane, and fix the vertices at 
@@ -525,7 +516,14 @@ def make_solver_params(params, patient, measurements):
         material = HolzapfelOgden(patient.e_f, gamma, matparams,
                                       params["active_model"], patient.strain_markers)
 
-    crl_basis = (patient.e_circ, patient.e_rad, patient.e_long)
+    # Circumferential, Radial and Longitudinal basis vector
+    crl_basis = {}
+    for att in ["e_circ", "e_rad", "e_long"]:
+        if hasattr(patient, att):
+            crl_basis[att] = getattr(patient, att)
+
+    
+
     
     solver_parameters = {"mesh": patient.mesh,
                          "facet_function": patient.facets_markers,
@@ -544,7 +542,7 @@ def make_solver_params(params, patient, measurements):
                                             "lambda": params["incompressibility_penalty"]},
                          "material": material,
                          "bc":{"dirichlet": base_bc,
-                               "neumann":[[p_lv, patient.ENDO]],
+                               "neumann":neumann_bc,
                                "robin": robin_bc},
                          "solve":setup_solver_parameters()}
 
@@ -555,9 +553,6 @@ def make_solver_params(params, patient, measurements):
     logger.info("\ta_f   = {:.3f}".format(pararr[1]))
     logger.info("\tb     = {:.3f}".format(pararr[2]))
     logger.info("\tb_f   = {:.3f}".format(pararr[3]))
-    # logger.info('\talpha = {}'.format(params["alpha"]))
-    # logger.info('\talpha_matparams = {}'.format(params["alpha_matparams"]))
-    # logger.info('\treg_par = {}\n'.format(params["reg_par"]))
 
 
     if params["phase"] in [PHASES[0], PHASES[2]]:
@@ -618,7 +613,7 @@ def get_measurements(params, patient):
         # Compute offsets
         # Choose the pressure at the beginning as reference pressure
         reference_pressure = pressure[0] 
-        logger.info("Pressure offset = {} kPa".format(reference_pressure))
+        logger.info("LV Pressure offset = {} kPa".format(reference_pressure))
 
         #Here the issue is that we do not have a stress free reference mesh. 
         #The reference mesh we use is already loaded with a certain
@@ -626,18 +621,38 @@ def get_measurements(params, patient):
         pressure = np.subtract(pressure,reference_pressure)
         
         measurements["pressure"] = pressure[start:end]
+
+        if patient.mesh_type == "biv":
+            rv_pressure = np.array(patient.RVP)
+            reference_pressure = rv_pressure[0]
+            logger.info("RV Pressure offset = {} kPa".format(reference_pressure))
+            rv_pressure = np.subtract(rv_pressure, reference_pressure)
+            measurements["rv_pressure"] = rv_pressure[start:end]
+            
         
         
         ## Volume
         if p["volume"]:
             # Calculate difference bwtween calculated volume, and volume given from echo
             volume_offset = get_volume_offset(patient)
-            logger.info("Volume offset = {} cm3".format(volume_offset))
+            logger.info("LV Volume offset = {} cm3".format(volume_offset))
 
             # Subtract this offset from the volume data
             volume = np.subtract(patient.volume,volume_offset)
 
             measurements["volume"] = volume[start:end]
+
+
+        if p["rv_volume"]:
+            # Calculate difference bwtween calculated volume, and volume given from echo
+            volume_offset = get_volume_offset(patient, "rv")
+            logger.info("RV Volume offset = {} cm3".format(volume_offset))
+
+            # Subtract this offset from the volume data
+            volume = np.subtract(patient.RVV ,volume_offset)
+
+            measurements["rv_volume"] = volume[start:end]
+                
 
         if p["regional_strain"]:
 
@@ -646,38 +661,27 @@ def get_measurements(params, patient):
                 strain[region] = patient.strain[region][start:end]
                 
             measurements["regional_strain"] = strain
-        
-       
-    
-    # measurements = Object()
-    # # Volume
-    # measurements.volume = volume[start:end]
-    
-    # # Pressure
-    # measurements.pressure = pressure[start:end]
-
-    # # Endoring vertex coordinates from segementation
-    # measurements.seg_verts = None if not hasattr(patient, 'seg_verts') else patient.seg_verts[start:end]
-    
-    # # Strain 
-    # if  params["use_deintegrated_strains"]:
-    #     strain, strain_deintegrated = strain
-    #     measurements.strain_deintegrated = strain_deintegrated[start:end] 
-    # else:
-    #     measurements.strain_deintegrated = None
-
-
-    # strains = {}
-    # for region in STRAIN_REGION_NUMS:
-    #     strains[region] = strain[region][start:end]
-    # measurements.strain = strains
     
 
     return measurements
 
-def get_volume_offset(patient):
+def get_volume_offset(patient, chamber = "lv"):
     N = FacetNormal(patient.mesh)
-    ds = Measure("exterior_facet", subdomain_data = patient.facets_markers, domain = patient.mesh)(patient.ENDO)
+
+    if chamber == "lv":
+    
+        if patient.mesh_type == "biv":
+            endo_marker = patient.ENDO_LV
+        else:
+            endo_marker = patient.ENDO
+
+    else:
+        endo_marker = patient.ENDO_RV
+        
+    ds = Measure("exterior_facet",
+                 subdomain_data = patient.facets_markers,
+                 domain = patient.mesh)(endo_marker)
+    
     X = SpatialCoordinate(patient.mesh)
     
     # Divide by 1000 to get the volume in ml
@@ -706,6 +710,7 @@ class MyReducedFunctional(ReducedFunctional):
         self.controls_lst = []
         self.initial_paramvec = gather_broadcast(paramvec.vector().array())
 
+
     def __call__(self, value):
         adj_reset()
         self.iter += 1
@@ -729,7 +734,9 @@ class MyReducedFunctional(ReducedFunctional):
             # Store initial results 
             self.ini_for_res = self.for_res
             self.first_call = False
-            # logger.info("Iter\tI_tot\t\tI_vol\t\tI_strain\tI_reg")
+
+            # Some printing
+            logger.info(print_head(self.for_res))
 	 
         
         control = Control(self.paramvec)
@@ -751,15 +758,13 @@ class MyReducedFunctional(ReducedFunctional):
 
         self.func_values_lst.append(func_value)
         self.controls_lst.append(Vector(paramvec_new.vector()))
+
         
         logger.debug(Text.yellow("Stop annotating"))
         parameters["adjoint"]["stop_annotating"] = True
 
-        # logger.info("{}\t{:.3e}\t{:.3e}\t{:.3e}\t{:.3e}".format(self.iter, 
-        #                                                        func_value, 
-        #                                                        self.for_res.func_value_volume, 
-        #                                                        self.for_res.func_value_strain, 
-        #                                                        self.for_res.gamma_gradient))
+        # Some printing
+        logger.info(print_line(self.for_res, self.iter))
 
         return self.scale*func_value
 

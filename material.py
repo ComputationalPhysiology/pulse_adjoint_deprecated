@@ -278,7 +278,6 @@ class HolzapfelOgden(Material):
         self.s0 = s0
         self.n0 = n0
         
-        self.strain_markers = strain_markers
         self.gamma = Constant(0, name="gamma") if gamma is None else gamma
 
         
@@ -296,8 +295,8 @@ class HolzapfelOgden(Material):
 
 
     def default_parameters(self):
-        return {"a":0.291, "a_f":2.582, 
-                "b":5.0, "b_f":5.0}
+        return {"a":2.28, "a_f":1.685, 
+                "b":9.726, "b_f":15.779}
 
 
     def W_1(self, I_1, diff=0, *args, **kwargs):
