@@ -36,46 +36,30 @@ class AutoVivification(dict):
 
 # Dummy object
 class Object(object):pass
+def print_head(for_res, display_iter = True):
+        
+    targets = for_res["optimization_targets"]
+    reg  = for_res["regularization"]
+    keys = targets.keys()+["regularization"]
+    n = len(keys)
 
-def print_optimization_report(params, opt_controls, init_controls, 
-                              ini_for_res, opt_for_res, opt_result = None):
+    head = "\n{:<6}\t".format("Iter") if display_iter else "\n"+" "*7
+    head += "{:<7}\t".format("I_tot") + \
+           "\t"+(n*"I_{:<10}\t").format(*keys)
+    return head
 
-    from numpy_mpi import gather_broadcast
-
-    if opt_result:
-        logger.info("\nOptimization terminated...")
-        logger.info("\tExit status {}".format(opt_result["status"]))
-        # logger.info("\tSuccess: {}".format(opt_result["success"]))
-        logger.info("\tMessage: {}".format(opt_result["message"]))
-        logger.info("\tFunction Evaluations: {}".format(opt_result["nfev"]))
-        logger.info("\tGradient Evaluations: {}".format(opt_result["njev"]))
-        logger.info("\tNumber of iterations: {}".format(opt_result["nit"]))
-        logger.info("\tNumber of crashes: {}".format(opt_result["ncrash"]))
-        logger.info("\tRun time: {:.2f} seconds".format(opt_result["run_time"]))
-
-    logger.info("\nFunctional Values")
-    logger.info("\tTotal\t\tStrain\t\tVolume")
-    logger.info("Initial\t{:.2e}\t{:.2e}\t{:.2e}".format(ini_for_res.func_value, 
-                                                         ini_for_res.func_value_strain,
-                                                         ini_for_res.func_value_volume))
-    logger.info("Optimal\t{:.2e}\t{:.2e}\t{:.2e}".format(opt_for_res.func_value, 
-                                                         opt_for_res.func_value_strain,
-                                                         opt_for_res.func_value_volume))
-
-    if params["phase"] == PHASES[0]:
-        logger.info("\nMaterial Parameters")
-        logger.info("Initial {}".format(init_controls))
-        logger.info("Optimal {}".format(gather_broadcast(opt_controls.vector().array())))
-    else:
-        logger.info("\nContraction Parameter")
-        logger.info("\tMin\tMean\tMax")
-        logger.info("Initial\t{:.5f}\t{:.5f}\t{:.5f}".format(init_controls.min(), 
-                                                             init_controls.mean(), 
-                                                             init_controls.max()))
-        opt_controls_arr = gather_broadcast(opt_controls.vector().array())
-        logger.info("Optimal\t{:.5f}\t{:.5f}\t{:.5f}".format(opt_controls_arr.min(), 
-                                                             opt_controls_arr.mean(), 
-                                                             opt_controls_arr.max()))
+def print_line(for_res, it = None):
+    
+    func_value = for_res["func_value"]
+    targets = for_res["optimization_targets"]
+    reg  = for_res["regularization"]
+    values = [sum(t.results["func_value"]) for t in targets.values()] + \
+             [sum(reg.results["func_value"])]
+    n = len(values)
+    line = "{:<6d}\t".format(it) if it is not None else ""
+    line += "{:<7.2e}".format(func_value) + \
+           "\t"+(n*"{:<10.2e}\t").format(*values)
+    return line
 
 def passive_inflation_exists(params):
     import h5py, os
@@ -127,10 +111,10 @@ def contract_point_exists(params):
 
    
     try:
-
+        
         # Check if pv point is already computed
         if key1 in h5file.keys() and key2 in h5file[key1].keys():
-            pressure = np.array(h5file[key1][key2]["lv_pressures"])[0]
+            pressure = np.array(h5file[key1][key2]["bcs"]["pressure"])[-1]
             logger.info(Text.green("Contract point {}, pressure = {:.3f} {}".format(params["active_contraction_iteration_number"],
                                                                                     pressure, "fetched from database")))
             h5file.close()
@@ -138,7 +122,7 @@ def contract_point_exists(params):
         logger.info(Text.blue("Contract point {}, {}".format(params["active_contraction_iteration_number"],"Run Optimization")))
         h5file.close()
         return False
-    except:
+    except KeyError:
         return False
 
 def list_sum(l):
