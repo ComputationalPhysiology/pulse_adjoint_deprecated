@@ -28,16 +28,20 @@ class BasicHeartProblem(collections.Iterator):
     """
     This is a basic class for the heart problem.
     """
-    def __init__(self, bcs, solver_parameters, p_lv):
+    def __init__(self, bcs, solver_parameters, pressure):
 
-        self._init_pressures(bcs["pressure"], p_lv)
+        self._init_pressures(bcs["pressure"], pressure["p_lv"], "lv")
+        self.p_lv.t = self.lv_pressure[0]
+        
+        if pressure.has_key("p_rv"):
+            self.has_rv = True
+            self._init_pressures(bcs["rv_pressure"], pressure["p_rv"], "rv")
+            self.p_rv.t = self.rv_pressure[0]
+        else:
+            self.has_rv = False
 
         # Mechanical solver Active strain Holzapfel and Ogden
         self.solver = LVSolver(solver_parameters)
-        
-        # Start with the first pressure
-        self.p_lv.t = self.pressure[0]
-        
     
         self.base_bc_from_seg = solver_parameters["base_bc_y"] is not None
 
@@ -88,46 +92,79 @@ class BasicHeartProblem(collections.Iterator):
         Step up the pressure to the next given
         pressure and solve the force-balance equations
         """
-        p_next = self.pressure_gen.next()
-        p_prev = self.p_lv.t
+        p_lv_next = self.lv_pressure_gen.next()
+        p_lv_prev = self.p_lv.t
 
-        p_diff = abs(p_next - p_prev)
-        if p_diff < DOLFIN_EPS:
-            return self.solver.solve()[0]
+        if self.has_rv:
+            p_rv_next = self.rv_pressure_gen.next()
+            p_rv_prev = self.p_rv.t
+            
+        # p_diff = abs(p_next - p_prev)
+        # if p_diff < DOLFIN_EPS:
+        #     return self.solver.solve()[0]
 
-        logger.debug("Increase pressure:  previous   next")
-        logger.debug("\t            {:.3f}     {:.3f}".format(p_prev, p_next))
+        head = "{:<20}\t{:<15}\t{:<15}".format("Increase pressure:",
+                                               "previous (lv)",
+                                               "next (lv)")
+        line = " "*20+"\t{:<15}\t{:<15}".format(p_lv_prev,
+                                                p_lv_next)
+        if self.has_rv:
+            head += "\t{:<15}\t{:<15}".format("previous (rv)",
+                                               "next (rv)")
+            line += "\t{:<15}\t{:<15}".format(p_rv_prev,
+                                              p_rv_next)
+            
+        logger.debug(head)
+        logger.debug(line)
 
         converged = False
         # nsteps = max(2, int(math.ceil(p_diff/PRESSURE_INC_LIMIT)))
         # nsteps = np.ceil(abs((p_next - p_prev)/(p_prev+1)))
         nsteps = 2
         n_max = 100
-        pressures = np.linspace(p_prev, p_next, nsteps)
-        p = p_prev
-
+        
+        lv_pressures = np.linspace(p_lv_prev, p_lv_next, nsteps)
+        p_lv = p_lv_prev
+        
+        if self.has_rv:
+            rv_pressures = np.linspace(p_rv_prev, p_rv_next, nsteps)
+            p_rv = p_rv_prev
+            
+    
         while not converged and nsteps < n_max:
 
             crash = False
-            for p in pressures[1:]:
-                self.p_lv.t = p
+            for it, p_lv in enumerate(lv_pressures[1:], start = 1):
                 
-                logger.debug("\nSolve for pressure = {}".format(p))
+                self.p_lv.t = p_lv
+                
+                if self.has_rv:
+                    p_rv = rv_pressures[it]
+                    self.p_rv.t = p_rv
+                
+                logger.debug("\nSolve for lv pressure = {}".format(p_lv))
                 out, crash = self.solver.solve()
                 
                 
                 if crash:
-                    logger.warning("\nSolver chrashed when increasing pressure from {} to {}".format(p_prev, p))
+                    logger.warning("\nSolver chrashed when increasing pressure from {} to {}".format(p_lv_prev, p_lv))
                     logger.warning("Take smaller steps")
                     nsteps *= 2
-                    pressures = np.linspace(p_prev, p_next, nsteps)
+                    lv_pressures = np.linspace(p_lv_prev, p_lv_next, nsteps)
+                    if self.has_rv:
+                        rv_pressures = np.linspace(p_rv_prev, p_rv_next, nsteps)
                     break
                 else:
-                    p_prev = p
+                    p_lv_prev = p_lv
+                    
                     # Adapt
                     nsteps = np.ceil(nsteps/1.5)
-                    pressures = np.linspace(p_prev, p_next, nsteps)
-                    converged = True if p == p_next else False
+                    lv_pressures = np.linspace(p_lv_prev, p_lv_next, nsteps)
+                    if self.has_rv:
+                        p_rv_prev = p_rv
+                        rv_pressures = np.linspace(p_rv_prev, p_rv_next, nsteps)
+                        
+                    converged = True if p_lv == p_lv_next else False
                     break
                     
 
@@ -157,10 +194,12 @@ class BasicHeartProblem(collections.Iterator):
         """
         return assemble(self.vol_form)
 
-    def _init_pressures(self, pressure, p_lv):
-        self.pressure = pressure
-        self.pressure_gen = (p for p in pressure[1:])
-        self.p_lv = p_lv
+    def _init_pressures(self, pressure, p, chamber = "lv"):
+
+        setattr(self, "{}_pressure".format(chamber), pressure)
+        setattr(self, "{}_pressure_gen".format(chamber),  (p for p in pressure[1:]))
+        setattr(self, "p_{}".format(chamber), p)
+       
         
 
     def next(self):
@@ -264,7 +303,7 @@ class ActiveHeartProblem(BasicHeartProblem):
     def __init__(self,
                  bcs,
                  solver_parameters,
-                 p_lv,
+                 pressure,
                  params,
                  annotate = False):
                    
@@ -272,7 +311,7 @@ class ActiveHeartProblem(BasicHeartProblem):
         
         passive_filling_duration = solver_parameters["passive_filling_duration"]
     
-        BasicHeartProblem.__init__(self, bcs, solver_parameters, p_lv)
+        BasicHeartProblem.__init__(self, bcs, solver_parameters, pressure)
 
         # Load the state from the previous iteration
         w_temp = Function(self.solver.get_state_space(), name = "w_temp")
@@ -426,13 +465,6 @@ class PassiveHeartProblem(BasicHeartProblem):
     Runs a biventricular simulation of the diastolic phase of the cardiac
     cycle. The simulation is driven by LV pressures and is quasi-static.
     """
-    def __init__(self, bcs, solver_parameters, p_lv):
-       
-        BasicHeartProblem.__init__(self, bcs,
-                                   solver_parameters,
-                                   p_lv)
-
-        
     def next(self):
         """
         Increase the pressure and solve the system

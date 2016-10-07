@@ -38,7 +38,7 @@ class BasicForwardRunner(object):
     
     def __init__(self,
                  solver_parameters,
-                 p_lv, 
+                 pressure, 
                  bcs,
                  optimization_targets,
                  params):
@@ -47,7 +47,9 @@ class BasicForwardRunner(object):
         self.bcs = bcs
         self.mesh_type = params["Patient_parameters"]["mesh_type"]
         self.solver_parameters = solver_parameters
-        self.p_lv = p_lv
+
+        self.pressure = pressure
+            
         self.target_params = params["Optimization_targets"]
 
         self.meshvol = Constant(assemble(Constant(1.0)*dx(solver_parameters["mesh"])),
@@ -211,7 +213,7 @@ class BasicForwardRunner(object):
 class ActiveForwardRunner(BasicForwardRunner):
     def __init__(self, 
                  solver_parameters, 
-                 p_lv, 
+                 pressure, 
                  bcs,
                  optimization_targets,
                  params,
@@ -229,7 +231,7 @@ class ActiveForwardRunner(BasicForwardRunner):
         
         BasicForwardRunner.__init__(self,
                                     solver_parameters,
-                                    p_lv,
+                                    pressure,
                                     bcs,
                                     optimization_targets,
                                     params)
@@ -241,7 +243,7 @@ class ActiveForwardRunner(BasicForwardRunner):
 
         self.cphm = ActiveHeartProblem(self.bcs,
                                        self.solver_parameters,
-                                       self.p_lv,
+                                       pressure,
                                        params,
                                        annotate = False)
 	
@@ -333,7 +335,7 @@ class ActiveForwardRunner(BasicForwardRunner):
 
 
 class PassiveForwardRunner(BasicForwardRunner):
-    def __init__(self, solver_parameters, p_lv, 
+    def __init__(self, solver_parameters, pressure, 
                  bcs, optimization_targets,
                  params, paramvec):
 
@@ -341,12 +343,12 @@ class PassiveForwardRunner(BasicForwardRunner):
         self.paramvec = paramvec
         BasicForwardRunner.__init__(self,
                                     solver_parameters,
-                                    p_lv, 
+                                    pressure, 
                                     bcs,
                                     optimization_targets,
                                     params)
 
-    def __call__(self, m, annotate = False, phm=None):
+    def __call__(self, m, annotate = False):
 
         self.paramvec.assign(m)
         paramvec = split(self.paramvec)
@@ -359,7 +361,7 @@ class PassiveForwardRunner(BasicForwardRunner):
      
         phm = PassiveHeartProblem(self.bcs,
                                   self.solver_parameters,
-                                  self.p_lv)
+                                  self.pressure)
 
         # Do an initial solve for the initial point
         parameters["adjoint"]["stop_annotating"] = True

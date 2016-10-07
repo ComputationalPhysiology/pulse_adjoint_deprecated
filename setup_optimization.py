@@ -428,9 +428,11 @@ def make_solver_params(params, patient, measurements):
         
         neumann_bc = [[p_lv, patient.ENDO_LV],
                      [p_rv, patient.ENDO_RV]]
+
+        pressure = {"p_lv":p_lv, "p_rv":p_rv}
     else:
         neumann_bc = [[p_lv, patient.ENDO]]
-
+        pressure = {"p_lv":p_lv}
     
 
     # Direchlet BC at the Base
@@ -556,11 +558,11 @@ def make_solver_params(params, patient, measurements):
 
 
     if params["phase"] in [PHASES[0], PHASES[2]]:
-        return solver_parameters, p_lv, paramvec
+        return solver_parameters, pressure, paramvec
     elif params["phase"] == PHASES[1]:
-        return solver_parameters, p_lv, gamma
+        return solver_parameters, pressure, gamma
     else:
-        return solver_parameters, p_lv
+        return solver_parameters, pressure
 
 def get_measurements(params, patient):
     """Get the measurement or the synthetic data
@@ -692,9 +694,9 @@ def setup_simulation(params, patient):
     
     # Load measurements
     measurements = get_measurements(params, patient)
-    solver_parameters, p_lv, controls = make_solver_params(params, patient, measurements)
+    solver_parameters, pressure, controls = make_solver_params(params, patient, measurements)
 
-    return measurements, solver_parameters, p_lv, controls
+    return measurements, solver_parameters, pressure, controls
 
 
 class MyReducedFunctional(ReducedFunctional):

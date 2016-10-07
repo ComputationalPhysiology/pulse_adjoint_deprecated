@@ -27,6 +27,8 @@ def setup_params():
     params = setup_adjoint_contraction_parameters()
 
     params["gamma_space"] = "CG_1"
+    params["Optimization_targets"]["rv_volume"] = False
+    params["Patient_parameters"]["mesh_type"] = "lv"
     params["Patient_parameters"]["patient"] = "test"
     params["Patient_parameters"]["patient_type"] = "test"
     params["sim_file"] = "data/test.h5"

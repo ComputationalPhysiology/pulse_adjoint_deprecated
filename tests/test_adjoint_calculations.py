@@ -118,5 +118,5 @@ def test_active():
 if __name__ == "__main__":
     # plot_displacements()
     # exit()
-    # test_passive()
+    test_passive()
     test_active()

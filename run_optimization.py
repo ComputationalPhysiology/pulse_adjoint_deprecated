@@ -37,19 +37,20 @@ def run_passive_optimization(params, patient):
     logger.info(Text.blue("\nRun Passive Optimization"))
 
     #Load patient data, and set up the simulation
-    measurements, solver_parameters, p_lv, paramvec = setup_simulation(params, patient)
+    measurements, solver_parameters, pressure, paramvec = setup_simulation(params, patient)
 
     rd, paramvec = run_passive_optimization_step(params, 
                                                  patient, 
                                                  solver_parameters, 
                                                  measurements, 
-                                                 p_lv, paramvec)
+                                                 pressure,
+                                                 paramvec)
 
     logger.info("\nSolve optimization problem.......")
     solve_oc_problem(params, rd, paramvec)
 
 
-def run_passive_optimization_step(params, patient, solver_parameters, measurements, p_lv, paramvec):
+def run_passive_optimization_step(params, patient, solver_parameters, measurements, pressure, paramvec):
     
     #Solve calls are not registred by libajoint
     logger.debug(Text.yellow("Stop annotating"))
@@ -73,7 +74,7 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
        
     #Initialize the solver for the Forward problem
     for_run = PassiveForwardRunner(solver_parameters, 
-                                   p_lv, 
+                                   pressure, 
                                    bcs,
                                    optimization_targets,
                                    params, 
@@ -105,7 +106,7 @@ def run_active_optimization(params, patient):
     logger.info(Text.blue("\nRun Active Optimization"))
 
     #Load patient data, and set up the simulation
-    measurements, solver_parameters, p_lv, gamma = setup_simulation(params, patient)
+    measurements, solver_parameters, pressure, gamma = setup_simulation(params, patient)
 
     # Loop over contract points
     i = 0
@@ -124,7 +125,8 @@ def run_active_optimization(params, patient):
                 try:
                     rd, gamma = run_active_optimization_step(params, patient, 
                                                              solver_parameters, 
-                                                             measurements, p_lv, 
+                                                             measurements,
+                                                             pressure, 
                                                              gamma)
                 except UnableToChangePressureExeption:
                     logger.info("Unable to change pressure. Exception caught")
@@ -149,7 +151,7 @@ def run_active_optimization(params, patient):
             
         i += 1
 
-def run_active_optimization_step(params, patient, solver_parameters, measurements, p_lv, gamma):
+def run_active_optimization_step(params, patient, solver_parameters, measurements, pressure, gamma):
 
     #Get initial guess for gamma
     if not params["nonzero_initial_guess"] or params["active_contraction_iteration_number"] == 0:
@@ -182,7 +184,7 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     parameters["adjoint"]["stop_annotating"] = False
    
     for_run = ActiveForwardRunner(solver_parameters,
-                                  p_lv,
+                                  pressure,
                                   bcs,
                                   optimization_targets,
                                   params,
