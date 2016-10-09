@@ -132,7 +132,7 @@ class RegionalStrainTarget(OptimizationTarget):
 
         :param mesh: The mesh
         :param crl_basis: Basis function for the cicumferential, radial
-                          and longituginal components
+                          and longituginal components (dict)
         :param dmu: Measure with subdomain information
         :param weights: Weights on the different segements
         
@@ -140,7 +140,12 @@ class RegionalStrainTarget(OptimizationTarget):
         self._name = "Regional Strain"
         self.target_space = VectorFunctionSpace(mesh, "R", 0, dim = 3)
         self.weights_arr = weights
-        self.crl_basis = crl_basis
+
+        self.crl_basis = []
+        for l in ["e_circ", "e_rad", "e_long"]:
+            if crl_basis.has_key(l):
+                self.crl_basis.append(crl_basis[l])
+        
         self.dmu = dmu
         OptimizationTarget.__init__(self, mesh)
 
@@ -309,7 +314,7 @@ class VolumeTarget(OptimizationTarget):
         :param mesh: Surface measure of the endocardium
         
         """
-        self._name = "Volume"
+        self._name = "{} Volume".format(chamber)
         self._X = SpatialCoordinate(mesh)
         self._N = FacetNormal(mesh)
         self.dmu = dmu
