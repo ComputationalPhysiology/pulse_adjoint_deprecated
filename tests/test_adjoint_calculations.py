@@ -106,34 +106,37 @@ def test_active(params):
     my_taylor_test(rd, gamma)
 
     
-def test():
+def test_lv():
 
     from itertools import product
-    spaces = ["CG_1", "regional", "R"]
-    mesh_types = ["lv", "biv"]
-    # spaces = ["CG_1"]
-    # mesh_types = ["biv"]
+    spaces = ["CG_1", "regional", "R_0"]
 
-    lv_opt_targets = ["volume", "regional_strain"]
-    rv_opt_targets = ["volume", "rv_volume"]
+    opt_targets = ["volume", "regional_strain"]
 
-    for space, mesh_type in product(spaces, mesh_types):
-        print space, mesh_type
-
-        if mesh_type == "lv": opt_targets = lv_opt_targets
-        if mesh_type == "biv": opt_targets = rv_opt_targets
-
-        if not(mesh_type == "biv" and space == "regional"):
-            params = setup_params(space, mesh_type, opt_targets)
+    for space in spaces:
+        params = setup_params(space, "lv", opt_targets)
         
-            test_passive(params)
-            test_active(params)
+        test_passive(params)
+        test_active(params)
+        
+def test_biv():
 
-            adj_reset()
+    from itertools import product
+    spaces = ["CG_1", "R_0"]
+
+    opt_targets = ["volume", "rv_volume"]
+
+    for space in spaces:
+        params = setup_params(space, "biv", opt_targets)
+        
+        test_passive(params)
+        test_active(params)
+     
+
 
 if __name__ == "__main__":
     # plot_displacements()
     # exit()
-    test()
+    test_biv()
     
    
