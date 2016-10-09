@@ -22,10 +22,7 @@ from pulse_adjoint.setup_optimization import initialize_patient_data, setup_simu
 from pulse_adjoint.adjoint_contraction_args import *
 from pulse_adjoint.utils import Text, pformat, passive_inflation_exists
 from test_utils import setup_params, my_taylor_test, store_results, plot_displacements
-def test_passive():
-    # dolfin.parameters["adjoint"]["fussy_replay"] = True
-    params = setup_params()
-    # params["base_bc"] =  "fix_x"
+def test_passive(params):
     
     patient = initialize_patient_data(params["Patient_parameters"], 
                                       params["synth_data"])
@@ -65,10 +62,7 @@ def test_passive():
     
 
 
-def test_active():
-
-    params = setup_params()
-    # params["base_bc"] =  "fix_x"
+def test_active(params):
     
     patient = initialize_patient_data(params["Patient_parameters"], 
                                       params["synth_data"])
@@ -112,11 +106,34 @@ def test_active():
     my_taylor_test(rd, gamma)
 
     
+def test():
 
-    
+    from itertools import product
+    spaces = ["CG_1", "regional", "R"]
+    mesh_types = ["lv", "biv"]
+    # spaces = ["CG_1"]
+    # mesh_types = ["biv"]
+
+    lv_opt_targets = ["volume", "regional_strain"]
+    rv_opt_targets = ["volume", "rv_volume"]
+
+    for space, mesh_type in product(spaces, mesh_types):
+        print space, mesh_type
+
+        if mesh_type == "lv": opt_targets = lv_opt_targets
+        if mesh_type == "biv": opt_targets = rv_opt_targets
+
+        if not(mesh_type == "biv" and space == "regional"):
+            params = setup_params(space, mesh_type, opt_targets)
+        
+            test_passive(params)
+            test_active(params)
+
+            adj_reset()
 
 if __name__ == "__main__":
     # plot_displacements()
     # exit()
-    test_passive()
-    test_active()
+    test()
+    
+   

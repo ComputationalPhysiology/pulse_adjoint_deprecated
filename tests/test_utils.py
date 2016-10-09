@@ -19,16 +19,32 @@ from dolfin import *
 from dolfin_adjoint import *
 import numpy as np
 from pulse_adjoint.adjoint_contraction_args import *
-from pulse_adjoint.setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters
+from pulse_adjoint.setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, setup_passive_optimization_weigths, setup_active_optimization_weigths
 from pulse_adjoint.numpy_mpi import *
 from pulse_adjoint.utils import Text
-def setup_params():
+def setup_params(space = "CG_1", mesh_type = "lv", opt_targets = ["volume"]):
     setup_general_parameters()
     params = setup_adjoint_contraction_parameters()
+    
+    for key in params["Optimization_targets"].keys():
+        if key in opt_targets:
+            params["Optimization_targets"][key] = True
+        else:
+            params["Optimization_targets"][key] = False
 
-    params["gamma_space"] = "CG_1"
-    params["Optimization_targets"]["rv_volume"] = False
-    params["Patient_parameters"]["mesh_type"] = "lv"
+
+    
+    # Update weights
+    pparams = setup_passive_optimization_weigths(params["Optimization_targets"])
+    aparams = setup_active_optimization_weigths(params["Optimization_targets"])
+
+    params.remove('Passive_optimization_weigths')
+    params.add(pparams)
+    params.remove('Active_optimization_weigths')
+    params.add(aparams)
+                
+    params["gamma_space"] = space
+    params["Patient_parameters"]["mesh_type"] = mesh_type
     params["Patient_parameters"]["patient"] = "test"
     params["Patient_parameters"]["patient_type"] = "test"
     params["sim_file"] = "data/test.h5"
