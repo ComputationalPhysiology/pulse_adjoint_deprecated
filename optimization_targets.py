@@ -422,7 +422,8 @@ class Regularization(object):
         
         elif self.space == "regional":
             m_arr = gather_broadcast(m.vector().array())
-            m_mean = Constant([m_arr.mean()]*17)
+          
+            m_mean = Constant([m_arr.mean()]*m._nvalues)
             return (inner(m-m_mean, m-m_mean)/self.meshvol)*self.dx
         else:
             return Constant(0.0)*self.dx

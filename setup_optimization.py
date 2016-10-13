@@ -31,13 +31,14 @@ def check_parameters(params):
 
     """
 
-    mesh_type = params["Patient_parameters"]
-
+    mesh_type = params["Patient_parameters"]["mesh_type"]
+    
     if mesh_type == "lv":
-
+    
         if params["Optimization_targets"]["rv_volume"]:
-            logger.Warning("Cannot optimize RV volume using an LV geometry")
+            logger.warning("Cannot optimize RV volume using an LV geometry")
             params["Optimization_targets"]["rv_volume"] = False
+            
 
 def setup_adjoint_contraction_parameters():
 
@@ -167,7 +168,6 @@ def setup_passive_optimization_weigths(targets):
     return params
     
 def setup_application_parameters():
-
     params = Parameters("Application_parmeteres")
 
     ## Output ##
@@ -197,7 +197,7 @@ def setup_application_parameters():
     ## Models ##
 
     # Active model
-    params.add("active_model", "active_strain", ["active_strain",
+    params.add("active_model", "active_stress", ["active_strain",
                                                  "active_strain_rossi",
                                                  "active_stress"])
 
@@ -372,7 +372,7 @@ def get_simulated_strain_traces(phm):
 def make_solver_params(params, patient, measurements):
     
     # Material parameters
-
+    
     # If we want to estimate material parameters, use the materal parameters
     # from the parameters
     if params["phase"] in [PHASES[0], PHASES[2]]:
@@ -785,10 +785,17 @@ class MyReducedFunctional(ReducedFunctional):
 
 class RegionalGamma(dolfin.Function):
     def __init__(self, meshfunction):
+
+        assert isinstance(meshfunction, MeshFunctionSizet), \
+            "Invalid meshfunction for regional gamma"
         
         mesh = meshfunction.mesh()
+
+        self._values = set(meshfunction.array())
+        self._nvalues = len(self._values)
         
-        V  = dolfin.VectorFunctionSpace(mesh, "R", 0, dim = 17)
+        
+        V  = dolfin.VectorFunctionSpace(mesh, "R", 0, dim = self._nvalues)
         
         dolfin.Function.__init__(self, V)
         self._meshfunction = meshfunction
@@ -798,9 +805,12 @@ class RegionalGamma(dolfin.Function):
        
         # Make indicator functions
         self._ind_functions = []
-        for i in range(1,18):
-            self._ind_functions.append(self._make_indicator_function(i))
+        for v in self._values:
+            self._ind_functions.append(self._make_indicator_function(v))
 
+    def get_values(self):
+        return self._values
+    
     def get_function(self):
         """
         Return linear combination of coefficents

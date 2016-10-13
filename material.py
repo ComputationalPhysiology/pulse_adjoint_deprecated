@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfinimport import *
+from setup_optimization import RegionalGamma
 
 
 def subplus(x):
@@ -36,9 +37,9 @@ class Material(object):
         Strain-energy density function.
         """
 
-     
+        
         # Activation
-        if self.gamma.value_size() == 17:
+        if isinstance(self.gamma, RegionalGamma):
             # This means a regional gamma
             # Could probably make this a bit more clean
             gamma = self.gamma.get_function()
@@ -102,7 +103,7 @@ class Material(object):
         
         """
         # Activation
-        if self.gamma.value_size() == 17:
+        if isinstance(self.gamma, RegionalGamma):
             # This means a regional gamma
             # Could probably make this a bit more clean
             gamma = self.gamma.get_function()
