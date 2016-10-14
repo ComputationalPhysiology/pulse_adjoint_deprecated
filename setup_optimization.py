@@ -57,9 +57,9 @@ def setup_adjoint_contraction_parameters():
     params.add(opttarget_parameters)
 
     # Weigths for each optimization target
-    optweigths_active_parameters = setup_active_optimization_weigths(opttarget_parameters)
+    optweigths_active_parameters = setup_active_optimization_weigths()
     params.add(optweigths_active_parameters)
-    optweigths_passive_parameters = setup_passive_optimization_weigths(opttarget_parameters)
+    optweigths_passive_parameters = setup_passive_optimization_weigths()
     params.add(optweigths_passive_parameters)
 
     check_parameters(params)
@@ -128,44 +128,31 @@ def setup_optimizationtarget_parameters():
     params.add("displacement", False)
     return params
 
-def setup_active_optimization_weigths(targets):
+def setup_active_optimization_weigths():
     
     params = Parameters("Active_optimization_weigths")
     
-    if targets["volume"]:
-        params.add("volume", 0.95)
-    if targets["rv_volume"]:
-        params.add("rv_volume", 0.95)
-    if targets["regional_strain"]:
-        params.add("regional_strain", 0.05)
-    if targets["full_strain"]:
-        params.add("full_strain", 1.0)
-    if targets["GL_strain"]:
-        params.add("GL_strain", 0.05)
-    if targets["displacement"]:
-        params.add("displacement", 1.0)
-
-    params.add("regularization", 0.0)
+    
+    params.add("volume", 0.95)
+    params.add("rv_volume", 0.95)
+    params.add("regional_strain", 0.05)
+    params.add("full_strain", 1.0)
+    params.add("GL_strain", 0.05)
+    params.add("displacement", 1.0)
+    params.add("regularization", 0.01)
         
     return params
 
-def setup_passive_optimization_weigths(targets):
+def setup_passive_optimization_weigths():
     
     params = Parameters("Passive_optimization_weigths")
     
-    if targets["volume"]:
-        params.add("volume", 1.0)
-    if targets["rv_volume"]:
-        params.add("rv_volume", 1.0)
-    if targets["regional_strain"]:
-        params.add("regional_strain", 0.0)
-    if targets["full_strain"]:
-        params.add("full_strain", 1.0)
-    if targets["GL_strain"]:
-        params.add("GL_strain", 0.05)
-    if targets["displacement"]:
-        params.add("displacement", 1.0)
-
+    params.add("volume", 1.0)
+    params.add("rv_volume", 1.0)
+    params.add("regional_strain", 0.0)
+    params.add("full_strain", 1.0)
+    params.add("GL_strain", 0.05)
+    params.add("displacement", 1.0)
     params.add("regularization", 0.0)
     
     return params

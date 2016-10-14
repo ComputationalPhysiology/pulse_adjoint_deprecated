@@ -85,6 +85,7 @@ class BasicForwardRunner(object):
         return line
 
     def _print_functional(self):
+        
         return "\nFuncional = {}\n".format((len(self.opt_weights.keys())*" {{}}*I_{} +").\
                                             format(*self.opt_weights.keys())[:-1].\
                                             format(*self.opt_weights.values()))
@@ -226,8 +227,12 @@ class ActiveForwardRunner(BasicForwardRunner):
         self.outdir = params["outdir"]
         self.active_contraction_iteration_number = params["active_contraction_iteration_number"]
         self.gamma_previous = gamma_previous
-        self.opt_weights = params["Passive_optimization_weigths"]
         
+        self.opt_weights = {}
+        for k, v in params["Active_optimization_weigths"].iteritems():
+            if k in self.optimization_targets.keys() or \
+               k == "regularization":
+                self.opt_weights[k] = v
         
         BasicForwardRunner.__init__(self,
                                     solver_parameters,
@@ -339,14 +344,21 @@ class PassiveForwardRunner(BasicForwardRunner):
                  bcs, optimization_targets,
                  params, paramvec):
 
-        self.opt_weights = params["Passive_optimization_weigths"]
-        self.paramvec = paramvec
+        
         BasicForwardRunner.__init__(self,
                                     solver_parameters,
                                     pressure, 
                                     bcs,
                                     optimization_targets,
                                     params)
+       
+        self.opt_weights = {}
+        for k, v in params["Passive_optimization_weigths"].iteritems():
+            if k in self.optimization_targets.keys() or \
+               k == "regularization":
+                self.opt_weights[k] = v
+                
+        self.paramvec = paramvec
 
     def __call__(self, m, annotate = False):
 
