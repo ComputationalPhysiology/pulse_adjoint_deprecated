@@ -107,6 +107,8 @@ def setup_patient_parameters():
     params.add("weight_rule", DEFAULT_WEIGHT_RULE, WEIGHT_RULES)
     params.add("weight_direction", DEFAULT_WEIGHT_DIRECTION, WEIGHT_DIRECTIONS) 
     params.add("resolution", "low_res")
+    params.add("pressure_path", "")
+    params.add("mesh_path", "")
     params.add("fiber_angle_epi", 50)
     params.add("fiber_angle_endo", 40)
     params.add("mesh_type", "biv", ["lv", "biv"])
@@ -122,6 +124,7 @@ def setup_optimizationtarget_parameters():
     params.add("regional_strain", False)
     params.add("full_strain", False)
     params.add("GL_strain", False)
+    params.add("GC_strain", False)
     params.add("displacement", False)
     return params
 
@@ -236,7 +239,7 @@ def setup_application_parameters():
     params.add("use_deintegrated_strains", False)
 
     # If you want to optimize passive parameters
-    params.add("optimize_matparams", False)
+    params.add("optimize_matparams", True)
 
     # If you want to use a zero initial guess for gamma (False),
     # or use gamma from previous iteration as initial guess (True)
@@ -710,6 +713,8 @@ class MyReducedFunctional(ReducedFunctional):
         self.nr_der_calls = 0
         self.func_values_lst = []
         self.controls_lst = []
+        self.forward_times = []
+        self.backward_times = []
         self.initial_paramvec = gather_broadcast(paramvec.vector().array())
 
 
@@ -729,7 +734,11 @@ class MyReducedFunctional(ReducedFunctional):
         parameters["adjoint"]["stop_annotating"] = False
 
         logger.setLevel(WARNING)
+        t = Timer("Forward run")
+        t.start()
         self.for_res, crash= self.for_run(paramvec_new, True)
+        for_time = t.stop()
+        self.forward_times.append(for_time)
         logger.setLevel(INFO)
 
         if self.first_call:
@@ -773,7 +782,15 @@ class MyReducedFunctional(ReducedFunctional):
     def derivative(self, *args, **kwargs):
         self.nr_der_calls += 1
         import math
+
+        t = Timer("Backward run")
+        t.start()
+        
         out = ReducedFunctional.derivative(self, forget = False)
+        
+        back_time = t.stop()
+        self.backward_times.append(back_time)
+        
         for num in out[0].vector().array():
             if math.isnan(num):
                 raise Exception("NaN in adjoint gradient calculation.")

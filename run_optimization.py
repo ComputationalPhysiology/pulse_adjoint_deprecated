@@ -279,7 +279,7 @@ def solve_oc_problem(params, rd, paramvec):
                 ub = np.array([0.0]*nvar)
             else: # Active stress
                 lb = np.array([0.0]*nvar)
-                ub = np.array([10.0]*nvar)
+                ub = np.array([100.0]*nvar)
 
             tol= opt_params["active_opt_tol"]
             max_iter = opt_params["active_maxiter"]
@@ -423,6 +423,8 @@ def solve_oc_problem(params, rd, paramvec):
             opt_result["run_time"] = run_time
             opt_result["controls"] = rd.controls_lst
             opt_result["func_vals"] = rd.func_values_lst
+            opt_result["forward_times"] = rd.forward_times
+            opt_result["backward_times"] = rd.backward_times
             x = opt_result.x
 
         assign_to_vector(paramvec.vector(), x)
