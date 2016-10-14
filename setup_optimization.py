@@ -420,9 +420,10 @@ def make_solver_params(params, patient, measurements):
 
     # Neumann BC
     neuman_bc = []
-    
+
+    V_real = FunctionSpace(patient.mesh, "R", 0)
     p_lv = Expression("t", t = measurements["pressure"][0],
-                      name = "LV_endo_pressure")
+                      name = "LV_endo_pressure", element = V_real.ufl_element())
     N = FacetNormal(patient.mesh)
 
     if patient.mesh_type == "biv":
@@ -528,7 +529,6 @@ def make_solver_params(params, patient, measurements):
             crl_basis[att] = getattr(patient, att)
 
     
-
     
     solver_parameters = {"mesh": patient.mesh,
                          "facet_function": patient.facets_markers,
@@ -698,7 +698,7 @@ def setup_simulation(params, patient):
     # Load measurements
     measurements = get_measurements(params, patient)
     solver_parameters, pressure, controls = make_solver_params(params, patient, measurements)
-
+   
     return measurements, solver_parameters, pressure, controls
 
 
@@ -808,7 +808,7 @@ class RegionalGamma(dolfin.Function):
         
         mesh = meshfunction.mesh()
 
-        self._values = set(meshfunction.array())
+        self._values = set(gather_broadcast(meshfunction.array()))
         self._nvalues = len(self._values)
         
         
