@@ -17,18 +17,37 @@
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, initialize_patient_data, save_patient_data_to_simfile
 from run_optimization import run_passive_optimization, run_active_optimization
-from adjoint_contraction_args import *
+
 from utils import passive_inflation_exists, contract_point_exists,  Text, pformat
 from dolfin_adjoint import adj_reset
+from adjoint_contraction_args import *
 
+def save_logger(params):
 
+    logfile = params["outdir"] + "/output.log"    
+    logging.basicConfig(filename=logfile,
+                        filemode='a',
+                        format='%(message)s',
+                        datefmt='%H:%M:%S',
+                        level=logging.INFO)
+    
+    ffc_logger = logging.getLogger('FFC')
+    ffc_logger.setLevel(logging.WARNING)
+    ufl_logger = logging.getLogger('UFL')
+    ufl_logger.setLevel(logging.WARNING)
 
+    import datetime
+    time = datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d %H:%M:%S')
+    logger.info("Time: {}".format(time))
+    
 
 def main(params):
 
+    save_logger(params)   
+    
     setup_general_parameters()
     
-
+    
     logger.info(Text.blue("Start Adjoint Contraction"))
     logger.info(pformat(params.to_dict()))
     
