@@ -53,8 +53,8 @@ def print_line(for_res, it = None):
     func_value = for_res["func_value"]
     targets = for_res["optimization_targets"]
     reg  = for_res["regularization"]
-    values = [sum(t.results["func_value"]) for t in targets.values()] + \
-             [sum(reg.results["func_value"])]
+    values = [t.func_value for t in targets.values()] + \
+             [reg.func_value]
     n = len(values)
     line = "{:<6d}\t".format(it) if it is not None else ""
     line += "{:<7.2e}".format(func_value) + \

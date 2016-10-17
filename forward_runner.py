@@ -93,7 +93,11 @@ class BasicForwardRunner(object):
         
 
     def solve_the_forward_problem(self, annotate = False, phm=None, phase = "passive"):
-	
+
+        # Set the functional value for each target to zero
+        for key,val in self.target_params.iteritems():
+            if val: self.optimization_targets[key].reset()
+                
         # Start the clock
         adj_start_timestep(0.0)
 
@@ -132,7 +136,7 @@ class BasicForwardRunner(object):
             # Add regulatization term to the functional
             m = phm.solver.parameters['material'].gamma
 
-            functional += self.regularization.get_functional(m)
+            funcgtional += self.regularization.get_functional(m)
             reg_term =  self.regularization.get_value()
 
         else:
@@ -228,11 +232,7 @@ class ActiveForwardRunner(BasicForwardRunner):
         self.active_contraction_iteration_number = params["active_contraction_iteration_number"]
         self.gamma_previous = gamma_previous
         
-        self.opt_weights = {}
-        for k, v in params["Active_optimization_weigths"].iteritems():
-            if k in self.optimization_targets.keys() or \
-               k == "regularization":
-                self.opt_weights[k] = v
+        
         
         BasicForwardRunner.__init__(self,
                                     solver_parameters,
@@ -241,6 +241,11 @@ class ActiveForwardRunner(BasicForwardRunner):
                                     optimization_targets,
                                     params)
 
+        self.opt_weights = {}
+        for k, v in params["Active_optimization_weigths"].iteritems():
+            if k in self.optimization_targets.keys() or \
+               k == "regularization":
+                self.opt_weights[k] = v
         
         
 

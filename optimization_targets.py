@@ -50,9 +50,14 @@ class OptimizationTarget(object):
         self.results = {"func_value": [],
                         "target": [],
                         "simulated":[]}
+        self.reset()
+
+    def reset(self):
+        self.func_value = 0.0
 
     def save(self):
-        self.results["func_value"].append(self.get_value())
+        self.func_value += self.get_value()
+        self.results["func_value"].append(self.func_value)
         self.results["target"].append(Vector(self.target_fun.vector()))
         self.results["simulated"].append(Vector(self.simulated_fun.vector()))
         
@@ -157,7 +162,8 @@ class RegionalStrainTarget(OptimizationTarget):
 
     def save(self):
         
-        self.results["func_value"].append(self.get_value())
+        self.func_value += self.get_value()
+        self.results["func_value"].append(self.func_value)
         target = []
         simulated = []
         for i in range(17):
@@ -395,6 +401,7 @@ class Regularization(object):
                                 name = "mesh volume")
         self.dx = dx(mesh)
         self.results = {"func_value":[]}
+        self.reset()
 
     def print_head(self):
         return "\t{:<10}".format("I_reg")
@@ -402,8 +409,12 @@ class Regularization(object):
         I = self.get_value()
         return "\t{:<10.2e}".format(I)
 
+    def reset(self):
+        self.func_value = 0.0
+
     def save(self):
-        self.results["func_value"].append(self._value)
+        self.func_value += self.get_value()
+        self.results["func_value"].append(self.func_value)
 
     def set_target_functions(self):
         pass
