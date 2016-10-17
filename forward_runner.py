@@ -136,7 +136,7 @@ class BasicForwardRunner(object):
             # Add regulatization term to the functional
             m = phm.solver.parameters['material'].gamma
 
-            funcgtional += self.regularization.get_functional(m)
+            functional += self.regularization.get_functional(m)
             reg_term =  self.regularization.get_value()
 
         else:

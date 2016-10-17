@@ -253,9 +253,9 @@ def setup_optimization_parameters():
     params.add("matparams_min", 0.1)
     params.add("matparams_max", 50.0)
     params.add("fix_a", False)
-    params.add("fix_a_f", False)
-    params.add("fix_b", False)
-    params.add("fix_b_f", False)
+    params.add("fix_a_f", True)
+    params.add("fix_b", True)
+    params.add("fix_b_f", True)
    
     
     params.add("disp", False)
@@ -380,8 +380,7 @@ def make_solver_params(params, patient, measurements):
         
                 # Get material parameter from passive phase file
                 paramvec = Function(VectorFunctionSpace(patient.mesh, "R", 0, dim = 4), name = "matparam vector")
-                h5file.read(paramvec.vector(), PASSIVE_INFLATION_GROUP +
-                            "/parameters/optimal_material_parameters", True)
+                h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
 
     
 

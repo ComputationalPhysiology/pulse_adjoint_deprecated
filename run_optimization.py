@@ -80,6 +80,7 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
                                    params, 
                                    paramvec)
 
+   
     #Solve the forward problem with guess results (just for printing)
     logger.info(Text.blue("\nForward solution at guess parameters"))
     forward_result, _ = for_run(paramvec, False)
@@ -166,7 +167,7 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
         # Load gamma from previous point
         g_temp = Function(gamma.function_space())
         with HDF5File(mpi_comm_world(), params["sim_file"], "r") as h5file:
-            h5file.read(g_temp.vector(), "active_contraction/contract_point_{}/parameters/activation_parameter/".format(params["active_contraction_iteration_number"]-1), True)
+            h5file.read(g_temp, "active_contraction/contract_point_{}/optimal_control".format(params["active_contraction_iteration_number"]-1))
         gamma.assign(g_temp)
         
     
@@ -214,19 +215,27 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     
 
 
-def store(params, rd, opt_controls, opt_result=None):
+def store(params, rd, opt_result):
 
+    from lvsolver import LVSolver
+    solver =  LVSolver(rd.for_run.solver_parameters)
+    
     if params["phase"] == PHASES[0]:
 
         h5group =  PASSIVE_INFLATION_GROUP
-        write_opt_results_to_h5(h5group, params, rd.ini_for_res, rd.for_res, 
-                                opt_matparams = opt_controls, 
-                                opt_result = opt_result)
+        write_opt_results_to_h5(h5group,
+                                params,
+                                rd.for_res,
+                                solver,
+                                opt_result)
     else:
         
         h5group =  ACTIVE_CONTRACTION_GROUP.format(params["active_contraction_iteration_number"])
-        write_opt_results_to_h5(h5group, params, rd.ini_for_res, rd.for_res, 
-                                opt_gamma = opt_controls, opt_result = opt_result)
+        write_opt_results_to_h5(h5group,
+                                params,
+                                rd.for_res,
+                                solver, 
+                                opt_result)
 
 
 def solve_oc_problem(params, rd, paramvec):
@@ -419,23 +428,27 @@ def solve_oc_problem(params, rd, paramvec):
             # Solve the optimization problem
             opt_result = scipy_minimize(rd,paramvec_arr, **kwargs)
             run_time = t.stop()
+
             opt_result["ncrash"] = rd.nr_crashes
             opt_result["run_time"] = run_time
             opt_result["controls"] = rd.controls_lst
             opt_result["func_vals"] = rd.func_values_lst
             opt_result["forward_times"] = rd.forward_times
             opt_result["backward_times"] = rd.backward_times
-            x = opt_result.x
 
-        assign_to_vector(paramvec.vector(), x)
+            print_optimization_report(params, rd.paramvec, rd.initial_paramvec,
+                                      rd.ini_for_res, rd.for_res, opt_result)
 
+            for k in ["message", "status", "success", "x"]:
+                opt_result.pop(k)
+            
+            rd.for_res["initial_control"] = rd.initial_paramvec,
+            rd.for_res["optimal_control"] = rd.paramvec
         
-        print_optimization_report(params, rd.paramvec, rd.initial_paramvec,
-                                  rd.ini_for_res, rd.for_res, opt_result)
         
         logger.info(Text.blue("\nForward solution at optimal parameters"))
         val = rd.for_run(paramvec, False)
-        store(params, rd, paramvec, opt_result)
+        store(params, rd, opt_result)
 
 def print_optimization_report(params, opt_controls, init_controls, 
                               ini_for_res, opt_for_res, opt_result = None):

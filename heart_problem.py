@@ -319,11 +319,11 @@ class ActiveHeartProblem(BasicHeartProblem):
         
             # Get previous state
             if params["active_contraction_iteration_number"] == 0:
-                h5file.read(w_temp.vector(), PASSIVE_INFLATION_GROUP + \
-                            "/states/{}".format(passive_filling_duration - 1), True)
+                h5file.read(w_temp, PASSIVE_INFLATION_GROUP + \
+                            "/states/{}".format(passive_filling_duration - 1))
             else:
-                h5file.read(w_temp.vector(), ACTIVE_CONTRACTION_GROUP.
-                            format(params["active_contraction_iteration_number"] - 1) + "/states/0", True)
+                h5file.read(w_temp, ACTIVE_CONTRACTION_GROUP.
+                            format(params["active_contraction_iteration_number"] - 1) + "/states/0")
 
 
         self.solver.get_state().assign(w_temp, annotate = annotate)
