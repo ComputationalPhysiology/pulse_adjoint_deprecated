@@ -160,6 +160,12 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
         zero = Constant(0.0) if gamma.value_size() == 1 \
           else Constant([0.0]*gamma.value_size())
 
+        if params["active_model"] == "active_stress":
+            # Just give it an easier starting point
+            zero = Constant(30.0) if gamma.value_size() == 1 \
+                   else Constant([30.0]*gamma.value_size())
+
+
         gamma.assign(zero)
        
     else:
@@ -199,7 +205,7 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
 
-    # Compute the functional as a pure function of gamma
+    
     rd = MyReducedFunctional(for_run, gamma)
 
     
@@ -219,7 +225,7 @@ def store(params, rd, opt_result):
 
     from lvsolver import LVSolver
     solver =  LVSolver(rd.for_run.solver_parameters)
-    
+
     if params["phase"] == PHASES[0]:
 
         h5group =  PASSIVE_INFLATION_GROUP
@@ -252,8 +258,11 @@ def solve_oc_problem(params, rd, paramvec):
     opt_params = params["Optimization_parmeteres"]
 
     if params["phase"] == PHASES[0] and not params["optimize_matparams"]:
+
         rd(paramvec_arr)
-        store(params, rd, paramvec)
+        rd.for_res["initial_control"] = rd.initial_paramvec,
+        rd.for_res["optimal_control"] = rd.paramvec
+        store(params, rd, {})
 
     else:
 
@@ -397,19 +406,7 @@ def solve_oc_problem(params, rd, paramvec):
 
 
             cons = ({"type": "ineq", "fun": lowerbound_constraint},
-                    {"type": "ineq", "fun": upperbound_constraint})
-
-            if params["phase"] == PHASES[0] and \
-               params["linear_matparams_ratio"] > 0:
-
-                # We put a constaint on the ration between a and a_f
-                def ratio_constraint(m):
-                    return m[0]/m[1] - float(params["linear_matparams_ratio"])
-                cons = (cons + ({"type": "eq",
-                                "fun": ratio_constraint}, {}))[:-1]
-
-                logger.info("Force ratio a/a_f = {}".format(params["linear_matparams_ratio"]))
-                
+                    {"type": "ineq", "fun": upperbound_constraint})                
                 
             
             kwargs = {"method": method,
@@ -441,13 +438,15 @@ def solve_oc_problem(params, rd, paramvec):
 
             for k in ["message", "status", "success", "x"]:
                 opt_result.pop(k)
-            
+
+          
             rd.for_res["initial_control"] = rd.initial_paramvec,
             rd.for_res["optimal_control"] = rd.paramvec
         
         
         logger.info(Text.blue("\nForward solution at optimal parameters"))
         val = rd.for_run(paramvec, False)
+        
         store(params, rd, opt_result)
 
 def print_optimization_report(params, opt_controls, init_controls, 
