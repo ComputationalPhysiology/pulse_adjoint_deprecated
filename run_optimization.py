@@ -415,8 +415,14 @@ def solve_oc_problem(params, rd, paramvec):
                       "jac": rd.derivative,
                       "tol":tol,
                       "options": {"disp": opt_params["disp"],
+                                  # "iprint": 2,
+                                  "ftol": 1e-16,
                                   "maxiter":max_iter}
                       }
+            # if method == "SLSQP":
+            #     kwargs["constraints"] = cons
+            # else:
+            #     kwargs["bounds"] = zip(lb,ub)
 
 
             # Start a timer to measure duration of the optimization
