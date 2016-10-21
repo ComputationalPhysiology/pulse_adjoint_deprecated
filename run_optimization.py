@@ -160,10 +160,10 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
         zero = Constant(0.0) if gamma.value_size() == 1 \
           else Constant([0.0]*gamma.value_size())
 
-        if params["active_model"] == "active_stress":
-            # Just give it an easier starting point
-            zero = Constant(30.0) if gamma.value_size() == 1 \
-                   else Constant([30.0]*gamma.value_size())
+        # if params["active_model"] == "active_stress":
+        #     # Just give it an easier starting point
+        #     zero = Constant(30.0) if gamma.value_size() == 1 \
+        #            else Constant([30.0]*gamma.value_size())
 
 
         gamma.assign(zero)
@@ -297,7 +297,7 @@ def solve_oc_problem(params, rd, paramvec):
                 ub = np.array([0.0]*nvar)
             else: # Active stress
                 lb = np.array([0.0]*nvar)
-                ub = np.array([100.0]*nvar)
+                ub = np.array([1.0]*nvar)
 
             tol= opt_params["active_opt_tol"]
             max_iter = opt_params["active_maxiter"]

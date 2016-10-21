@@ -30,6 +30,9 @@ class Material(object):
         assert self._active_model in \
           ["active_stress", "active_strain", "active_strain_rossi"], \
           "The active model '{}' is not implemented.".format(self._active_model)
+        
+        self._T_ref = 75.0 if self._active_model == "active_stress"  else 1.0
+            
 
 
     def strain_energy(self, F):
@@ -141,7 +144,7 @@ class Material(object):
         if self._active_model == 'active_stress':
 
             if diff == 0:
-                return gamma*I4f
+                return self._T_ref*gamma*I4f
             elif diff == 1:
                 return gamma 
             
