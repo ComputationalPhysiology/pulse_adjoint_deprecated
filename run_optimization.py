@@ -382,9 +382,13 @@ def solve_oc_problem(params, rd, paramvec):
                          "nfev":rd.iter,
                          "nit":rd.iter,
                          "njev":rd.nr_der_calls,
-                         "status":status,
-                         "message": message_exit_status[status],
-                         "obj":obj}
+                         # "status":status,
+                         # "message": message_exit_status[status],
+                         "obj":obj,
+                         "controls": rd.controls_lst,
+                         "func_vals": rd.func_values_lst,
+                         "forward_times": rd.forward_times,
+                         "backward_times": rd.backward_times}
             
             nlp.close()
             
@@ -446,8 +450,8 @@ def solve_oc_problem(params, rd, paramvec):
                 opt_result.pop(k)
 
           
-            rd.for_res["initial_control"] = rd.initial_paramvec,
-            rd.for_res["optimal_control"] = rd.paramvec
+        rd.for_res["initial_control"] = rd.initial_paramvec,
+        rd.for_res["optimal_control"] = rd.paramvec
         
         
         logger.info(Text.blue("\nForward solution at optimal parameters"))

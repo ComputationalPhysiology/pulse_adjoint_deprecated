@@ -102,7 +102,7 @@ def setup_general_parameters():
 
 def setup_patient_parameters():
     params = Parameters("Patient_parameters")
-    params.add("patient", "CRT02")
+    params.add("patient", "Joakim")
     params.add("patient_type", "full")
     params.add("weight_rule", DEFAULT_WEIGHT_RULE, WEIGHT_RULES)
     params.add("weight_direction", DEFAULT_WEIGHT_DIRECTION, WEIGHT_DIRECTIONS) 
@@ -111,7 +111,7 @@ def setup_patient_parameters():
     params.add("mesh_path", "")
     params.add("fiber_angle_epi", 50)
     params.add("fiber_angle_endo", 40)
-    params.add("mesh_type", "biv", ["lv", "biv"])
+    params.add("mesh_type", "lv", ["lv", "biv"])
     params.add("include_sheets", False)
 
     return params
@@ -121,7 +121,7 @@ def setup_optimizationtarget_parameters():
     params = Parameters("Optimization_targets")
     params.add("volume", True)
     params.add("rv_volume", True)
-    params.add("regional_strain", False)
+    params.add("regional_strain", True)
     params.add("full_strain", False)
     params.add("GL_strain", False)
     params.add("GC_strain", False)
@@ -169,19 +169,15 @@ def setup_application_parameters():
     ## Parameters ##
     
     # Spring constant at base (Note: works one for base_bc = fix_x)
-    params.add("base_spring_k", BASE_K)
+    params.add("base_spring_k", 1.0)
 
     # Material parameters
     material_parameters = Parameters("Material_parameters")
-    material_parameters.add("a", INITIAL_MATPARAMS[0])
-    material_parameters.add("a_f", INITIAL_MATPARAMS[1])
-    material_parameters.add("b", INITIAL_MATPARAMS[2])
-    material_parameters.add("b_f", INITIAL_MATPARAMS[3])
+    material_parameters.add("a", 2.28)
+    material_parameters.add("a_f", 1.685)
+    material_parameters.add("b", 9.726)
+    material_parameters.add("b_f", 15.779)
     params.add(material_parameters)
-
-    # Ratio a/a_f used to constrain the passive optimization
-    # if None then no constraint are put on the optimization
-    params.add("linear_matparams_ratio", 0.0)
     
 
     ## Models ##
@@ -220,7 +216,7 @@ def setup_application_parameters():
     ## Additional setup ##
     
     # Space for active parameter
-    params.add("gamma_space", "regional", ["CG_1", "R_0", "regional"])
+    params.add("gamma_space", "CG_1", ["CG_1", "R_0", "regional"])
 
     # If you want to use pointswise strains as input (only synthetic)
     params.add("use_deintegrated_strains", False)
@@ -241,15 +237,15 @@ def setup_application_parameters():
     return params
 
 def setup_optimization_parameters():
-    # Parameters for the Scipy Optimization
+    # Parameters for the Optimization
     params = Parameters("Optimization_parmeteres")
-    params.add("method", DEFAULT_OPTIMIZATION_METHOD)
-    params.add("active_opt_tol", OPTIMIZATION_TOLERANCE_GAMMA)
-    params.add("active_maxiter", OPTIMIZATION_MAXITER_GAMMA)
-    params.add("passive_opt_tol", OPTIMIZATION_TOLERANCE_MATPARAMS)
-    params.add("passive_maxiter", OPTIMIZATION_MAXITER_MATPARAMS)
-    params.add("scale", SCALE)
-    params.add("gamma_max", MAX_GAMMA)
+    params.add("method", "ipopt")
+    params.add("active_opt_tol", 1e-6)
+    params.add("active_maxiter", 100)
+    params.add("passive_opt_tol", 1e-9)
+    params.add("passive_maxiter", 30)
+    params.add("scale", 1.0)
+    params.add("gamma_max", 0.9)
     params.add("matparams_min", 0.1)
     params.add("matparams_max", 50.0)
     params.add("fix_a", False)
@@ -395,6 +391,8 @@ def make_solver_params(params, patient, measurements):
         gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
 
         gamma = Function(gamma_space, name = 'activation parameter')
+
+    
 
 
     strain_weights = None if not hasattr(patient, "strain_weights") else patient.strain_weights
@@ -617,6 +615,7 @@ def get_measurements(params, patient):
             rv_pressure = np.array(patient.RVP)
             reference_pressure = rv_pressure[0]
             logger.info("RV Pressure offset = {} kPa".format(reference_pressure))
+            
             rv_pressure = np.subtract(rv_pressure, reference_pressure)
             measurements["rv_pressure"] = rv_pressure[start:end]
             
@@ -628,6 +627,7 @@ def get_measurements(params, patient):
             volume_offset = get_volume_offset(patient)
             logger.info("LV Volume offset = {} cm3".format(volume_offset))
 
+            
             # Subtract this offset from the volume data
             volume = np.subtract(patient.volume,volume_offset)
 
@@ -677,6 +677,7 @@ def get_volume_offset(patient, chamber = "lv"):
     
     # Divide by 1000 to get the volume in ml
     vol = assemble((-1.0/3.0)*dot(X,N)*ds)
+    # print "{}: {}".format(chamber, vol)
     return patient.volume[0] - vol
 
 def setup_simulation(params, patient):
@@ -717,6 +718,8 @@ class MyReducedFunctional(ReducedFunctional):
 
     
         logger.debug(Text.yellow("Start annotating"))
+        # arr = gather_broadcast(paramvec_new.vector().array())
+        # logger.info("Try value {} (mean)".format(arr.mean()))
         parameters["adjoint"]["stop_annotating"] = False
 
         logger.setLevel(WARNING)
