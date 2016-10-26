@@ -83,8 +83,10 @@ def write_opt_results_to_h5(h5group,
                         h5file.write(c, h5group + \
                                      "/controls/{}".format(it))
                 else:
-                    save_data(v, "/".join([h5group, k]))
-            
+                    # Do not save empty lists
+                    if (hasattr(v, "__len__") and not len(v) == 0) or np.isscalar(v):
+                        save_data(v, "/".join([h5group, k]))
+                  
             # controls = opt_result.pop("controls", [0])
             # for it, c in enumerate(controls):
             #     h5file.write(c, h5group + "/controls/{}".format(it))
@@ -156,15 +158,3 @@ def write_opt_results_to_h5(h5group,
         for k,v in for_result_opt["bcs"].iteritems():
             save_data(np.array(v), "/".join([h5group, "bcs", k]))
 
-
-
-
-###################################
-#Test area
-###################################
-
-if __name__ == "__main__":
-    # test_diastolic_output()
-    # test_systolic_output()
-    # test_multiple_points_output()
-    test_write_parameters()

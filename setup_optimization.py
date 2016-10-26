@@ -240,9 +240,10 @@ def setup_optimization_parameters():
     # Parameters for the Optimization
     params = Parameters("Optimization_parmeteres")
     params.add("method", "ipopt")
+    params.add("method_1d", "brent")
     params.add("active_opt_tol", 1e-6)
     params.add("active_maxiter", 100)
-    params.add("passive_opt_tol", 1e-9)
+    params.add("passive_opt_tol", 1e-6)
     params.add("passive_maxiter", 30)
     params.add("scale", 1.0)
     params.add("gamma_max", 0.9)
@@ -358,13 +359,19 @@ def get_simulated_strain_traces(phm):
 def make_solver_params(params, patient, measurements):
     
     # Material parameters
-    
+    npassive = sum([ not params["Optimization_parmeteres"][k] \
+                     for k in ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]])
+
+    if npassive == 1:
+        paramvec = Function(FunctionSpace(patient.mesh, "R", 0), name = "matparam vector")
+    else:
+        paramvec = Function(VectorFunctionSpace(patient.mesh, "R", 0, dim = npassive), name = "matparam vector")
+        
     # If we want to estimate material parameters, use the materal parameters
     # from the parameters
     if params["phase"] in [PHASES[0], PHASES[2]]:
         
         material_parameters = params["Material_parameters"]
-        paramvec = Function(VectorFunctionSpace(patient.mesh, "R", 0, dim = 4), name = "matparam vector")
         assign_to_vector(paramvec.vector(), np.array(material_parameters.values()))
         
 
@@ -375,14 +382,9 @@ def make_solver_params(params, patient, measurements):
         with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
         
                 # Get material parameter from passive phase file
-                paramvec = Function(VectorFunctionSpace(patient.mesh, "R", 0, dim = 4), name = "matparam vector")
                 h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
 
-    
-
-        
-    a,a_f,b,b_f = split(paramvec)
-
+                
     # Contraction parameter
     if params["gamma_space"] == "regional":
         gamma = RegionalGamma(patient.strain_markers)
@@ -497,8 +499,37 @@ def make_solver_params(params, patient, measurements):
                                    name ="base_spring_constant"), patient.BASE]]
 
 
+    # Material model
     from material import HolzapfelOgden
-    matparams = {"a":a, "a_f":a_f, "b":b, "b_f":b_f}
+    matparams = params["Material_parameters"].to_dict()
+    lst = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
+    pararr = gather_broadcast(paramvec.vector().array())
+    pars = []
+    logger.info("\nMaterial Parameters")
+    if npassive == 1:
+        fixed_idx = np.nonzero([not params["Optimization_parmeteres"][k] for k in lst])[0][0]
+        par = lst[fixed_idx].split("fix_")[-1]
+        pars.append(par)
+        matparams[par] = paramvec
+        logger.info("\t{}\t= {:.3f}".format(par, pararr[0]))
+        
+        
+    else:
+        paramvec_split = split(paramvec)
+        fixed_idx = np.nonzero([not params["Optimization_parmeteres"][k] for k in lst])[0]
+        
+        for it, idx in enumerate(fixed_idx):
+            par = lst[idx].split("fix_")[-1]
+            pars.append(par)
+            matparams[par] = paramvec_split[it]
+            logger.info("\t{}\t= {:.3f}".format(par, pararr[it]))
+
+    for par, v in matparams.iteritems():
+        if par not in pars:
+            logger.info("\t{}\t= {:.3f}".format(par, v))
+
+            
+    
     if params["active_model"] == "active_strain_rossi":
         material = HolzapfelOgden(patient.e_f, gamma, matparams, params["active_model"],
                                       patient.strain_markers, s0 = patient.e_s, n0 = patient.e_sn)
@@ -536,12 +567,12 @@ def make_solver_params(params, patient, measurements):
                          "solve":setup_solver_parameters()}
 
 
-    pararr = gather_broadcast(paramvec.vector().array())
-    logger.info("\nParameters")
-    logger.info("\ta     = {:.3f}".format(pararr[0]))
-    logger.info("\ta_f   = {:.3f}".format(pararr[1]))
-    logger.info("\tb     = {:.3f}".format(pararr[2]))
-    logger.info("\tb_f   = {:.3f}".format(pararr[3]))
+    
+    
+    
+    # logger.info("\ta_f   = {:.3f}".format(pararr[1]))
+    # logger.info("\tb     = {:.3f}".format(pararr[2]))
+    # logger.info("\tb_f   = {:.3f}".format(pararr[3]))
 
 
     if params["phase"] in [PHASES[0], PHASES[2]]:
@@ -710,9 +741,11 @@ class MyReducedFunctional(ReducedFunctional):
         self.iter += 1
 
         paramvec_new = Function(self.paramvec.function_space(), name = "new control")
-
+      
         if isinstance(value, Function) or isinstance(value, RegionalGamma):
             paramvec_new.assign(value)
+        elif isinstance(value, float) or isinstance(value, int):
+            assign_to_vector(paramvec_new.vector(), np.array([value]))
         else:
             assign_to_vector(paramvec_new.vector(), value)
 
@@ -756,7 +789,7 @@ class MyReducedFunctional(ReducedFunctional):
         else:
             func_value = self.for_res["func_value"]
 
-        self.func_values_lst.append(func_value)
+        self.func_values_lst.append(func_value*self.scale)
         self.controls_lst.append(Vector(paramvec_new.vector()))
 
         

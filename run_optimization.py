@@ -23,6 +23,7 @@ from optimization_targets import *
 from numpy_mpi import *
 from adjoint_contraction_args import *
 from scipy.optimize import minimize as scipy_minimize
+from scipy.optimize import minimize_scalar as scipy_minimize_1d
 from store_opt_results import write_opt_results_to_h5
 
 try:
@@ -244,6 +245,99 @@ def store(params, rd, opt_result):
                                 opt_result)
 
 
+def minimize_1d(f, x0, **kwargs):
+
+    # Initial step size
+    dx = 0.01
+    # Initial functional value
+    f_prev = f.func_values_lst[0]
+
+    # If the initial step size is too large, reduce it
+    while x0 + dx > kwargs["bounds"][1]:
+        dx /= 2
+
+    # Evaluate the functional at the new point
+    f_cur = f(x0 + dx)
+   
+    # If the current value is larger than the previous one, try to step in the other direction
+    if f_cur > f_prev:
+        dx *= -1
+        while x0 + dx < kwargs["bounds"][0]:
+            dx /= 2
+        f_cur = f(x0 + dx)
+
+    # If this still is true, then the minimum is witin the interval we just checked (assuming convexity).
+    if f_cur > f_prev:
+        
+        if x0 - dx > x0:
+            a = x0 + dx
+            b = x0 - dx
+        else:
+            a = x0 - dx
+            b = x0 + dx
+        
+        return scipy_minimize_1d(f, bracket = (a,b), **kwargs)
+
+    # Otherwise we step up until the current value if larger then the previous one
+    else:
+        x0 = x0 + dx
+        f_prev_tmp = f_cur
+        while f_cur < f_prev:
+
+            
+            dx *= 10
+            # If the new value is outside the bounds reduce the step size
+            while x0 + dx > kwargs["bounds"][1] or x0 + dx < kwargs["bounds"][0]:
+                dx /= 2
+            
+
+            ncrashes = f.nr_crashes
+            # Try to evaluate the functional at the new point
+            f_cur = f(x0 +dx)
+
+            # Check if the solver chrashed in the evaluation
+            if f.nr_crashes > ncrashes:
+                
+                # We were not able to evaluate the funcitonal, reduce step size until convergence
+                crash = True
+                ncrashes = f.nr_crashes
+                x0 = x0 - dx
+                while crash:
+                    
+                    dx /= 2
+                    x0 = x0 +dx
+                    f_cur = f(x0 +dx)
+                    
+                    if ncrashes == f_cur.nr_crashes:
+                        crash = False
+                    else:
+                        x0 = x0-dx
+                    
+                    
+            # Assign the previous value
+            f_prev = f_prev_tmp
+            f_prev_tmp = f_cur
+            # Increment the control
+            x0 = x0 + dx
+        
+
+        # If f_cur > f_prev we have a interval to search for the minimum (assuming convexity).
+        if x0 - dx > x0:
+            a = x0
+            b = x0 - dx
+        else:
+            a = x0 - dx
+            b = x0
+            
+        return scipy_minimize_1d(f, bracket = (a,b), **kwargs)
+            
+            
+            
+    
+    
+    
+    
+        
 def solve_oc_problem(params, rd, paramvec):
     """Solve the optimal control problem
 
@@ -273,16 +367,6 @@ def solve_oc_problem(params, rd, paramvec):
 
             lb = np.array([opt_params["matparams_min"]]*nvar)
             ub = np.array([opt_params["matparams_max"]]*nvar)
-
-            if opt_params["fix_a"]:
-                lb[0] = ub[0] = paramvec_arr[0]
-            if opt_params["fix_a_f"]:
-                lb[1] = ub[1] = paramvec_arr[1]
-            if opt_params["fix_b"]:
-                lb[2] = ub[2] = paramvec_arr[2]
-            if opt_params["fix_b_f"]:
-                lb[3] = ub[3] = paramvec_arr[3]
-
                 
             tol = opt_params["passive_opt_tol"]
             max_iter = opt_params["passive_maxiter"]
@@ -302,140 +386,27 @@ def solve_oc_problem(params, rd, paramvec):
             tol= opt_params["active_opt_tol"]
             max_iter = opt_params["active_maxiter"]
 
-        
-        if has_pyipopt and opt_params["method"] == "ipopt":
 
-            # Bounds
-            lb = np.array([opt_params["matparams_min"]]*nvar)
-            ub = np.array([opt_params["matparams_max"]]*nvar)
- 
-            # No constraits 
-            nconstraints = 0
-            constraints_nnz = nconstraints * nvar
-            empty = np.array([], dtype=float)
-            clb = empty
-            cub = empty
+        # Use 1D optimization method
+        if nvar == 1:
 
-            # The constraint function, should do nothing
-            def fun_g(x, user_data=None):
-                return empty
-
-            # The constraint Jacobian
-            def jac_g(x, flag, user_data=None):
-                if flag:
-                    rows = np.array([], dtype=int)
-                    cols = np.array([], dtype=int)
-                    return (rows, cols)
-                else:
-                    return empty
-
-            J  = rd.__call__
-            dJ = rd.derivative
-
-            
-            nlp = pyipopt.create(nvar,              # number of control variables
-                                 lb,                # lower bounds on control vector
-                                 ub,                # upper bounds on control vector
-                                 nconstraints,      # number of constraints
-                                 clb,               # lower bounds on constraints,
-                                 cub,               # upper bounds on constraints,
-                                 constraints_nnz,   # number of nonzeros in the constraint Jacobian
-                                 0,                 # number of nonzeros in the Hessian
-                                 J,                 # to evaluate the functional
-                                 dJ,                # to evaluate the gradient
-                                 fun_g,             # to evaluate the constraints
-                                 jac_g)             # to evaluate the constraint Jacobian
-
-                                 
-            
-            nlp.num_option('tol', tol)
-            nlp.int_option('max_iter', max_iter)
-            pyipopt.set_loglevel(1)                 # turn off annoying pyipopt logging
-
-            nlp.str_option("print_timing_statistics", "yes")
-            nlp.str_option("warm_start_init_point", "yes")
-
-            print_level = 6 if logger.level < INFO else 4
-
-            if mpi_comm_world().rank > 0:
-                nlp.int_option('print_level', 0)    # disable redundant IPOPT output in parallel
-            else:
-                nlp.int_option('print_level', print_level)    # very useful IPOPT output
-
-            # Do an initial solve to put something in the cache
-            rd(paramvec_arr)
-
-            # Start a timer to measure duration of the optimization
-            t = Timer()
-            t.start()
-
-            # Solve optimization problem with initial guess
-            x, zl, zu, constraint_multipliers, obj, status = nlp.solve(paramvec_arr)
-            
-            run_time = t.stop()
-
-            message_exit_status = {0:"Optimization terminated successfully", 
-                                   -1:"Iteration limit exceeded"}
-            
-            opt_result= {"ncrash":rd.nr_crashes, 
-                         "run_time": run_time, 
-                         "nfev":rd.iter,
-                         "nit":rd.iter,
-                         "njev":rd.nr_der_calls,
-                         # "status":status,
-                         # "message": message_exit_status[status],
-                         "obj":obj,
-                         "controls": rd.controls_lst,
-                         "func_vals": rd.func_values_lst,
-                         "forward_times": rd.forward_times,
-                         "backward_times": rd.backward_times}
-            
-            nlp.close()
-            
-
-        else:
-            
-            if opt_params["method"] == "ipopt":
-                logger.Warning("Warning: Ipopt is not installed. Use SLSQP")
-                method = "SLSQP"
-            else:
-                method = opt_params["method"]
-                
-            def lowerbound_constraint(m):
-                return m - lb
-
-            def upperbound_constraint(m):
-                return ub - m
-
-
-
-            cons = ({"type": "ineq", "fun": lowerbound_constraint},
-                    {"type": "ineq", "fun": upperbound_constraint})                
-                
-            
-            kwargs = {"method": method,
-                      "constraints": cons, 
-                      # "bounds":zip(lb,ub),
-                      "jac": rd.derivative,
+            kwargs = {"method": opt_params["method_1d"],
+                      "bounds":zip(lb,ub)[0],
                       "tol":tol,
-                      "options": {"disp": opt_params["disp"],
-                                  # "iprint": 2,
-                                  "ftol": 1e-16,
-                                  "maxiter":max_iter}
-                      }
-            # if method == "SLSQP":
-            #     kwargs["constraints"] = cons
-            # else:
-            #     kwargs["bounds"] = zip(lb,ub)
-
-
-            # Start a timer to measure duration of the optimization
+                      "options": {"maxiter":max_iter}
+            }
+            
             t = Timer()
             t.start()
             # Solve the optimization problem
-            opt_result = scipy_minimize(rd,paramvec_arr, **kwargs)
+            opt_result = minimize_1d(rd, paramvec_arr[0], **kwargs)
+
+            # scipy_minimize_1d(rd, **kwargs)
             run_time = t.stop()
 
+            opt_result["message"] = ""
+            opt_result["status"] = ""
+            opt_result["njev"] = rd.nr_der_calls
             opt_result["ncrash"] = rd.nr_crashes
             opt_result["run_time"] = run_time
             opt_result["controls"] = rd.controls_lst
@@ -443,19 +414,170 @@ def solve_oc_problem(params, rd, paramvec):
             opt_result["forward_times"] = rd.forward_times
             opt_result["backward_times"] = rd.backward_times
 
+            
             print_optimization_report(params, rd.paramvec, rd.initial_paramvec,
                                       rd.ini_for_res, rd.for_res, opt_result)
 
-            for k in ["message", "status", "success", "x"]:
+            for k in ["message", "status", "success"]:
                 opt_result.pop(k)
+        else:
+        
+            if has_pyipopt and opt_params["method"] == "ipopt":
 
+                # Bounds
+                lb = np.array([opt_params["matparams_min"]]*nvar)
+                ub = np.array([opt_params["matparams_max"]]*nvar)
+                
+                # No constraits 
+                nconstraints = 0
+                constraints_nnz = nconstraints * nvar
+                empty = np.array([], dtype=float)
+                clb = empty
+                cub = empty
+
+                # The constraint function, should do nothing
+                def fun_g(x, user_data=None):
+                    return empty
+
+                # The constraint Jacobian
+                def jac_g(x, flag, user_data=None):
+                    if flag:
+                        rows = np.array([], dtype=int)
+                        cols = np.array([], dtype=int)
+                        return (rows, cols)
+                    else:
+                        return empty
+
+                J  = rd.__call__
+                dJ = rd.derivative
+
+            
+                nlp = pyipopt.create(nvar,              # number of control variables
+                                     lb,                # lower bounds on control vector
+                                     ub,                # upper bounds on control vector
+                                     nconstraints,      # number of constraints
+                                     clb,               # lower bounds on constraints,
+                                     cub,               # upper bounds on constraints,
+                                     constraints_nnz,   # number of nonzeros in the constraint Jacobian
+                                     0,                 # number of nonzeros in the Hessian
+                                     J,                 # to evaluate the functional
+                                     dJ,                # to evaluate the gradient
+                                     fun_g,             # to evaluate the constraints
+                                     jac_g)             # to evaluate the constraint Jacobian
+
+                                 
+            
+                nlp.num_option('tol', tol)
+                nlp.int_option('max_iter', max_iter)
+                pyipopt.set_loglevel(1)                 # turn off annoying pyipopt logging
+                
+                nlp.str_option("print_timing_statistics", "yes")
+                nlp.str_option("warm_start_init_point", "yes")
+                
+                print_level = 6 if logger.level < INFO else 4
+
+                if mpi_comm_world().rank > 0:
+                    nlp.int_option('print_level', 0)    # disable redundant IPOPT output in parallel
+                else:
+                    nlp.int_option('print_level', print_level)    # very useful IPOPT output
+                    
+                # Do an initial solve to put something in the cache
+                rd(paramvec_arr)
+
+                # Start a timer to measure duration of the optimization
+                t = Timer()
+                t.start()
+
+                # Solve optimization problem with initial guess
+                x, zl, zu, constraint_multipliers, obj, status = nlp.solve(paramvec_arr)
+            
+                run_time = t.stop()
+                
+                message_exit_status = {0:"Optimization terminated successfully", 
+                                   -1:"Iteration limit exceeded"}
+            
+                opt_result= {"ncrash":rd.nr_crashes, 
+                             "run_time": run_time, 
+                             "nfev":rd.iter,
+                             "nit":rd.iter,
+                             "njev":rd.nr_der_calls,
+                             # "status":status,
+                             # "message": message_exit_status[status],
+                             "x":obj,
+                             "controls": rd.controls_lst,
+                             "func_vals": rd.func_values_lst,
+                             "forward_times": rd.forward_times,
+                             "backward_times": rd.backward_times}
+            
+                nlp.close()
+            
+
+            else:
+            
+                if opt_params["method"] == "ipopt":
+                    logger.Warning("Warning: Ipopt is not installed. Use SLSQP")
+                    method = "SLSQP"
+                else:
+                    method = opt_params["method"]
+                
+                def lowerbound_constraint(m):
+                    return m - lb
+
+                def upperbound_constraint(m):
+                    return ub - m
+
+
+
+                cons = ({"type": "ineq", "fun": lowerbound_constraint},
+                        {"type": "ineq", "fun": upperbound_constraint})                
+                
+            
+                kwargs = {"method": method,
+                          "constraints": cons, 
+                          # "bounds":zip(lb,ub),
+                          "jac": rd.derivative,
+                          "tol":tol,
+                          "options": {"disp": opt_params["disp"],
+                                      # "iprint": 2,
+                                      "ftol": 1e-16,
+                                      "maxiter":max_iter}
+                }
+                # if method == "SLSQP":
+                #     kwargs["constraints"] = cons
+                # else:
+                #     kwargs["bounds"] = zip(lb,ub)
+                
+
+                # Start a timer to measure duration of the optimization
+                t = Timer()
+                t.start()
+                # Solve the optimization problem
+                opt_result = scipy_minimize(rd,paramvec_arr, **kwargs)
+                run_time = t.stop()
+                
+                opt_result["ncrash"] = rd.nr_crashes
+                opt_result["run_time"] = run_time
+                opt_result["controls"] = rd.controls_lst
+                opt_result["func_vals"] = rd.func_values_lst
+                opt_result["forward_times"] = rd.forward_times
+                opt_result["backward_times"] = rd.backward_times
+
+                print_optimization_report(params, rd.paramvec, rd.initial_paramvec,
+                                          rd.ini_for_res, rd.for_res, opt_result)
+
+                for k in ["message", "status", "success"]:
+                    opt_result.pop(k)
+
+        x = np.array([opt_result.pop("x")]) if nvar == 1 else gather_broadcast(opt_result.pop("x"))
+        assign_to_vector(paramvec.vector(), gather_broadcast(x))
+        logger.info(Text.blue("\nForward solution at optimal parameters"))
+        val = rd.for_run(paramvec, False)
           
         rd.for_res["initial_control"] = rd.initial_paramvec,
         rd.for_res["optimal_control"] = rd.paramvec
         
         
-        logger.info(Text.blue("\nForward solution at optimal parameters"))
-        val = rd.for_run(paramvec, False)
+        
         
         store(params, rd, opt_result)
 

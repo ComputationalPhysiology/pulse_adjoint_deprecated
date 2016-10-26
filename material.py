@@ -289,7 +289,7 @@ class HolzapfelOgden(Material):
             params = self.default_parameters()
 
         for k,v in params.iteritems():
-            setattr(self, k, v)
+            setattr(self, k, Constant(v))
 
         self._active_model = active_model
 

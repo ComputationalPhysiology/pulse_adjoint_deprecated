@@ -51,6 +51,7 @@ class BasicForwardRunner(object):
         self.pressure = pressure
             
         self.target_params = params["Optimization_targets"]
+        self.params = params
 
         self.meshvol = Constant(assemble(Constant(1.0)*dx(solver_parameters["mesh"])),
                                 name = "mesh volume")
@@ -368,13 +369,24 @@ class PassiveForwardRunner(BasicForwardRunner):
     def __call__(self, m, annotate = False):
 
         self.paramvec.assign(m)
-        paramvec = split(self.paramvec)
-        
-        self.solver_parameters["material"].a = paramvec[0]
-        self.solver_parameters["material"].a_f = paramvec[1]
-        self.solver_parameters["material"].b = paramvec[2]
-        self.solver_parameters["material"].b_f = paramvec[3]
        
+
+        npassive = sum([ not self.params["Optimization_parmeteres"][k] \
+                     for k in ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]])
+    
+
+        lst = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
+        if npassive == 1:
+            fixed_idx = np.nonzero([not self.params["Optimization_parmeteres"][k] for k in lst])[0][0]
+            par = lst[fixed_idx].split("fix_")[-1]
+            setattr(self.solver_parameters["material"], par, self.paramvec)
+        else:
+            paramvec_split = split(self.paramvec)
+            fixed_idx = np.nonzero([not self.params["Optimization_parmeteres"][k] for k in lst])[0]
+            for it, idx in enumerate(fixed_idx):
+                par = lst[idx].split("fix_")[-1]
+                setattr(self.solver_parameters["material"], par, paramvec_split[it])
+                
      
         phm = PassiveHeartProblem(self.bcs,
                                   self.solver_parameters,
