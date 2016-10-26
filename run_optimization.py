@@ -404,8 +404,6 @@ def solve_oc_problem(params, rd, paramvec):
             # scipy_minimize_1d(rd, **kwargs)
             run_time = t.stop()
 
-            opt_result["message"] = ""
-            opt_result["status"] = ""
             opt_result["njev"] = rd.nr_der_calls
             opt_result["ncrash"] = rd.nr_crashes
             opt_result["run_time"] = run_time
@@ -419,7 +417,7 @@ def solve_oc_problem(params, rd, paramvec):
                                       rd.ini_for_res, rd.for_res, opt_result)
 
             for k in ["message", "status", "success"]:
-                opt_result.pop(k)
+                opt_result.pop(k, None)
         else:
         
             if has_pyipopt and opt_params["method"] == "ipopt":
@@ -566,7 +564,7 @@ def solve_oc_problem(params, rd, paramvec):
                                           rd.ini_for_res, rd.for_res, opt_result)
 
                 for k in ["message", "status", "success"]:
-                    opt_result.pop(k)
+                    opt_result.pop(k, None)
 
         x = np.array([opt_result.pop("x")]) if nvar == 1 else gather_broadcast(opt_result.pop("x"))
         assign_to_vector(paramvec.vector(), gather_broadcast(x))
