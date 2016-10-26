@@ -739,15 +739,18 @@ class MyReducedFunctional(ReducedFunctional):
     def __call__(self, value):
         adj_reset()
         self.iter += 1
-
         paramvec_new = Function(self.paramvec.function_space(), name = "new control")
       
         if isinstance(value, Function) or isinstance(value, RegionalGamma):
             paramvec_new.assign(value)
         elif isinstance(value, float) or isinstance(value, int):
             assign_to_vector(paramvec_new.vector(), np.array([value]))
+        elif isinstance(value, enlisting.Enlisted):
+            val_delisted = delist(value,self.controls)
+            paramvec_new.assign(val_delisted)
+            
         else:
-            assign_to_vector(paramvec_new.vector(), value)
+            assign_to_vector(paramvec_new.vector(), gather_broadcast(value))
 
     
         logger.debug(Text.yellow("Start annotating"))

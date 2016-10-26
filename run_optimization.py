@@ -425,71 +425,81 @@ def solve_oc_problem(params, rd, paramvec):
             if has_pyipopt and opt_params["method"] == "ipopt":
 
                 # Bounds
-                lb = np.array([opt_params["matparams_min"]]*nvar)
-                ub = np.array([opt_params["matparams_max"]]*nvar)
+                # lb = np.array([opt_params["matparams_min"]]*nvar)
+                # ub = np.array([opt_params["matparams_max"]]*nvar)
                 
-                # No constraits 
-                nconstraints = 0
-                constraints_nnz = nconstraints * nvar
-                empty = np.array([], dtype=float)
-                clb = empty
-                cub = empty
+                # # No constraits 
+                # nconstraints = 0
+                # constraints_nnz = nconstraints * nvar
+                # empty = np.array([], dtype=float)
+                # clb = empty
+                # cub = empty
 
-                # The constraint function, should do nothing
-                def fun_g(x, user_data=None):
-                    return empty
+                # # The constraint function, should do nothing
+                # def fun_g(x, user_data=None):
+                #     return empty
 
-                # The constraint Jacobian
-                def jac_g(x, flag, user_data=None):
-                    if flag:
-                        rows = np.array([], dtype=int)
-                        cols = np.array([], dtype=int)
-                        return (rows, cols)
-                    else:
-                        return empty
+                # # The constraint Jacobian
+                # def jac_g(x, flag, user_data=None):
+                #     if flag:
+                #         rows = np.array([], dtype=int)
+                #         cols = np.array([], dtype=int)
+                #         return (rows, cols)
+                #     else:
+                #         return empty
 
-                J  = rd.__call__
-                dJ = rd.derivative
+                # J  = rd.__call__
+                # dJ = rd.derivative
 
             
-                nlp = pyipopt.create(nvar,              # number of control variables
-                                     lb,                # lower bounds on control vector
-                                     ub,                # upper bounds on control vector
-                                     nconstraints,      # number of constraints
-                                     clb,               # lower bounds on constraints,
-                                     cub,               # upper bounds on constraints,
-                                     constraints_nnz,   # number of nonzeros in the constraint Jacobian
-                                     0,                 # number of nonzeros in the Hessian
-                                     J,                 # to evaluate the functional
-                                     dJ,                # to evaluate the gradient
-                                     fun_g,             # to evaluate the constraints
-                                     jac_g)             # to evaluate the constraint Jacobian
+                # nlp = pyipopt.create(nvar,              # number of control variables
+                #                      lb,                # lower bounds on control vector
+                #                      ub,                # upper bounds on control vector
+                #                      nconstraints,      # number of constraints
+                #                      clb,               # lower bounds on constraints,
+                #                      cub,               # upper bounds on constraints,
+                #                      constraints_nnz,   # number of nonzeros in the constraint Jacobian
+                #                      0,                 # number of nonzeros in the Hessian
+                #                      J,                 # to evaluate the functional
+                #                      dJ,                # to evaluate the gradient
+                #                      fun_g,             # to evaluate the constraints
+                #                      jac_g)             # to evaluate the constraint Jacobian
 
                                  
-            
-                nlp.num_option('tol', tol)
-                nlp.int_option('max_iter', max_iter)
-                pyipopt.set_loglevel(1)                 # turn off annoying pyipopt logging
+                # from IPython import embed; embed()
+                # exit()
+                # nlp.num_option('tol', tol)
+                # nlp.int_option('max_iter', max_iter)
+                # pyipopt.set_loglevel(1)                 # turn off annoying pyipopt logging
                 
-                nlp.str_option("print_timing_statistics", "yes")
-                nlp.str_option("warm_start_init_point", "yes")
+                # nlp.str_option("print_timing_statistics", "yes")
+                # nlp.str_option("warm_start_init_point", "yes")
                 
-                print_level = 6 if logger.level < INFO else 4
+                # print_level = 6 if logger.level < INFO else 4
 
-                if mpi_comm_world().rank > 0:
-                    nlp.int_option('print_level', 0)    # disable redundant IPOPT output in parallel
-                else:
-                    nlp.int_option('print_level', print_level)    # very useful IPOPT output
+                # if mpi_comm_world().rank > 0:
+                #     nlp.int_option('print_level', 0)    # disable redundant IPOPT output in parallel
+                # else:
+                #     nlp.int_option('print_level', print_level)    # very useful IPOPT output
                     
                 # Do an initial solve to put something in the cache
                 rd(paramvec_arr)
+
+                lb = opt_params["matparams_min"]
+                ub = opt_params["matparams_max"]
+                problem = MinimizationProblem(rd, bounds=(lb, ub))
+               
+                ipopt_parameters = {'maximum_iterations': max_iter, "tol": tol}
+
+                solver = IPOPTSolver(problem, parameters=ipopt_parameters)
+                x = solver.solve()
 
                 # Start a timer to measure duration of the optimization
                 t = Timer()
                 t.start()
 
                 # Solve optimization problem with initial guess
-                x, zl, zu, constraint_multipliers, obj, status = nlp.solve(paramvec_arr)
+                # x, zl, zu, constraint_multipliers, obj, status = nlp.solve(paramvec_arr)
             
                 run_time = t.stop()
                 
@@ -503,7 +513,7 @@ def solve_oc_problem(params, rd, paramvec):
                              "njev":rd.nr_der_calls,
                              # "status":status,
                              # "message": message_exit_status[status],
-                             "x":obj,
+                             "x":x,
                              "controls": rd.controls_lst,
                              "func_vals": rd.func_values_lst,
                              "forward_times": rd.forward_times,
