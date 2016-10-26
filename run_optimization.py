@@ -404,6 +404,8 @@ def solve_oc_problem(params, rd, paramvec):
             # scipy_minimize_1d(rd, **kwargs)
             run_time = t.stop()
 
+            opt_result["status"] = ""
+            opt_result["message"] = ""
             opt_result["njev"] = rd.nr_der_calls
             opt_result["ncrash"] = rd.nr_crashes
             opt_result["run_time"] = run_time
