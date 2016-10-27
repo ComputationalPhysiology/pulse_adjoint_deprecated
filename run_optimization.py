@@ -32,6 +32,12 @@ try:
 except:
     has_pyipopt = False
 
+try:
+    import moola
+    has_moola = True
+except:
+    has_moola = False
+
 
 def run_passive_optimization(params, patient):
 
@@ -424,65 +430,6 @@ def solve_oc_problem(params, rd, paramvec):
         
             if has_pyipopt and opt_params["method"] == "ipopt":
 
-                # Bounds
-                # lb = np.array([opt_params["matparams_min"]]*nvar)
-                # ub = np.array([opt_params["matparams_max"]]*nvar)
-                
-                # # No constraits 
-                # nconstraints = 0
-                # constraints_nnz = nconstraints * nvar
-                # empty = np.array([], dtype=float)
-                # clb = empty
-                # cub = empty
-
-                # # The constraint function, should do nothing
-                # def fun_g(x, user_data=None):
-                #     return empty
-
-                # # The constraint Jacobian
-                # def jac_g(x, flag, user_data=None):
-                #     if flag:
-                #         rows = np.array([], dtype=int)
-                #         cols = np.array([], dtype=int)
-                #         return (rows, cols)
-                #     else:
-                #         return empty
-
-                # J  = rd.__call__
-                # dJ = rd.derivative
-
-            
-                # nlp = pyipopt.create(nvar,              # number of control variables
-                #                      lb,                # lower bounds on control vector
-                #                      ub,                # upper bounds on control vector
-                #                      nconstraints,      # number of constraints
-                #                      clb,               # lower bounds on constraints,
-                #                      cub,               # upper bounds on constraints,
-                #                      constraints_nnz,   # number of nonzeros in the constraint Jacobian
-                #                      0,                 # number of nonzeros in the Hessian
-                #                      J,                 # to evaluate the functional
-                #                      dJ,                # to evaluate the gradient
-                #                      fun_g,             # to evaluate the constraints
-                #                      jac_g)             # to evaluate the constraint Jacobian
-
-                                 
-                # from IPython import embed; embed()
-                # exit()
-                # nlp.num_option('tol', tol)
-                # nlp.int_option('max_iter', max_iter)
-                # pyipopt.set_loglevel(1)                 # turn off annoying pyipopt logging
-                
-                # nlp.str_option("print_timing_statistics", "yes")
-                # nlp.str_option("warm_start_init_point", "yes")
-                
-                # print_level = 6 if logger.level < INFO else 4
-
-                # if mpi_comm_world().rank > 0:
-                #     nlp.int_option('print_level', 0)    # disable redundant IPOPT output in parallel
-                # else:
-                #     nlp.int_option('print_level', print_level)    # very useful IPOPT output
-                    
-                # Do an initial solve to put something in the cache
                 rd(paramvec_arr)
 
                 lb = opt_params["matparams_min"]
@@ -498,9 +445,6 @@ def solve_oc_problem(params, rd, paramvec):
                 t = Timer()
                 t.start()
 
-                # Solve optimization problem with initial guess
-                # x, zl, zu, constraint_multipliers, obj, status = nlp.solve(paramvec_arr)
-            
                 run_time = t.stop()
                 
                 message_exit_status = {0:"Optimization terminated successfully", 
@@ -518,10 +462,50 @@ def solve_oc_problem(params, rd, paramvec):
                              "func_vals": rd.func_values_lst,
                              "forward_times": rd.forward_times,
                              "backward_times": rd.backward_times}
-            
-                nlp.close()
+
+            elif has_moola and opt_params["method"] == "moola":
+
+                problem = MoolaOptimizationProblem(rd)
+                
+                paramvec_moola = moola.DolfinPrimalVector(paramvec)
+                # solver = moola.NewtonCG(problem, paramvec_moola, options={'gtol': 1e-9,
+                #                                                           'maxiter': 20, 
+                #                                                           'display': 3, 
+                #                                                           'ncg_hesstol': 0})
+                
+                
+                solver = moola.BFGS(problem, paramvec_moola, options={'jtol': 0,
+                                                                      'gtol': 1e-9,
+                                                                      'Hinit': "default",
+                                                                      'maxiter': 100,
+                                                                      'mem_lim': 10})
+                solver = moola.NonLinearCG(problem, paramvec_moola, options={'jtol': 0,
+                                                                             'gtol': 1e-9,
+                                                                             'Hinit': "default",
+                                                                             'maxiter': 100,
+                                                                             'mem_lim': 10})
             
 
+                
+                t = Timer()
+                t.start()
+                # Solve the optimization problem
+                sol = solver.solve()
+                x = sol['control'].data
+                
+                run_time = t.stop()
+
+                opt_result["x"] = x
+                opt_result["status"] = ""
+                opt_result["message"] = ""
+                opt_result["njev"] = rd.nr_der_calls
+                opt_result["ncrash"] = rd.nr_crashes
+                opt_result["run_time"] = run_time
+                opt_result["controls"] = rd.controls_lst
+                opt_result["func_vals"] = rd.func_values_lst
+                opt_result["forward_times"] = rd.forward_times
+                opt_result["backward_times"] = rd.backward_times
+                
             else:
             
                 if opt_params["method"] == "ipopt":

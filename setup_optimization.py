@@ -239,7 +239,7 @@ def setup_application_parameters():
 def setup_optimization_parameters():
     # Parameters for the Optimization
     params = Parameters("Optimization_parmeteres")
-    params.add("method", "ipopt")
+    params.add("method", "slsqp")
     params.add("method_1d", "brent")
     params.add("active_opt_tol", 1e-6)
     params.add("active_maxiter", 100)
