@@ -291,7 +291,7 @@ def minimize_1d(f, x0, **kwargs):
         while f_cur < f_prev:
 
             
-            dx *= 10
+            dx *= 5
             # If the new value is outside the bounds reduce the step size
             while x0 + dx > kwargs["bounds"][1] or x0 + dx < kwargs["bounds"][0]:
                 dx /= 2
@@ -334,7 +334,7 @@ def minimize_1d(f, x0, **kwargs):
         else:
             a = x0 - dx
             b = x0
-            
+        
         return scipy_minimize_1d(f, bracket = (a,b), **kwargs)
             
             
@@ -479,11 +479,11 @@ def solve_oc_problem(params, rd, paramvec):
                                                                       'Hinit': "default",
                                                                       'maxiter': 100,
                                                                       'mem_lim': 10})
-                solver = moola.NonLinearCG(problem, paramvec_moola, options={'jtol': 0,
-                                                                             'gtol': 1e-9,
-                                                                             'Hinit': "default",
-                                                                             'maxiter': 100,
-                                                                             'mem_lim': 10})
+                # solver = moola.NonLinearCG(problem, paramvec_moola, options={'jtol': 0,
+                #                                                              'gtol': 1e-9,
+                #                                                              'Hinit': "default",
+                #                                                              'maxiter': 100,
+                #                                                              'mem_lim': 10})
             
 
                 
