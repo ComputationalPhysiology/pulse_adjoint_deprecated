@@ -31,7 +31,7 @@ class Material(object):
           ["active_stress", "active_strain", "active_strain_rossi"], \
           "The active model '{}' is not implemented.".format(self._active_model)
         
-        self._T_ref = 75.0 if self._active_model == "active_stress"  else 1.0
+        self._T_ref = 100.0 if self._active_model == "active_stress"  else 1.0
             
 
 
