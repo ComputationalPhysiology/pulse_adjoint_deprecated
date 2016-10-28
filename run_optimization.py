@@ -254,7 +254,8 @@ def store(params, rd, opt_result):
 def minimize_1d(f, x0, **kwargs):
 
     # Initial step size
-    dx = 0.01
+    dx = np.abs(np.diff(kwargs["bounds"]))[0]/10.0
+   
     # Initial functional value
     f_prev = f.func_values_lst[0]
 
@@ -291,7 +292,7 @@ def minimize_1d(f, x0, **kwargs):
         while f_cur < f_prev:
 
             
-            dx *= 5
+            # dx *= 2
             # If the new value is outside the bounds reduce the step size
             while x0 + dx > kwargs["bounds"][1] or x0 + dx < kwargs["bounds"][0]:
                 dx /= 2
