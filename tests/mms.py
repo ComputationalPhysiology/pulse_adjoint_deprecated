@@ -678,7 +678,7 @@ def test_neohookean_2d():
     err_p = []
     err_J = []
     err_Tf = []
-    ndivs = [2,4,8,16, 32, 64, 128]
+    ndivs = [2,4,8,16, 32]
     # ndivs = [16]
     plot = False
     
@@ -706,12 +706,11 @@ def test_neohookean_2d():
         
         # Activation
         act = Ta if active_model == "active_stress" else gamma
-    
 
         if material_model == "neo_hookean":
-            material = mat.NeoHookean(f0, act, matparams, active_model = active_model)
+            material = mat.NeoHookean(f0, act, matparams, active_model = active_model, T_ref = 1.0)
         else:
-            material = mat.HolzapfelOgden(f0, act, matparams, active_model = active_model)
+            material = mat.HolzapfelOgden(f0, act, matparams, active_model = active_model, T_ref = 1.0)
          
         nsolver = "snes_solver"
         prm = {"nonlinear_solver": "snes", "snes_solver":{}}
