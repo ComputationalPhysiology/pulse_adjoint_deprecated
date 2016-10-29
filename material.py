@@ -26,12 +26,15 @@ def heaviside(x):
     return conditional(ge(x, 0.0), 1.0, 0.0)
 
 class Material(object):
-    def __init__(self):
+    def __init__(self, T_ref = None):
         assert self._active_model in \
           ["active_stress", "active_strain", "active_strain_rossi"], \
           "The active model '{}' is not implemented.".format(self._active_model)
-        
-        self._T_ref = 100.0 if self._active_model == "active_stress"  else 1.0
+
+        if T_ref is None:
+            self._T_ref = 100.0 if self._active_model == "active_stress"  else 1.0
+        else:
+            self._T_ref = T_ref
             
 
 
@@ -274,7 +277,7 @@ class Material(object):
 
 
 class HolzapfelOgden(Material):
-    def __init__(self, f0 = None, gamma = None, params = None, active_model = "active_strain", strain_markers = None, s0 = None, n0 = None):
+    def __init__(self, f0 = None, gamma = None, params = None, active_model = "active_strain", strain_markers = None, s0 = None, n0 = None, T_ref = None):
 
 
         # Fiber system
@@ -294,7 +297,7 @@ class HolzapfelOgden(Material):
         self._active_model = active_model
 
         
-        Material.__init__(self)
+        Material.__init__(self, T_ref)
         
 
 
@@ -452,7 +455,7 @@ class Guccione(Material) :
 
 
 class NeoHookean(Material):
-    def __init__(self, f0 = None, gamma = None, params = None, active_model = "active_strain", s0 = None, n0 = None):
+    def __init__(self, f0 = None, gamma = None, params = None, active_model = "active_strain", s0 = None, n0 = None, T_ref = None):
 
         # Fiber system
         self.f0 = f0
@@ -470,7 +473,7 @@ class NeoHookean(Material):
 
         self._active_model = active_model
 
-        Material.__init__(self)
+        Material.__init__(self, T_ref)
         
     def default_parameters(self):
         return {"mu": 0.385}
