@@ -21,7 +21,6 @@ from numpy_mpi import *
 __all__ = ["RegionalStrainTarget", "FullStrainTarget",
            "VolumeTarget", "Regularization"]
 
-
 class OptimizationTarget(object):
     """Base class for optimization
     target
@@ -144,6 +143,9 @@ class RegionalStrainTarget(OptimizationTarget):
         """
         self._name = "Regional Strain"
         self.target_space = VectorFunctionSpace(mesh, "R", 0, dim = 3)
+        
+        
+        self.weight_space = TensorFunctionSpace(mesh, "R", 0)
         self.weights_arr = weights
 
         self.crl_basis = []
@@ -152,6 +154,10 @@ class RegionalStrainTarget(OptimizationTarget):
                 self.crl_basis.append(crl_basis[l])
         
         self.dmu = dmu
+
+        self.meshvols = [Constant(assemble(Constant(1.0)*dmu(i)),
+                                  name = "mesh volume") for i in range(1,18)]
+        
         OptimizationTarget.__init__(self, mesh)
 
     def print_head(self):
@@ -167,9 +173,12 @@ class RegionalStrainTarget(OptimizationTarget):
         target = []
         simulated = []
         for i in range(17):
+            
             target.append(Vector(self.target_fun[i].vector()))
             simulated.append(Vector(self.simulated_fun[i].vector()))
-            
+
+        
+        
         self.results["target"].append(target)
         self.results["simulated"].append(simulated)
 
@@ -204,17 +213,21 @@ class RegionalStrainTarget(OptimizationTarget):
                                     name = "Strains_{} Functional".format(i)) \
                            for i in range(1,18)]
         
-        self.weights = [Function(self.target_space, \
+        self.weights = [Function(self.weight_space, \
                                  name = "Strains Weights_{}".format(i)) \
                         for i in range(1,18)]
 
         for i in range(17):
-            assign_to_vector(self.weights[i].vector(), self.weights_arr[i])
+            weight = np.zeros(9)
+            weight[0::4] = self.weights_arr[i]
+            assign_to_vector(self.weights[i].vector(), weight)
+
                 
         self._set_form()
 
     def _set_form(self):
-     
+
+    
         self._form = [(dot(self.weights[i],self.simulated_fun[i] \
                            - self.target_fun[i]))**2 \
                      for i in range(17)]
@@ -250,13 +263,13 @@ class RegionalStrainTarget(OptimizationTarget):
                   self.simulated_fun[i])
 
     def assign_functional(self):
-
+        
         for i in range(17):
             solve(self._trial_r*self._test_r/self.meshvol*dx == \
-                  self._test_r*self._form[i]*self.dmu(i+1), \
+                  self._test_r*self._form[i]/self.meshvols[i]*self.dmu(i+1), \
                   self.functional[i])
 
-
+       
     def get_functional(self):
         return (list_sum(self.functional)/self.meshvol)*dx
                                     
