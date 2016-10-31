@@ -128,6 +128,9 @@ def write_opt_results_to_h5(h5group,
 
             # Save the results
             save_data(np.array(v.results["func_value"]), "/".join([group, "func_value"]))
+
+            # Save the optimal value
+            save_data(np.array(v.results["func_value"]), "/".join([group, "func_value"]))
             
             # Save weights if applicable
             if hasattr(v, 'weights'):
@@ -139,13 +142,13 @@ def write_opt_results_to_h5(h5group,
             n = len(v.results["func_value"])
             for k1 in ["simulated", "target"]:
 
-                for i in range(n):
-                    if k == "regional_strain":
-                        for j,s in enumerate(v.results[k1][i]):
-                            h5file.write(s, "/".join([group, k1, str(i), "region_{}".format(j)]))
+                # Save only the last one
+                if k == "regional_strain":
+                    for j,s in enumerate(v.results[k1][n-1]):
+                        h5file.write(s, "/".join([group, k1, "region_{}".format(j)]))
 
-                    else:
-                        h5file.write(v.results[k1][i], "/".join([group, k1, str(i)]))
+                else:
+                    h5file.write(v.results[k1][i], "/".join([group, k1]))
 
         # Store the regularization
         if for_result_opt.has_key("regularization"):
