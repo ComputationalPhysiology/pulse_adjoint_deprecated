@@ -93,6 +93,13 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     forward_result, _ = for_run(paramvec, False)
     
 
+    weights = {}
+    for k, v in for_run.opt_weights.iteritems():
+        weights[k] = v/(10*forward_result["func_value"])
+    for_run.opt_weights.update(**weights)
+    logger.info("Update weights for functional")
+    logger.info(for_run._print_functional())
+    
     # Stop recording
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
@@ -208,6 +215,13 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     logger.info(Text.blue("\nForward solution at guess parameters"))
     forward_result, _ = for_run(gamma, False)
 
+    weights = {}
+    for k, v in for_run.opt_weights.iteritems():
+        weights[k] = v/(10*forward_result["func_value"])
+    for_run.opt_weights.update(**weights)
+    logger.info("Update weights for functional")
+    logger.info(for_run._print_functional())
+    
     # Stop recording
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
