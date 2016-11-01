@@ -131,7 +131,7 @@ class RegionalStrainTarget(OptimizationTarget):
     """Class for regional strain optimization
     target
     """                                  
-    def __init__(self, mesh, crl_basis, dmu, weights=np.ones((17,3))):
+    def __init__(self, mesh, crl_basis, dmu, weights=np.ones((17,3)), nregions = 17):
         """Initialize regional strain target
 
         :param mesh: The mesh
@@ -142,11 +142,25 @@ class RegionalStrainTarget(OptimizationTarget):
         
         """
         self._name = "Regional Strain"
-        self.target_space = VectorFunctionSpace(mesh, "R", 0, dim = 3)
+        self.nregions = nregions
+        dim = mesh.geometry().dim()
+        self.dim = dim
+        
+        self.target_space = VectorFunctionSpace(mesh, "R", 0, dim = dim)
         
         
         self.weight_space = TensorFunctionSpace(mesh, "R", 0)
-        self.weights_arr = weights
+
+        if weights.shape == (nregions, dim):
+            self.weights_arr = weights
+        else:
+            from adjoint_contraction_args import logger
+            msg = "Weights do not correspond to the number of regions and dimension.\n"+\
+                  "Dim = {}, number of regions = {}, {} and {} was given".format(dim, nregions,
+                                                                                 weights.shape[1],
+                                                                                 weights.shape[0])
+            logger.warning(msg)
+            self.weights_arr =np.ones((nregions,dim))
 
         self.crl_basis = []
         for l in ["e_circ", "e_rad", "e_long"]:
@@ -155,8 +169,8 @@ class RegionalStrainTarget(OptimizationTarget):
         
         self.dmu = dmu
 
-        self.meshvols = [Constant(assemble(Constant(1.0)*dmu(i)),
-                                  name = "mesh volume") for i in range(1,18)]
+        self.meshvols = [Constant(assemble(Constant(1.0)*dmu(i+1)),
+                                  name = "mesh volume") for i in range(nregions)]
         
         OptimizationTarget.__init__(self, mesh)
 
@@ -172,7 +186,7 @@ class RegionalStrainTarget(OptimizationTarget):
         self.results["func_value"].append(self.func_value)
         target = []
         simulated = []
-        for i in range(17):
+        for i in range(self.nregions):
             
             target.append(Vector(self.target_fun[i].vector()))
             simulated.append(Vector(self.simulated_fun[i].vector()))
@@ -190,7 +204,7 @@ class RegionalStrainTarget(OptimizationTarget):
 
         """
         strains = []
-        for i in range(17):
+        for i in range(self.nregions):
             f = Function(self.target_space)
             assign_to_vector(f.vector(), np.array(target_data[i+1][n]))
             strains.append(f)
@@ -202,25 +216,29 @@ class RegionalStrainTarget(OptimizationTarget):
         """
         
         self.target_fun = [Function(self.target_space,
-                                    name = "Target Strains_{}".format(i)) \
-                           for i in range(1,18)]
+                                    name = "Target Strains_{}".format(i+1)) \
+                           for i in range(self.nregions)]
 
         self.simulated_fun = [Function(self.target_space,
-                                       name = "Simulated Strains_{}".format(i)) \
-                              for i in range(1,18)]
+                                       name = "Simulated Strains_{}".format(i+1)) \
+                              for i in range(self.nregions)]
 
         self.functional = [Function(self.realspace,
-                                    name = "Strains_{} Functional".format(i)) \
-                           for i in range(1,18)]
+                                    name = "Strains_{} Functional".format(i+1)) \
+                           for i in range(self.nregions)]
         
         self.weights = [Function(self.weight_space, \
-                                 name = "Strains Weights_{}".format(i)) \
-                        for i in range(1,18)]
+                                 name = "Strains Weights_{}".format(i+1)) \
+                        for i in range(self.nregions)]
 
-        for i in range(17):
-            weight = np.zeros(9)
-            weight[0::4] = self.weights_arr[i]
+        for i in range(self.nregions):
+            weight = np.zeros(self.dim**2)
+            weight[0::(self.dim+1)] = self.weights_arr[i]
             assign_to_vector(self.weights[i].vector(), weight)
+
+            # weight = np.zeros(9)
+            # weight[0::4] = self.weights_arr[i]
+            # assign_to_vector(self.weights[i].vector(), weight)
 
                 
         self._set_form()
@@ -230,11 +248,11 @@ class RegionalStrainTarget(OptimizationTarget):
     
         self._form = [(dot(self.weights[i],self.simulated_fun[i] \
                            - self.target_fun[i]))**2 \
-                     for i in range(17)]
+                     for i in range(self.nregions)]
 
     def get_value(self):
         return sum([gather_broadcast(self.functional[i].vector().array())[0] \
-                    for i in range(17)])
+                    for i in range(self.nregions)])
 
         
     def assign_target(self, target, annotate=False):
@@ -257,14 +275,14 @@ class RegionalStrainTarget(OptimizationTarget):
         grad_u_diag = as_vector([inner(e,gradu*e) for e in self.crl_basis])
 
         # Make a project for dolfin-adjoint recording
-        for i in range(17):
+        for i in range(self.nregions):
             solve(inner(self._trial, self._test)*self.dmu(i+1) == \
                   inner(grad_u_diag, self._test)*self.dmu(i+1), \
                   self.simulated_fun[i])
 
     def assign_functional(self):
         
-        for i in range(17):
+        for i in range(self.nregions):
             solve(self._trial_r*self._test_r/self.meshvol*dx == \
                   self._test_r*self._form[i]/self.meshvols[i]*self.dmu(i+1), \
                   self.functional[i])
