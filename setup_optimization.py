@@ -697,8 +697,11 @@ def get_volume_offset(patient, chamber = "lv"):
         else:
             endo_marker = patient.ENDO
 
+        volume = patient.volume[0]
+        
     else:
         endo_marker = patient.ENDO_RV
+        volume = patient.RVV[0]
         
     ds = Measure("exterior_facet",
                  subdomain_data = patient.facets_markers,
@@ -708,8 +711,8 @@ def get_volume_offset(patient, chamber = "lv"):
     
     # Divide by 1000 to get the volume in ml
     vol = assemble((-1.0/3.0)*dot(X,N)*ds)
-    # print "{}: {}".format(chamber, vol)
-    return patient.volume[0] - vol
+    
+    return volume - vol
 
 def setup_simulation(params, patient):
     
@@ -740,7 +743,7 @@ class MyReducedFunctional(ReducedFunctional):
         adj_reset()
         self.iter += 1
         paramvec_new = Function(self.paramvec.function_space(), name = "new control")
-      
+
         if isinstance(value, Function) or isinstance(value, RegionalGamma):
             paramvec_new.assign(value)
         elif isinstance(value, float) or isinstance(value, int):
@@ -792,6 +795,7 @@ class MyReducedFunctional(ReducedFunctional):
         else:
             func_value = self.for_res["func_value"]
 
+        
         self.func_values_lst.append(func_value*self.scale)
         self.controls_lst.append(Vector(paramvec_new.vector()))
 
