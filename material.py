@@ -32,7 +32,7 @@ class Material(object):
           "The active model '{}' is not implemented.".format(self._active_model)
 
         if T_ref is None:
-            self._T_ref = 100.0 if self._active_model == "active_stress"  else 1.0
+            self._T_ref = 300.0 if self._active_model == "active_stress"  else 1.0
         else:
             self._T_ref = T_ref
             
