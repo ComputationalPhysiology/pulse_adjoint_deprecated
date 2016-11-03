@@ -138,18 +138,18 @@ def write_opt_results_to_h5(h5group,
                     h5file.write(w.vector(), "/".join([group, "weigths", str(l)]))
                 
                 
-            
-            n = len(v.results["func_value"])
+
             for k1 in ["simulated", "target"]:
-
-                # Save only the last one
-                if k == "regional_strain":
-                    for j,s in enumerate(v.results[k1][n-1]):
-                        h5file.write(s, "/".join([group, k1, "region_{}".format(j)]))
-
-                else:
-                    h5file.write(v.results[k1][i], "/".join([group, k1]))
-
+                n = len(v.results[k1])
+                for i in range(n):
+                    if k == "regional_strain":
+                        for j,s in enumerate(v.results[k1][i]):
+                            h5file.write(s, "/".join([group, k1, str(i), "region_{}".format(j)]))
+                        
+                    else:
+                        h5file.write(v.results[k1][i], "/".join([group, k1, str(i)]))
+                    
+            
         # Store the regularization
         if for_result_opt.has_key("regularization"):
             save_data(for_result_opt["regularization"].results["func_value"],

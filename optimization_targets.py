@@ -53,6 +53,8 @@ class OptimizationTarget(object):
 
     def reset(self):
         self.func_value = 0.0
+        self.results["target"] = []
+        self.results["simulated"] = []
 
     def save(self):
         self.func_value += self.get_value()
