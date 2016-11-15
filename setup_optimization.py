@@ -109,6 +109,7 @@ def setup_patient_parameters():
     params.add("resolution", "low_res")
     params.add("pressure_path", "")
     params.add("mesh_path", "")
+    params.add("subsample", False)
     params.add("fiber_angle_epi", 50)
     params.add("fiber_angle_endo", 40)
     params.add("mesh_type", "lv", ["lv", "biv"])
@@ -179,6 +180,11 @@ def setup_application_parameters():
     material_parameters.add("b_f", 15.779)
     params.add(material_parameters)
     
+    # Space for material parameter(s)
+    # If optimization of multiple material parameters are selected,
+    # then R_0 is currently the only applicable space
+    params.add("matparams_space", "R_0", ["CG_1", "R_0", "regional"])
+
 
     ## Models ##
 
@@ -217,7 +223,7 @@ def setup_application_parameters():
     
     # Space for active parameter
     params.add("gamma_space", "CG_1", ["CG_1", "R_0", "regional"])
-
+    
     # If you want to use pointswise strains as input (only synthetic)
     params.add("use_deintegrated_strains", False)
 
@@ -363,8 +369,22 @@ def make_solver_params(params, patient, measurements):
                      for k in ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]])
 
     if npassive == 1:
-        paramvec = Function(FunctionSpace(patient.mesh, "R", 0), name = "matparam vector")
+        
+        if params["matparams_space"] == "regional":
+            paramvec = RegionalGamma(patient.strain_markers)
+        
+        else:
+        
+            family, degree = params["matparams_space"].split("_")
+            matparams_space = FunctionSpace(patient.mesh, family, int(degree))
+            paramvec = Function(matparams_space, name = "matparam vector")
+        
     else:
+        if params["matparams_space"] != "R_0":
+            msg = "Non scalar space for material parameters " \
+                  "is currently only supported for single materal paramters. " \
+                  "Scalar space will be used."
+            logger.warning(msg)
         paramvec = Function(VectorFunctionSpace(patient.mesh, "R", 0, dim = npassive), name = "matparam vector")
         
     # If we want to estimate material parameters, use the materal parameters
@@ -715,7 +735,7 @@ def get_volume_offset(patient, chamber = "lv"):
     return volume - vol
 
 def setup_simulation(params, patient):
-    
+
     # Load measurements
     measurements = get_measurements(params, patient)
     solver_parameters, pressure, controls = make_solver_params(params, patient, measurements)
