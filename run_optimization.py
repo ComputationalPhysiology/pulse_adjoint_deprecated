@@ -17,7 +17,7 @@
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfinimport import *
 from setup_optimization import setup_simulation, logger, MyReducedFunctional, get_measurements
-from utils import Text, Object, pformat, print_line, print_head, contract_point_exists, get_spaces,  UnableToChangePressureExeption
+from utils import Text, Object, pformat, print_line, print_head, contract_point_exists, get_spaces,  UnableToChangePressureExeption, get_simulated_pressure
 from forward_runner import ActiveForwardRunner, PassiveForwardRunner
 from optimization_targets import *
 from numpy_mpi import *
@@ -126,10 +126,11 @@ def run_active_optimization(params, patient):
     # Loop over contract points
     i = 0
     # for i in range(patient.num_contract_points):
+    
     while i < patient.num_contract_points:
         params["active_contraction_iteration_number"] = i
         if not contract_point_exists(params):
-
+            
             # Number of times we have interpolated in order
             # to be able to change the pressure
             attempts = 0
@@ -163,7 +164,14 @@ def run_active_optimization(params, patient):
          
             if not pressure_change:
                 raise RuntimeError("Unable to increasure")
-            
+        else:
+
+            # Make sure to do interpolation if that was done earlier
+            plv = get_simulated_pressure(params)
+            if not plv == measurements["pressure"][i+1]:
+                patient.interpolate_data(i+patient.passive_filling_duration-1)
+                measurements = get_measurements(params, patient)
+        
         i += 1
 
 def run_active_optimization_step(params, patient, solver_parameters, measurements, pressure, gamma):

@@ -125,6 +125,23 @@ def contract_point_exists(params):
     except KeyError:
         return False
 
+def get_simulated_pressure(params):
+
+    import h5py, numpy
+    from adjoint_contraction_args import ACTIVE_CONTRACTION, CONTRACTION_POINT, PASSIVE_INFLATION_GROUP, PHASES
+    
+    key1 = ACTIVE_CONTRACTION
+    key2  = CONTRACTION_POINT.format(params["active_contraction_iteration_number"])
+    key3 = PASSIVE_INFLATION_GROUP
+            
+    with h5py.File(params["sim_file"], "r") as h5file:
+        try:
+            pressure = numpy.array(h5file[key1][key2]["bcs"]["pressure"])[-1]
+        except:
+            pressure = None
+            
+    return pressure
+
 def list_sum(l):
     if not isinstance(l, list):
         return l
