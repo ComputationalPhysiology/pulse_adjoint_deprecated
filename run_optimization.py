@@ -130,7 +130,7 @@ def run_active_optimization(params, patient):
     while i < patient.num_contract_points:
         params["active_contraction_iteration_number"] = i
         if not contract_point_exists(params):
-            
+
             # Number of times we have interpolated in order
             # to be able to change the pressure
             attempts = 0
@@ -171,7 +171,7 @@ def run_active_optimization(params, patient):
             if not plv == measurements["pressure"][i+1]:
                 patient.interpolate_data(i+patient.passive_filling_duration-1)
                 measurements = get_measurements(params, patient)
-        
+                i -= 1
         i += 1
 
 def run_active_optimization_step(params, patient, solver_parameters, measurements, pressure, gamma):
