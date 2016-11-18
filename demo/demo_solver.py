@@ -44,7 +44,7 @@ def load_patient_data():
     class Object: pass
     patient = Object()
 
-    h5group = "26"
+    h5group = "22"
     ggroup = '{}/geometry'.format(h5group)
     mgroup = '{}/mesh'.format(ggroup)
     lgroup = "{}/local basis functions".format(h5group)
@@ -68,7 +68,7 @@ def load_patient_data():
         V = QuadratureSpace(mesh, 4)
         name = "fiber"
         l = Function(V, name = name)
-        fsubgroup = fgroup+"/fiber_epi50_endo40"
+        fsubgroup = fgroup+"/fiber_epi-60_endo60"
         h5file.read(l, fsubgroup)
         fsub_attrs = h5file.attributes(fsubgroup)
         setattr(patient, "e_f", l)
@@ -87,13 +87,18 @@ def load_patient_data():
 def demo_heart():
 
     setup_general_parameters()
+    from patient_data import FullPatient
 
     patient = load_patient_data()
+    # patient = FullPatient("Impact_p16_i43")
+
     
     mesh = patient.mesh
     ffun = patient.facets_markers
     N = FacetNormal(mesh)
 
+    # from IPython import embed; embed()
+    # exit()
 
     # Dirichlet BC
     def make_dirichlet_bcs(W):
@@ -105,30 +110,31 @@ def demo_heart():
 
     # Fibers
     f0 = patient.e_f
-    
-    # from IPython import embed; embed()
-    # exit()
+  
     # Contraction parameter
-    gamma = Constant(0.0)
-
+    # gamma = Constant(0.0)
+    gamma = Function(FunctionSpace(mesh, "R", 0))
     # Pressure
     pressure = Expression("t", t = 0.0)
 
     # Spring
-    spring = Constant(0.0)
+    spring = Constant(0.1)
+
     
     # Set up material model
-    # material = HolzapfelOgden(f0, gamma, active_model = "active_strain")
+    matparams = {"a":2.28, "a_f":1.685, 
+                "b":9.726, "b_f":15.779}
+    material = HolzapfelOgden(patient.e_f, gamma, matparams, active_model = "active_strain")
     # material = HolzapfelOgden(f0, gamma, active_model = "active_stress")
-    material = NeoHookean(f0, gamma, active_model = "active_stress")
+    # material = NeoHookean(f0, gamma, active_model = "active_stress")
 
     # Solver parameters
     solver_parameters = {"snes_solver":{}}
     solver_parameters["nonlinear_solver"] = "snes"
     solver_parameters["snes_solver"]["method"] = "newtontr"
-    solver_parameters["snes_solver"]["maximum_iterations"] = 8
-    solver_parameters["snes_solver"]["absolute_tolerance"] = 1e-5
-    solver_parameters["snes_solver"]["linear_solver"] = "mumps"
+    solver_parameters["snes_solver"]["maximum_iterations"] = 15
+    solver_parameters["snes_solver"]["absolute_tolerance"] = 1e-1
+    solver_parameters["snes_solver"]["linear_solver"] = "lu"
 
     # solver_parameters = {"newton_solver":{}}
     # solver_parameters["nonlinear_solver"] = "newton"
@@ -151,13 +157,34 @@ def demo_heart():
              "solve":solver_parameters}
 
     parameters["adjoint"]["stop_annotating"] = True
-    
+
+    # Initialize solver
     solver = LVSolver(params)
 
+    # Solve for the initial state
     solver.solve()
     u,p = solver.get_state().split()
     # u = solver.get_state()#.split()
-    plot(u, mode="displacement", title = "displacement")
+    plot(u, mode="displacement", title = "Initial solve")
+
+    # Put on some pressure and solve
+    pressure.t = 0.1
+    solver.solve()
+        
+    u,p = solver.get_state().split()
+    # u = solver.get_state()#.split()
+    plot(u, mode="displacement",
+         title = "Soulution after pressure change")
+    # plot(p, title = "hydrostatic pressure")
+
+    # Put on some active contraction and solve
+    gamma.assign(Constant(0.05))
+    solver.solve()
+        
+    u,p = solver.get_state().split()
+    # u = solver.get_state()#.split()
+    plot(u, mode="displacement",
+         title = "Solution after initiation of active contraction")
     # plot(p, title = "hydrostatic pressure")
     
     interactive()
