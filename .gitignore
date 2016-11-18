@@ -3,6 +3,11 @@
 *.htm
 *.html
 *.pyc
+*.aux
+*.log
+*.bbl
+*.cpp
+*.blg
 tests/data
 local_results
-posprocessing/results
+posprocessing
