@@ -379,7 +379,11 @@ class PassiveForwardRunner(BasicForwardRunner):
         if npassive == 1:
             fixed_idx = np.nonzero([not self.params["Optimization_parmeteres"][k] for k in lst])[0][0]
             par = lst[fixed_idx].split("fix_")[-1]
-            setattr(self.solver_parameters["material"], par, self.paramvec)
+            if self.params["matparams_space"] == "regional":
+                paramvec = self.paramvec.get_function()
+            else:
+                paramvec = self.paramvec
+            setattr(self.solver_parameters["material"], par, paramvec)
         else:
             paramvec_split = split(self.paramvec)
             fixed_idx = np.nonzero([not self.params["Optimization_parmeteres"][k] for k in lst])[0]
