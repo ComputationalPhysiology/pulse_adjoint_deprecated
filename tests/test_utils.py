@@ -35,8 +35,8 @@ def setup_params(space = "CG_1", mesh_type = "lv", opt_targets = ["volume"]):
 
     
     # Update weights
-    pparams = setup_passive_optimization_weigths(params["Optimization_targets"])
-    aparams = setup_active_optimization_weigths(params["Optimization_targets"])
+    pparams = setup_passive_optimization_weigths()
+    aparams = setup_active_optimization_weigths()
 
     params.remove('Passive_optimization_weigths')
     params.add(pparams)
@@ -88,17 +88,8 @@ def my_taylor_test(Jhat, m0_fun):
 
 
 def store_results(params, rd, control):
-    from pulse_adjoint.store_opt_results import write_opt_results_to_h5
-    
-    if params["phase"] == "passive_inflation":
-        h5group =  PASSIVE_INFLATION_GROUP
-        write_opt_results_to_h5(h5group, params, rd.ini_for_res, 
-                                    rd.for_res, opt_matparams = control)
-        
-    else:
-        h5group =  ACTIVE_CONTRACTION_GROUP.format(0)
-        write_opt_results_to_h5(h5group, params, rd.ini_for_res, 
-                                    rd.for_res, opt_gamma = control)
+    from pulse_adjoint.run_optimization import store
+    store(params, rd, opt_result)
 
 
 def plot_displacements():

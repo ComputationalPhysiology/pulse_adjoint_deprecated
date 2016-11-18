@@ -58,7 +58,7 @@ def test_passive(params):
     logger.info("Taylor test")
     my_taylor_test(rd, paramvec)
 
-    store_results(params, rd, paramvec)
+    store_results(params, rd, {})
     
 
 
@@ -137,6 +137,7 @@ def test_biv():
 if __name__ == "__main__":
     # plot_displacements()
     # exit()
-    test_biv()
+    # test_biv()
+    test_lv()
     
    
