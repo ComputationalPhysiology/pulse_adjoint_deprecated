@@ -52,8 +52,9 @@ class Compressibility(object):
 
             element = "taylor_hood" if not parameters.has_key("elements") \
                        else parameters["elements"]
-            
-            assert element in ["taylor_hood", "mini"]
+
+            msg  = "Supported elements are 'taylor_hood' and 'mini'"
+            assert element in ["taylor_hood", "mini"], msg
 
             if DOLFIN_VERSION_MAJOR > 1.6:
 
@@ -61,8 +62,14 @@ class Compressibility(object):
                     
                     P2 = VectorElement("Lagrange", mesh.ufl_cell(), 2)
                     P1 = FiniteElement("Lagrange", mesh.ufl_cell(), 1)
+
+                    self._u_space = FunctionSpace(mesh, P2)
+                    self._p_space = FunctionSpace(mesh, P1)
                     self.W = FunctionSpace(mesh, P2*P1)
                 else:
+
+                    logger.warning("MINI elements are experimental. "
+                                   "Things might fail.")
                     bdim = 3 if mesh.ufl_domain().topological_dimension() == 2 else 4
                     
                     P1 = VectorElement("Lagrange", mesh.ufl_cell(), 1)
@@ -89,6 +96,8 @@ class Compressibility(object):
                                    "Consider upgrading to version 2016.1.0")
                 P2 = VectorFunctionSpace(mesh, "Lagrange", 2)
                 P1 = FunctionSpace(mesh, "Lagrange", 1)
+                self._u_space = P2
+                self._p_space = P1
                 self.W = P2*P1
                                     
                 # # Displacemet Space
@@ -114,6 +123,10 @@ class Compressibility(object):
         
         def get_displacement_space(self):
             return self.W.sub(0)
+        def get_u_space(self):
+            return self._u_space
+        def get_p_space(self):
+            return self._p_space
 
         def get_pressure_space(self):
             return self.W.sub(1)
