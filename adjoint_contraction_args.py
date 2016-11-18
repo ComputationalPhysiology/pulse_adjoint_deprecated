@@ -90,51 +90,22 @@ DEFAULT_WEIGHT_RULE = "equal"
 WEIGHT_DIRECTIONS = ["c", "l", "r", "all"]
 DEFAULT_WEIGHT_DIRECTION = "all"
 
-#Spring constant for base.
-BASE_K = 1.0
-
-# Regularization patameter
-REG_PAR = 0.001
-
-# Weighting of strain and volume (0=Strain only, 1=Volume only)
-ALPHA = 0.5
-ALPHA_MATPARAMS = 1.0
-
-
 # The different phases we can optimize
 PHASES = ['passive_inflation', 'active_contraction', "all"]
 
-# Initial material parameters
-# INITIAL_MATPARAMS = [0.795, 6.855, 21.207, 40.545]
-# INITIAL_MATPARAMS = [2.91, 2.582, 5.0,5.0]
-INITIAL_MATPARAMS = [2.91, 1.0, 5.0,5.0] 
 
 # If true, Optimize material parameters, otherswise use the default material parameters
 OPTIMIZE_MATPARAMS = True
 
-# Scale for optimization algorithm
-SCALE = 1.0
-
-# MAX size of gamma steps.
 GAMMA_INC_LIMIT = 0.02
 
 # Max size of gamma
 MAX_GAMMA = 0.9
 
-# MAX size of pressure step (cPa)
-#PRESSURE_INC_LIMIT = 0.4
 
 # Optimization method
-DEFAULT_OPTIMIZATION_METHOD = "SLSQP"
+# DEFAULT_OPTIMIZATION_METHOD = "SLSQP"
 OPTIMIZATION_METHODS = ["TNC", "L-BFGS-B", "SLSQP", "ipopt"]
-
-# Optimization tolerance 
-OPTIMIZATION_TOLERANCE_GAMMA = 1.0e-6
-OPTIMIZATION_TOLERANCE_MATPARAMS = 1.0e-9
-
-# Maximum number of iterations
-OPTIMIZATION_MAXITER_GAMMA = 100
-OPTIMIZATION_MAXITER_MATPARAMS = 30
 
 
 ############### SYNTHETIC DATA  #####################

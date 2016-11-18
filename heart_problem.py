@@ -118,8 +118,7 @@ class BasicHeartProblem(collections.Iterator):
         logger.debug(line)
 
         converged = False
-        # nsteps = max(2, int(math.ceil(p_diff/PRESSURE_INC_LIMIT)))
-        # nsteps = np.ceil(abs((p_next - p_prev)/(p_prev+1)))
+
         nsteps = 2
         n_max = 100
         
