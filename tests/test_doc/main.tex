@@ -220,19 +220,37 @@ In both cases the strain-energy depends on the elastic component only, and this 
 incorporated by modifying the corresponding elastic invariants. 
 For \eqref{eq:active_strain_Fa_rossi} we find that:
 \begin{align}
-I_1^E &= I_1 - I_{4\ef} \frac{\gamma (\gamma +2)}{(1+\gamma)^2} - (I_1-I_{4\ef})\frac{(1 + \gamma)^{2(d-1)} - 1}{((1 + \gamma)^{d-1} - 1)^2},\\
+I_1^E &= I_1(1 + \gamma)^{4-d} +  I_{4\ef}\left(\frac{1}{(1+\gamma)^2} -(1+\gamma)^{4-d}\right) ,\\
 I_{4\ef}^E &= I_{4\ef} \frac{1}{(1+\gamma)^2},
 \end{align}
+
 where $d \in [2,3]$ refers to the topological dimension. For \eqref{eq:active_strain_Fa_gjerald} we find that
 \begin{align}
-I_1^E &= I_1(1 - \gamma)^{4-d} +  I_{4\ef}\left(\frac{1}{(1-\gamma)^2} +(\gamma -1)^{4-d}\right) ,\\
+I_1^E &= I_1(1 - \gamma)^{4-d} +  I_{4\ef}\left(\frac{1}{(1-\gamma)^2} - (1-\gamma)^{4-d}\right) ,\\
 I_{4\ef}^E &= I_{4\ef} \frac{1}{(1-\gamma)^2},
 \end{align}
 
 
 
 \subsection{Force-balance equations}
-
+The Cauchy momentum equation in is general form is given by
+\begin{align}
+\nabla \cdot \Cauchy + \mathbf{f}_b - \rho \frac{d\mathbf{v}}{dt} = 0,
+\end{align}
+where $\Cauchy$ is the Cauchy stress, $\mathbf{f}_b$ are body forces
+(e.g graviational forces), and $ \rho \frac{d\mathbf{v}}{dt}$
+represents the inertial forces. We assume body forces and inertial
+forces are neglectable, and end up with the following force-balance
+equation
+\begin{align}
+  \nabla \cdot \Cauchy = 0.
+  \label{eq:Force-balance}
+\end{align}
+In the reference configuration we have the force-balance eqution
+\begin{align}
+  \nabla \cdot \FPiola = 0.
+  \label{eq:Force-balance_ref}
+\end{align}
 
 \section{Tests}
 
@@ -249,7 +267,7 @@ For the active stress formulation we find that
 \begin{align}
 \FPiola = \mu \F + T_a \F  \ef \otimes \ef - pJ\F^{-T}, 
 \end{align}
-and the Force-balance equation \eqref{eq:Force-balance} gives:
+and the Force-balance equation \eqref{eq:Force-balance_ref} gives:
 \begin{align}
   p(x,y) = (\mu + T_a)(0.5 ( \alpha y)^2 + \alpha x) + \mu
 \end{align}
@@ -259,8 +277,8 @@ For the active strain approach we find for \eqref{eq:active_strain_Fa_rossi} tha
 \end{align}
 and the Force-balance equation \eqref{eq:Force-balance} gives
 \begin{align}
-  p(x,y) = \frac{\alpha \mu}{(1+\gamma)^2}(0.5 \alpha y^2 +  x) + \mu(1+\gamma)
-\end{align}, 
+  p(x,y) = \frac{\alpha \mu}{(1+\gamma)^2}(0.5 \alpha y^2 +  x) + \mu(1+\gamma),
+\end{align}
 and for \eqref{eq:active_strain_Fa_gjerald} we find that
 \begin{align}
 \FPiola =
