@@ -42,6 +42,20 @@ class BasicForwardRunner(object):
                  bcs,
                  optimization_targets,
                  params):
+        """Initialize base class for forward solver
+
+        :param solver_parameters: solver parameters coming from 
+        setup_optimization.make_solver_paramerters()
+        :param pressure: list of pressure that should be solved for, 
+        starting with the current pressure
+        :param bcs: Dictionary with boundary conditions coming from
+        run_optimization.load_target_data()
+        :param optimization_targets: Dictionary with optimization 
+        targets,  coming from run_optimization.load_target_data()
+        :param params: adjoint contraction paramters
+        
+        """
+        
 
         
         self.bcs = bcs
@@ -64,6 +78,9 @@ class BasicForwardRunner(object):
         self.optimization_targets = optimization_targets
 
     def _print_head(self):
+        """
+        Print the top line for the output of the forward solve
+        """
         
         head = "{:<12}".format("LV Pressure")
         if self.mesh_type == "biv":
@@ -75,6 +92,9 @@ class BasicForwardRunner(object):
         return head
 
     def _print_line(self, it):
+        """
+        Print each line for the forward solve, corresponding to the head
+        """
         
         line= "{:<12.2f}".format(self.bcs["pressure"][it])
         if self.mesh_type == "biv":
@@ -86,6 +106,9 @@ class BasicForwardRunner(object):
         return line
 
     def _print_functional(self):
+        """
+        Print the terms in the functional in a mathematical way
+        """
         
         return "\nFuncional = {}\n".format((len(self.opt_weights.keys())*" {{}}*I_{} +").\
                                             format(*self.opt_weights.keys())[:-1].\
@@ -93,7 +116,17 @@ class BasicForwardRunner(object):
         
         
 
-    def solve_the_forward_problem(self, annotate = False, phm=None, phase = "passive"):
+    def solve_the_forward_problem(self, phm, annotate = False phase = "passive"):
+        """Solve the forward model
+
+        :param annotate: 
+        :param phm: A heart problem instance
+        :param phase: Which phase of the cycle, options: ['passive', 'active']
+        :returns: A dictionary with the results
+        :rtype: dict
+
+        """
+        
 
         # Set the functional value for each target to zero
         for key,val in self.target_params.iteritems():
@@ -124,12 +157,13 @@ class BasicForwardRunner(object):
         # Print the head of table 
         logger.info(self._print_head())
        
-
+        # Get the functional value of each term in the functional
         func_lst = []
         for key,val in self.target_params.iteritems():
             if val:
                 func_lst.append(self.opt_weights[key]*self.optimization_targets[key].get_functional())
-                
+
+        # Collect the terms in the functional
         functional = list_sum(func_lst)
               
        
@@ -146,12 +180,12 @@ class BasicForwardRunner(object):
             reg_term = 0.0
 
         
-        
         for it, p in enumerate(self.bcs["pressure"][1:], start=1):
 
             sol = phm.next()
-
+           
             for key,val in self.target_params.iteritems():
+
                 if val:
             
                     self.optimization_targets[key].next_target(it, annotate=annotate)
@@ -160,8 +194,7 @@ class BasicForwardRunner(object):
                     self.optimization_targets[key].save()
                     
             self.regularization.save()
-
-
+            
             # Print the values
             logger.info(self._print_line(it))
             
@@ -182,7 +215,6 @@ class BasicForwardRunner(object):
         forward_result = self._make_forward_result(functional_values,
                                                    functionals_time)
 
-        
         # self._print_finished_report(forward_result)
         return forward_result
     
@@ -311,7 +343,8 @@ class ActiveForwardRunner(BasicForwardRunner):
 
             # Solve the forward problem with the old gamma
             logger.debug("Solve the forward problem with the old gamma")
-            forward_result = BasicForwardRunner.solve_the_forward_problem(self, annotate, self.cphm, "active")
+            forward_result = BasicForwardRunner.solve_the_forward_problem(self, self.cphm,
+                                                                          annotate, "active")
 
             return forward_result, True
 
@@ -336,7 +369,8 @@ class ActiveForwardRunner(BasicForwardRunner):
             # Relax on the convergence criteria in order to ensure convergence
             self.cphm.solver.parameters["solve"]["snes_solver"]['absolute_tolerance']*= 100
             self.cphm.solver.parameters["solve"]["snes_solver"]['relative_tolerance']*= 100
-            forward_result = BasicForwardRunner.solve_the_forward_problem(self, annotate, self.cphm, "active")
+            forward_result = BasicForwardRunner.solve_the_forward_problem(self, self.cphm,
+                                                                          annotate, "active")
             self.cphm.solver.parameters["solve"]["snes_solver"]['absolute_tolerance']*= 0.01
             self.cphm.solver.parameters["solve"]["snes_solver"]['relative_tolerance']*= 0.01
 
@@ -401,7 +435,7 @@ class PassiveForwardRunner(BasicForwardRunner):
         phm.solver.solve()
         parameters["adjoint"]["stop_annotating"] = not annotate
         
-        forward_result = BasicForwardRunner.solve_the_forward_problem(self, annotate, phm, "passive")
+        forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, annotate, "passive")
 
 
         return forward_result, False

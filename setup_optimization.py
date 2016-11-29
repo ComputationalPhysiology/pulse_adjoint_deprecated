@@ -273,7 +273,6 @@ def initialize_patient_data(patient_parameters, synth_data):
     from patient_data import Patient
     
     patient = Patient(**patient_parameters)
-    
 
     if synth_data:
         patient.passive_filling_duration = SYNTH_PASSIVE_FILLING
@@ -418,6 +417,7 @@ def make_solver_params(params, patient, measurements):
 
 
     strain_weights = None if not hasattr(patient, "strain_weights") else patient.strain_weights
+
     
     strain_weights_deintegrated = patient.strain_weights_deintegrated \
       if params["use_deintegrated_strains"] else None
@@ -699,7 +699,7 @@ def get_measurements(params, patient):
         if p["regional_strain"]:
 
             strain = {}
-            for region in STRAIN_REGION_NUMS:
+            for region in patient.strain.keys():
                 strain[region] = patient.strain[region][start:end]
                 
             measurements["regional_strain"] = strain

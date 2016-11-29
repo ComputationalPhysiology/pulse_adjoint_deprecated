@@ -133,7 +133,7 @@ class RegionalStrainTarget(OptimizationTarget):
     """Class for regional strain optimization
     target
     """                                  
-    def __init__(self, mesh, crl_basis, dmu, weights=np.ones((17,3)), nregions = 17):
+    def __init__(self, mesh, crl_basis, dmu, weights=np.ones((17,3)), nregions = None):
         """Initialize regional strain target
 
         :param mesh: The mesh
@@ -144,7 +144,7 @@ class RegionalStrainTarget(OptimizationTarget):
         
         """
         self._name = "Regional Strain"
-        self.nregions = nregions
+        self.nregions = np.shape(weights)[0] if nregions is None else nregions
         dim = mesh.geometry().dim()
         self.dim = dim
         
@@ -152,17 +152,18 @@ class RegionalStrainTarget(OptimizationTarget):
         
         
         self.weight_space = TensorFunctionSpace(mesh, "R", 0)
-
-        if weights.shape == (nregions, dim):
+       
+        if weights.shape == (self.nregions, dim):
             self.weights_arr = weights
         else:
             from adjoint_contraction_args import logger
             msg = "Weights do not correspond to the number of regions and dimension.\n"+\
-                  "Dim = {}, number of regions = {}, {} and {} was given".format(dim, nregions,
+                  "Dim = {}, number of regions = {}, {} and {} was given".format(dim,
+                                                                                 self.nregions,
                                                                                  weights.shape[1],
                                                                                  weights.shape[0])
             logger.warning(msg)
-            self.weights_arr =np.ones((nregions,dim))
+            self.weights_arr =np.ones((self.nregions,dim))
 
         self.crl_basis = []
         for l in ["e_circ", "e_rad", "e_long"]:
@@ -172,7 +173,7 @@ class RegionalStrainTarget(OptimizationTarget):
         self.dmu = dmu
 
         self.meshvols = [Constant(assemble(Constant(1.0)*dmu(i+1)),
-                                  name = "mesh volume") for i in range(nregions)]
+                                  name = "mesh volume") for i in range(self.nregions)]
         
         OptimizationTarget.__init__(self, mesh)
 
