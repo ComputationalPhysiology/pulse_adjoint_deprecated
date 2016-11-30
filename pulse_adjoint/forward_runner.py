@@ -116,7 +116,7 @@ class BasicForwardRunner(object):
         
         
 
-    def solve_the_forward_problem(self, phm, annotate = False phase = "passive"):
+    def solve_the_forward_problem(self, phm, annotate = False, phase = "passive"):
         """Solve the forward model
 
         :param annotate: 

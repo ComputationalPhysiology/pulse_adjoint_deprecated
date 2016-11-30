@@ -21,116 +21,160 @@ from pulse_adjoint.run_optimization import run_passive_optimization_step, run_ac
 from pulse_adjoint.setup_optimization import initialize_patient_data, setup_simulation
 from pulse_adjoint.adjoint_contraction_args import *
 from pulse_adjoint.utils import Text, pformat, passive_inflation_exists
-from test_utils import setup_params, my_taylor_test, store_results, plot_displacements
-def test_passive(params):
-    
-    patient = initialize_patient_data(params["Patient_parameters"], 
-                                      params["synth_data"])
-    
-    
-    logger.info(Text.blue("\nTest Passive Optimization"))
+from utils import setup_params, my_taylor_test, store_results, plot_displacements
+def passive(params):
 
-    logger.info(pformat(params.to_dict()))
+    try:
+        patient = initialize_patient_data(params["Patient_parameters"], 
+                                          params["synth_data"])
+    
+    
+        logger.info(Text.blue("\nTest Passive Optimization"))
+
+        logger.info(pformat(params.to_dict()))
 
 
-    params["phase"] = "passive_inflation"
-    # params["alpha_matparams"] = 0.5
-    measurements, solver_parameters, p_lv, paramvec = \
-      setup_simulation(params, patient)
+        params["phase"] = "passive_inflation"
+        # params["alpha_matparams"] = 0.5
+        measurements, solver_parameters, p_lv, paramvec \
+            = setup_simulation(params, patient)
 
     
-    rd, paramvec = run_passive_optimization_step(params, 
-                                                 patient, 
-                                                 solver_parameters, 
-                                                 measurements, 
-                                                 p_lv, paramvec)    
+        rd, paramvec = run_passive_optimization_step(params, 
+                                                     patient, 
+                                                     solver_parameters, 
+                                                     measurements, 
+                                                     p_lv, paramvec)    
    
     
-    # Dump html visualization of the forward and adjoint system
-    adj_html("passive_forward.html", "forward")
-    adj_html("passive_adjoint.html", "adjoint")
-
-    # Replay the forward run, i.e make sure that the recording is correct.
-    logger.info("Replay dolfin")
-    assert replay_dolfin(tol=1e-12)
-    
-    # Test that the gradient is correct
-    logger.info("Taylor test")
-    my_taylor_test(rd, paramvec)
-
-    store_results(params, rd, {})
-    
-
-
-def test_active(params):
-    
-    patient = initialize_patient_data(params["Patient_parameters"], 
-                                      params["synth_data"])
-    
-    logger.info(Text.blue("\nTest Passive Optimization"))
-
-    logger.info(pformat(params.to_dict()))
-
-    if not passive_inflation_exists(params):
-        params["phase"] = "passive_inflation"
-        params["optimize_matparams"] = False
-        run_passive_optimization(params, patient)
+        # Dump html visualization of the forward and adjoint system
+        adj_html("passive_forward.html", "forward")
+        adj_html("passive_adjoint.html", "adjoint")
         
-    adj_reset()
+        # Replay the forward run, i.e make sure that the recording is correct.
+        logger.info("Replay dolfin")
+        assert replay_dolfin(tol=1e-12)
+        
+        # Test that the gradient is correct
+        logger.info("Taylor test")
+        my_taylor_test(rd, paramvec)
+        
+        store_results(params, rd, {})
+        return True
+    except:
+        return False
 
-    params["phase"] = "active_contraction"
-    measurements, solver_parameters, p_lv, gamma = \
-      setup_simulation(params, patient)
+
+def active(params):
+
+    try:
+        patient = initialize_patient_data(params["Patient_parameters"], 
+                                          params["synth_data"])
     
-    rd, gamma = run_active_optimization_step(params, 
-                                             patient, 
-                                             solver_parameters, 
-                                             measurements, p_lv, 
-                                             gamma)
+        logger.info(Text.blue("\nTest Passive Optimization"))
+        
+        logger.info(pformat(params.to_dict()))
+        
+        if not passive_inflation_exists(params):
+            params["phase"] = "passive_inflation"
+            params["optimize_matparams"] = False
+            run_passive_optimization(params, patient)
+        
+            adj_reset()
 
-    # Test that we can store the results
-    store_results(params, rd, gamma)
+        params["phase"] = "active_contraction"
+        measurements, solver_parameters, p_lv, gamma \
+            = setup_simulation(params, patient)
+    
+        rd, gamma = run_active_optimization_step(params, 
+                                                 patient, 
+                                                 solver_parameters, 
+                                                 measurements, p_lv, 
+                                                 gamma)
+
+        # Test that we can store the results
+        store_results(params, rd, gamma)
 
     
 
-    # Dump html visualization of the forward and adjoint system
-    adj_html("active_forward.html", "forward")
-    adj_html("active_adjoint.html", "adjoint")
-
-    # Replay the forward run, i.e make sure that the recording is correct.
-    logger.info("Replay dolfin")
-    assert replay_dolfin(tol=1e-12)
+        # Dump html visualization of the forward and adjoint system
+        adj_html("active_forward.html", "forward")
+        adj_html("active_adjoint.html", "adjoint")
+        
+        # Replay the forward run, i.e make sure that the recording is correct.
+        logger.info("Replay dolfin")
+        assert replay_dolfin(tol=1e-12)
+        
+        # Test that the gradient is correct
+        logger.info("Taylor test")
+        my_taylor_test(rd, gamma)
+        return True
+    except:
+        return False
     
-    # Test that the gradient is correct
-    logger.info("Taylor test")
-    my_taylor_test(rd, gamma)
+def test_lv_passive_CG1():
 
     
-def test_lv():
-
-    from itertools import product
-    spaces = ["CG_1", "regional", "R_0"]
-
+    space = "CG_1"
     opt_targets = ["volume", "regional_strain"]
 
-    for space in spaces:
-        params = setup_params(space, "lv", opt_targets)
-        
-        test_passive(params)
-        test_active(params)
-        
-def test_biv():
+    params = setup_params(space, "lv", opt_targets)
 
-    from itertools import product
-    spaces = ["CG_1", "R_0"]
+    
+    assert passive(params)
+    
+    
+def test_lv_active_CG1():
 
-    opt_targets = ["volume", "rv_volume"]
 
-    for space in spaces:
-        params = setup_params(space, "biv", opt_targets)
+    space = "CG_1"
+    opt_targets = ["volume", "regional_strain"]
+
+    params = setup_params(space, "lv", opt_targets)
+    
+    assert active(params)
+
+def test_lv_passive_regional():
+
+    
+    space = "regional"
+    opt_targets = ["volume", "regional_strain"]
+
+    params = setup_params(space, "lv", opt_targets)
+    
+    assert passive(params)
+    
+    
+def test_lv_active_R_0():
+
+    space = "R_0"
+    opt_targets = ["volume", "regional_strain"]
+
+    params = setup_params(space, "lv", opt_targets)
+    
+    assert active(params)
+
+def test_lv_active_R_0():
+
+    space = "R_0"
+    opt_targets = ["volume", "regional_strain"]
+
+    params = setup_params(space, "lv", opt_targets)
+    
+    assert active(params)
         
-        test_passive(params)
-        test_active(params)
+# def test_biv():
+
+#     from itertools import product
+#     spaces = ["CG_1", "R_0"]
+
+#     opt_targets = ["volume", "rv_volume"]
+
+#     for space in spaces:
+#         params = setup_params(space, "biv", opt_targets)
+        
+#         passive(params)
+#         active(params)
      
 
 

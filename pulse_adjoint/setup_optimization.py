@@ -68,15 +68,19 @@ def setup_adjoint_contraction_parameters():
     
     
 def setup_solver_parameters():
-    # from dolfin.cpp.fem import NonlinearVariationalSolver
-    #NonlinearVariationalSolver.default_parameters()
+    """
+    Have a look at :py:function:`NonlinearVariationalSolver.default_parameters()`
+    for options
+
+    """
+    
     solver_parameters = {"snes_solver":{}}
 
-    solver_parameters["nonlinear_solver"] = NONLINSOLVER
-    solver_parameters["snes_solver"]["method"] = SNES_SOLVER_METHOD
-    solver_parameters["snes_solver"]["maximum_iterations"] = SNES_SOLVER_MAXITR
-    solver_parameters["snes_solver"]["absolute_tolerance"] = SNES_SOLVER_ABSTOL 
-    solver_parameters["snes_solver"]["linear_solver"] = SNES_SOLVER_LINSOLVER
+    solver_parameters["nonlinear_solver"] = "snes"
+    solver_parameters["snes_solver"]["method"] = "newtontr"
+    solver_parameters["snes_solver"]["maximum_iterations"] = 15
+    solver_parameters["snes_solver"]["absolute_tolerance"] = 1.0e-5
+    solver_parameters["snes_solver"]["linear_solver"] = "lu"
     
     
 
@@ -85,6 +89,9 @@ def setup_solver_parameters():
    
 
 def setup_general_parameters():
+    """
+    Parameters to speed up the compiler
+    """
 
     # Parameter for the compiler
     flags = ["-O3", "-ffast-math", "-march=native"]
@@ -101,6 +108,42 @@ def setup_general_parameters():
 
 
 def setup_patient_parameters():
+    """
+    Have a look at :py:class:`patient_data.FullPatient`
+    for options
+
+    Defaults are
+
+    +------------------+-----------------+---------------+
+    | key              | Default Value   | Description   |
+    +==================+=================+===============+
+    | weight_rule      | equal           |               |
+    +------------------+-----------------+---------------+
+    | patient          | Joakim          |               |
+    +------------------+-----------------+---------------+
+    | weight_direction | all             |               |
+    +------------------+-----------------+---------------+
+    | include_sheets   | False           |               |
+    +------------------+-----------------+---------------+
+    | patient_type     | full            |               |
+    +------------------+-----------------+---------------+
+    | mesh_path        |                 |               |
+    +------------------+-----------------+---------------+
+    | fiber_angle_epi  | -60             |               |
+    +------------------+-----------------+---------------+
+    | subsample        | False           |               |
+    +------------------+-----------------+---------------+
+    | mesh_type        | lv              |               |
+    +------------------+-----------------+---------------+
+    | pressure_path    |                 |               |
+    +------------------+-----------------+---------------+
+    | resolution       | low_res         |               |
+    +------------------+-----------------+---------------+
+    | fiber_angle_endo | 60              |               |
+    +------------------+-----------------+---------------+
+
+    """
+    
     params = Parameters("Patient_parameters")
     params.add("patient", "Joakim")
     params.add("patient_type", "full")
@@ -110,18 +153,41 @@ def setup_patient_parameters():
     params.add("pressure_path", "")
     params.add("mesh_path", "")
     params.add("subsample", False)
-    params.add("fiber_angle_epi", 50)
-    params.add("fiber_angle_endo", 40)
+    params.add("fiber_angle_epi", -60)
+    params.add("fiber_angle_endo", 60)
     params.add("mesh_type", "lv", ["lv", "biv"])
     params.add("include_sheets", False)
 
     return params
 
 def setup_optimizationtarget_parameters():
+    """
+    Set which targets to use
+    Default solver parameters are:
+
+    +----------------------+-----------------------+
+    |Key                   | Default value         |
+    +======================+=======================+
+    | volume               | True                  |
+    +----------------------+-----------------------+
+    | rv_volume            | False                 |
+    +----------------------+-----------------------+
+    | regional_strain      | True                  |
+    +----------------------+-----------------------+
+    | full_strain          | False                 |
+    +----------------------+-----------------------+
+    | GL_strain            | False                 |
+    +----------------------+-----------------------+
+    | GC_strain            | False                 |
+    +----------------------+-----------------------+
+    | displacement         | False                 |
+    +----------------------+-----------------------+
+    
+    """
 
     params = Parameters("Optimization_targets")
     params.add("volume", True)
-    params.add("rv_volume", True)
+    params.add("rv_volume", False)
     params.add("regional_strain", True)
     params.add("full_strain", False)
     params.add("GL_strain", False)
@@ -130,7 +196,31 @@ def setup_optimizationtarget_parameters():
     return params
 
 def setup_active_optimization_weigths():
+    """
+    Set the weight on each target (if used) for the active phase.
+    Default solver parameters are:
+
+    +----------------------+-----------------------+
+    |Key                   | Default value         |
+    +======================+=======================+
+    | volume               | 0.95                  |
+    +----------------------+-----------------------+
+    | rv_volume            | 0.95                  |
+    +----------------------+-----------------------+
+    | regional_strain      | 0.05                  |
+    +----------------------+-----------------------+
+    | full_strain          | 1.0                   |
+    +----------------------+-----------------------+
+    | GL_strain            | 0.05                  |
+    +----------------------+-----------------------+
+    | GC_strain            | 0.05                  |
+    +----------------------+-----------------------+
+    | displacement         | 1.0                   |
+    +----------------------+-----------------------+
+    | regularization       | 0.01                  |
+    +----------------------+-----------------------+
     
+    """
     params = Parameters("Active_optimization_weigths")
     
     
@@ -139,12 +229,38 @@ def setup_active_optimization_weigths():
     params.add("regional_strain", 0.05)
     params.add("full_strain", 1.0)
     params.add("GL_strain", 0.05)
+    params.add("GC_strain", 0.05)
     params.add("displacement", 1.0)
     params.add("regularization", 0.01)
         
     return params
 
 def setup_passive_optimization_weigths():
+    """
+    Set the weight on each target (if used) for the passive phase.
+    Default solver parameters are:
+
+    +----------------------+-----------------------+
+    |Key                   | Default value         |
+    +======================+=======================+
+    | volume               | 1.0                   |
+    +----------------------+-----------------------+
+    | rv_volume            | 1.0                   |
+    +----------------------+-----------------------+
+    | regional_strain      | 0.0                   |
+    +----------------------+-----------------------+
+    | full_strain          | 1.0                   |
+    +----------------------+-----------------------+
+    | GL_strain            | 0.05                  |
+    +----------------------+-----------------------+
+    | GC_strain            | 0.05                  |
+    +----------------------+-----------------------+
+    | displacement         | 1.0                   |
+    +----------------------+-----------------------+
+    | regularization       | 0.0                   |
+    +----------------------+-----------------------+
+    
+    """
     
     params = Parameters("Passive_optimization_weigths")
     
@@ -159,13 +275,57 @@ def setup_passive_optimization_weigths():
     return params
     
 def setup_application_parameters():
+    """
+    Setup the main parameters for the pipeline
+
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | key                                 | Default Value                                        | Description   |
+    +=====================================+======================================================+===============+
+    | base_bc                             | 'fix_x'                                              |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | matparams_space                     | 'R_0'                                                |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | noise                               | False                                                |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | use_deintegrated_strains            | False                                                |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | nonzero_initial_guess               | True                                                 |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | active_model                        | 'active_stress'                                      |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | base_spring_k                       | 1.0                                                  |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | synth_data                          | False                                                |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | sim_file                            | 'result.h5'                                          |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | Material_parameters                 | {'a': 2.28, 'a_f': 1.685, 'b': 9.726, 'b_f': 15.779} |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | phase                               | passive_inflation                                    |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | optimize_matparams                  | True                                                 |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | state_space                         | 'P_2:P_1'                                            |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | gamma_space                         | 'CG_1'                                               |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | incomp_penalty                      | 0.0                                                  |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | compressibility                     | 'incompressible'                                     |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | active_contraction_iteration_number | 0                                                    |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+    | outdir                              |                                                      |               |
+    +-------------------------------------+------------------------------------------------------+---------------+
+
+    """
     params = Parameters("Application_parmeteres")
 
     ## Output ##
     
     # Location of output
-    params.add("sim_file", DEFAULT_SIMULATION_FILE)
-    params.add("outdir", os.path.dirname(DEFAULT_SIMULATION_FILE))
+    params.add("sim_file", "result.h5")
+    params.add("outdir", os.path.dirname(params["sim_file"]))
 
     ## Parameters ##
     
@@ -202,7 +362,7 @@ def setup_application_parameters():
                                                      "stabalized_incompressible", 
                                                      "penalty", "hu_washizu"])
     # Incompressibility penalty (applicable if model is not incompressible)
-    params.add("incompressibility_penalty", 0.0)
+    params.add("incomp_penalty", 0.0)
 
     # Boundary condition at base
     params.add("base_bc", "fix_x", ["from_seg_base",
@@ -243,6 +403,46 @@ def setup_application_parameters():
     return params
 
 def setup_optimization_parameters():
+    """
+    Parameters for the optimization.
+    Default parameters are
+
+    +-----------------+-----------------+---------------+
+    | key             | Default Value   | Description   |
+    +=================+=================+===============+
+    | disp            | False           |               |
+    +-----------------+-----------------+---------------+
+    | active_maxiter  | 100             |               |
+    +-----------------+-----------------+---------------+
+    | scale           | 1.0             |               |
+    +-----------------+-----------------+---------------+
+    | passive_maxiter | 30              |               |
+    +-----------------+-----------------+---------------+
+    | matparams_max   | 50.0            |               |
+    +-----------------+-----------------+---------------+
+    | fix_a           | False           |               |
+    +-----------------+-----------------+---------------+
+    | fix_a_f         | True            |               |
+    +-----------------+-----------------+---------------+
+    | fix_b           | True            |               |
+    +-----------------+-----------------+---------------+
+    | fix_b_f         | True            |               |
+    +-----------------+-----------------+---------------+
+    | gamma_max       | 0.9             |               |
+    +-----------------+-----------------+---------------+
+    | matparams_min   | 0.1             |               |
+    +-----------------+-----------------+---------------+
+    | passive_opt_tol | 1e-06           |               |
+    +-----------------+-----------------+---------------+
+    | active_opt_tol  | 1e-06           |               |
+    +-----------------+-----------------+---------------+
+    | method_1d       | brent           |               |
+    +-----------------+-----------------+---------------+
+    | method          | slsqp           |               |
+    +-----------------+-----------------+---------------+
+    
+
+    """
     # Parameters for the Optimization
     params = Parameters("Optimization_parmeteres")
     params.add("method", "slsqp")
@@ -266,8 +466,23 @@ def setup_optimization_parameters():
     return params
 
 
-def initialize_patient_data(patient_parameters, synth_data):
+def initialize_patient_data(patient_parameters, synth_data=False):
+    """
+    Make an instance of patient from :py:module`patient_data`
+    baed on th given parameters
 
+    **Example of usage**::
+    
+      params = setup_patient_parameters()
+      patient = initialize_patient_data(params, False)
+
+    :param patient_parameters: the parameters 
+    :type patient_parameters: dict or :py:function:`dolfin.parameters`
+    :param bool synth_data: If synthetic data or not
+    :returns: A patient instance
+    :rtype: :py:class`patient_data.Patient`
+
+    """
     
     logger.info("Initialize patient data")
     from patient_data import Patient

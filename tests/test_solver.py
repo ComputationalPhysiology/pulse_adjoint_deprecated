@@ -27,14 +27,14 @@ from pulse_adjoint.adjoint_contraction_args import logger
 logger.setLevel(DEBUG)
 
 
-def test_pressure_increase_passive():
+def pressure_increase_passive():
     """
     Make sure that exceptions are handled correctly
     it the solver fails to increase the pressure in 
     the passive phase
     """
     
-    from test_utils import setup_params as setup_test_params
+    from utils import setup_params as setup_test_params
     from pulse_adjoint.utils import Text, pformat, UnableToChangePressureExeption
     from pulse_adjoint.setup_optimization import initialize_patient_data, setup_simulation
     from pulse_adjoint.run_optimization import run_passive_optimization_step
@@ -86,14 +86,14 @@ def test_pressure_increase_passive():
             print "Success"
             sucess = True
 
-def test_pressure_increase_active():
+def pressure_increase_active():
     """
     Make sure that exceptions are handled correctly
     it the solver fails to increase the pressure in 
     the active phase
     """
     
-    from test_utils import setup_params as setup_test_params
+    from utils import setup_params as setup_test_params
     from pulse_adjoint.utils import Text, pformat, UnableToChangePressureExeption, passive_inflation_exists
     from pulse_adjoint.setup_optimization import initialize_patient_data, setup_simulation
     from pulse_adjoint.run_optimization import run_passive_optimization, run_active_optimization_step
@@ -241,17 +241,17 @@ def test_solver_heart():
     solver = LVSolver(params)
 
     solver.solve()
-    u,p = solver.get_state().split()
-    # u = solver.get_state().split()
-    plot(u, mode="displacement", title = "displacement")
-    plot(p, title = "hydrostatic pressure")
+    # u,p = solver.get_state().split()
+    # # u = solver.get_state().split()
+    # plot(u, mode="displacement", title = "displacement")
+    # plot(p, title = "hydrostatic pressure")
 
-    postprocess = solver.postprocess()
+    # postprocess = solver.postprocess()
 
-    fiber_stress = postprocess.fiber_stress()
-    plot(fiber_stress, title = "fiber stress")
+    # fiber_stress = postprocess.fiber_stress()
+    # plot(fiber_stress, title = "fiber stress")
     
-    interactive()
+    # interactive()
 
 def test_solver_cube():
     setup_general_parameters()
@@ -349,20 +349,20 @@ def test_solver_cube():
     
     solver.solve()
 
-    u,p = solver.get_state().split()
-    plot(u, mode="displacement", title = "displacement")
-    plot(p, title = "hydrostatic pressure")
+    # u,p = solver.get_state().split()
+    # plot(u, mode="displacement", title = "displacement")
+    # plot(p, title = "hydrostatic pressure")
 
-    postprocess = solver.postprocess()
+    # postprocess = solver.postprocess()
 
-    V_cg = FunctionSpace(mesh, "CG", 1)
-    V_quad = QuadratureSpace(mesh, 4)
+    # V_cg = FunctionSpace(mesh, "CG", 1)
+    # V_quad = QuadratureSpace(mesh, 4)
 
 
-    fiber_stress = postprocess.fiber_stress()
-    plot(fiber_stress, title = "fiber stress")
+    # fiber_stress = postprocess.fiber_stress()
+    # plot(fiber_stress, title = "fiber stress")
 
-    interactive()
+    # interactive()
 
 if __name__ == "__main__":
     # test_solver_cube()

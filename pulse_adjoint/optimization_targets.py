@@ -137,10 +137,14 @@ class RegionalStrainTarget(OptimizationTarget):
         """Initialize regional strain target
 
         :param mesh: The mesh
-        :param crl_basis: Basis function for the cicumferential, radial
-                          and longituginal components (dict)
+        :type mesh: :py:class:`dolfin.Mesh`
+        :param dict crl_basis: Basis function for the cicumferential, radial
+                               and longituginal components
+        :type mesh: :py:class:`dolfin.Mesh`
         :param dmu: Measure with subdomain information
+        :type dmu: :py:class:`dolfin.Measure`
         :param weights: Weights on the different segements
+        :type wieghts: :py:function:`numpy.array`
         
         """
         self._name = "Regional Strain"
@@ -202,8 +206,8 @@ class RegionalStrainTarget(OptimizationTarget):
     def load_target_data(self, target_data, n):
         """Load the target data
 
-        :param target_data: The data
-        :param n: Index
+        :param dict target_data: The data
+        :param int n: Index
 
         """
         strains = []
@@ -215,7 +219,9 @@ class RegionalStrainTarget(OptimizationTarget):
         self.data.append(strains)
 
     def set_target_functions(self):
-        """Initialize the functions
+        """
+        Initialize the functions
+
         """
         
         self.target_fun = [Function(self.target_space,
@@ -234,17 +240,18 @@ class RegionalStrainTarget(OptimizationTarget):
                                  name = "Strains Weights_{}".format(i+1)) \
                         for i in range(self.nregions)]
 
+
+        self._set_weights()        
+        self._set_form()
+
+    def _set_weights():
+
         for i in range(self.nregions):
             weight = np.zeros(self.dim**2)
             weight[0::(self.dim+1)] = self.weights_arr[i]
             assign_to_vector(self.weights[i].vector(), weight)
 
-            # weight = np.zeros(9)
-            # weight[0::4] = self.weights_arr[i]
-            # assign_to_vector(self.weights[i].vector(), weight)
 
-                
-        self._set_form()
 
     def _set_form(self):
 
@@ -262,6 +269,7 @@ class RegionalStrainTarget(OptimizationTarget):
         """Assing target regional strain
 
         :param target: Target regional strain
+        :type target: list of :py:class:`dolfin.Function`
         """
 
         for fun, target in zip(self.target_fun, target):
@@ -271,6 +279,7 @@ class RegionalStrainTarget(OptimizationTarget):
         """Assing simulated regional strain
 
         :param u: New displacement
+        :type u: :py:class:`dolfin.Function`
         """
         
         # Compute the strains
@@ -293,8 +302,8 @@ class RegionalStrainTarget(OptimizationTarget):
        
     def get_functional(self):
         return (list_sum(self.functional)/self.meshvol)*dx
-                                    
-        
+
+                                          
 class DisplacementTarget(OptimizationTarget):
     def __init__(self, mesh):
         self._name = "Displacement"
@@ -499,3 +508,83 @@ class Regularization(object):
         """
         return self._value
         
+
+
+# class RegionalStrainComponentTarget(RegionalStrainTarget):
+#     """Class for one component regional strain optimization
+#     target
+#     """                                  
+#     def __init__(self, mesh, crl_basis, dmu, weights=np.ones((17,3)), nregions = None):
+#         """Initialize regional strain target
+
+#         :param mesh: The mesh
+#         :type mesh: :py:class:`dolfin.Mesh`
+#         :param comp: A vectorfield with the strain component
+#         :type comp: :py:class:`dolfin.Function`
+#         :type mesh: :py:class:`dolfin.Mesh`
+#         :param dmu: Measure with subdomain information
+#         :type dmu: :py:class:`dolfin.Measure`
+#         :param weights: Weights on the different segements
+#         :type wieghts: :py:function:`numpy.array`
+        
+#         """
+#         self._name = "Regional Strain"
+#         self.nregions = np.shape(weights)[0] if nregions is None else nregions
+#         dim = mesh.geometry().dim()
+#         self.dim = dim
+        
+#         self.target_space = FunctionSpace(mesh, "R", 0)
+#         self.weight_space = FunctionSpace(mesh, "R", 0)
+       
+#         if weights.shape == (self.nregions, 1):
+#             self.weights_arr = weights
+#         else:
+#             from adjoint_contraction_args import logger
+#             msg = "Weights do not correspond to the number of regions and dimension.\n"+\
+#                   "Dim = {}, number of regions = {}, {} and {} was given".format(dim,
+#                                                                                  self.nregions,
+#                                                                                  weights.shape[1],
+#                                                                                  weights.shape[0])
+#             logger.warning(msg)
+#             self.weights_arr =np.ones((self.nregions,1))
+
+#         self.comp = comp        
+#         self.dmu = dmu
+
+#         self.meshvols = [Constant(assemble(Constant(1.0)*dmu(i+1)),
+#                                   name = "mesh volume") for i in range(self.nregions)]
+        
+#         OptimizationTarget.__init__(self, mesh)
+
+#     def _set_weights():
+#         pass
+#         # for i in range(self.nregions):
+#         #     weights
+
+#     def assign_simulated(self, u):
+#         """Assing simulated regional strain
+
+#         :param u: New displacement
+#         :type u: :py:class:`dolfin.Function`
+#         """
+        
+#         # Compute the strains
+#         gradu = grad(u)
+#         grad_u_diag = as_vector(inner(e,gradu*e) for e in self.crl_basis])
+
+#         # Make a project for dolfin-adjoint recording
+#         for i in range(self.nregions):
+#             solve(inner(self._trial, self._test)*self.dmu(i+1) == \
+#                   inner(grad_u_diag, self._test)*self.dmu(i+1), \
+#                   self.simulated_fun[i])
+
+#     def assign_functional(self):
+        
+#         for i in range(self.nregions):
+#             solve(self._trial_r*self._test_r/self.meshvol*dx == \
+#                   self._test_r*self._form[i]/self.meshvols[i]*self.dmu(i+1), \
+#                   self.functional[i])
+
+       
+#     def get_functional(self):
+#         return (list_sum(self.functional)/self.meshvol)*dx

@@ -682,6 +682,15 @@ def load_target_data(measurements, params, optimization_targets):
 
 
 def get_optimization_targets(params, solver_parameters):
+    """FIXME! briefly describe function
+
+    :param params: 
+    :param solver_parameters: 
+    :returns: 
+    :rtype: 
+
+    """
+    
 
     p = params["Optimization_targets"]
     mesh = solver_parameters["mesh"]

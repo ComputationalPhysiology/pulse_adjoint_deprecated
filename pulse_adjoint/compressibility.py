@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfinimport import *
+from adjoint_contraction_args import logger
 
 def get_compressibility(parameters):
 
