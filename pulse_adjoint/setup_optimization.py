@@ -590,7 +590,7 @@ def make_solver_params(params, patient, measurements):
     
     ##  Contraction parameter
     if params["gamma_space"] == "regional":
-        gamma = RegionalGamma(patient.strain_markers)
+        gamma = RegionalParameter(patient.strain_markers)
     else:
         gamma_family, gamma_degree = params["gamma_space"].split("_")
         gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
@@ -606,28 +606,36 @@ def make_solver_params(params, patient, measurements):
     npassive = sum([ not params["Optimization_parmeteres"][k] \
                      for k in fixed_matparams_keys])
 
-    # if npassive == 1:
-        
+    
+    # Create an object for each single material parameter
     if params["matparams_space"] == "regional":
-        paramvec = RegionalGamma(patient.strain_markers)
+        paramvec_ = RegionalParameter(patient.strain_markers)
         
     else:
         
         family, degree = params["matparams_space"].split("_")
         matparams_space = FunctionSpace(patient.mesh, family, int(degree))
-        paramvec = Function(matparams_space, name = "matparam vector")
+        paramvec_ = Function(matparams_space, name = "matparam vector")
+
         
-    # else:
-    #     if params["matparams_space"] != "R_0":
-    #         msg = "Non scalar space for material parameters " \
-    #               "is currently only supported for single materal paramters. " \
-    #               "Scalar space will be used."
-    #         logger.warning(msg)
-    #         params["matparams_space"] = "R_0"
-    #     paramvec = Function(VectorFunctionSpace(patient.mesh, "R", 0, dim = npassive), name = "matparam vector")
+    if npassive <= 1:
+        # If there is only one parameter, just pick the same object
+        paramvec = paramvec_
 
+        # If there is none then 
+        if npassive == 0:
+            logger.debug("All material paramters are fixed")
+            params["optimize_matparams"] = False
+
+    else:
+        
+        # Otherwise, we make a mixed parameter
+        paramvec = MixedParameter(paramvec_, npassive)
+        # Make an iterator for the function assigment
+        nopts_par = 0
+
+    
     matparams = params["Material_parameters"].to_dict()
-
     for par, val in matparams.iteritems():
 
         # Check if material parameter should be fixed
@@ -639,12 +647,20 @@ def make_solver_params(params, patient, measurements):
             if params["phase"] in [PHASES[0], PHASES[2]]:
 
                 
-                val_const = Constant(val) if paramvec.value_size() == 1 \
-                            else Constant([val]*paramvec.value_size())
-                
-                paramvec.assign(val_const)
-                matparams[par] = paramvec
+                val_const = Constant(val) if paramvec_.value_size() == 1 \
+                            else Constant([val]*paramvec_.value_size())
 
+                if npassive <= 1:
+                    paramvec.assign(val_const)
+                    matparams[par] = paramvec
+
+                else:
+                  
+                    paramvec.assign_sub(val_const, nopts_par)
+                    
+                    matparams[par] = split(paramvec)[nopts_par]
+                    nopts_par += 1
+                    
                 
             else:
                 # Otherwise load the parameters from the result file  
@@ -658,13 +674,18 @@ def make_solver_params(params, patient, measurements):
    
     # Print the material parameter to stdout
     logger.info("\nMaterial Parameters")
+    nopts_par = 0
     for par, v in matparams.iteritems():
         if isinstance(v, (float, int)):
             logger.info("\t{}\t= {:.3f}".format(par, v))
         else:
-            v_ = gather_broadcast(v.vector().array()).mean()
-            # from IPython import embed; embed()
-            # exit()
+            
+            if npassive <= 1:
+                v_ = gather_broadcast(v.vector().array()).mean()
+            else:
+                v_ = gather_broadcast(paramvec.split(deepcopy=True)[nopts_par].vector().array()).mean()
+                nopts_par += 1
+       
             logger.info("\t{}\t= {:.3f} (mean), spatially resolved".format(par, v_))
 
     
@@ -988,11 +1009,12 @@ class MyReducedFunctional(ReducedFunctional):
 
 
     def __call__(self, value):
+        
         adj_reset()
         self.iter += 1
         paramvec_new = Function(self.paramvec.function_space(), name = "new control")
 
-        if isinstance(value, Function) or isinstance(value, RegionalGamma):
+        if isinstance(value, (Function, RegionalParameter, MixedParameter)):
             paramvec_new.assign(value)
         elif isinstance(value, float) or isinstance(value, int):
             assign_to_vector(paramvec_new.vector(), np.array([value]))
@@ -1077,7 +1099,7 @@ class MyReducedFunctional(ReducedFunctional):
         return self.scale*gathered_out
 
 
-class RegionalGamma(dolfin.Function):
+class RegionalParameter(dolfin.Function):
     def __init__(self, meshfunction):
 
         assert isinstance(meshfunction, MeshFunctionSizet), \
@@ -1105,14 +1127,14 @@ class RegionalGamma(dolfin.Function):
     def get_values(self):
         return self._values
     
-    def get_function(self):
+    def get_function(self):        
         """
         Return linear combination of coefficents
         and basis functions
 
-        *Returns*
-           fun (dolfin.Function)
-             A function with gamma values at each segment
+        :returns: A function with parameter values at each segment
+                  specified by the meshfunction
+        :rtype:  :py:class`dolfin.Function             
              
         """
         return self._sum()
@@ -1136,6 +1158,70 @@ class RegionalGamma(dolfin.Function):
 
         return fun
 
+
+class MixedParameter(dolfin.Function):
+    def __init__(self, fun, n, name = "material_parameters"):
+        """
+        Initialize Mixed parameter.
+
+        This will instanciate a function in a dolfin.MixedFunctionSpace
+        consiting of `n` subspaces of the same type as `fun`.
+        This is of course easy for the case when `fun` is a normal
+        dolfin function, but in the case of a `RegionalParameter` it
+        is not that straight forward. 
+        This class handles this case as well. 
+
+        
+
+        :param fun: The type of you want to make a du
+        :type fun: (:py:class:`dolfin.Function`)
+        :param int n: number of subspaces 
+        :param str name: Name of the function
+
+        .. todo::
+        
+           Implement support for MixedParameter with different
+           types of subspaces, e.g [RegionalParamter, R_0, CG_1]
+
+        """
+        
+
+        msg = "Please provide a dolin function as argument to MixedParameter"
+        assert isinstance(fun, (dolfin.Function, RegionalParameter)), msg
+
+
+        # We can just make a usual mixed function space
+        # with n copies of the original one
+        V  = fun.function_space()
+        W = dolfin.MixedFunctionSpace([V]*n)
+        
+        dolfin.Function.__init__(self, W, name = name)
+        
+        # Create a function assigner
+        self.function_assigner \
+            =  [dolfin.FunctionAssigner(W.sub(i), V) for i in range(n)]
+
+        # Store the original function space
+        self.basespace = V
+
+        if isinstance(fun, RegionalParameter):
+            self._meshfunction = fun._meshfunction
+
+        
+            
+    def assign_sub(self, f, i):
+        """
+        Assign subfunction
+
+        :param f: The function you want to assign
+        :param int i: The subspace number
+
+        """
+        f_ = Function(self.basespace)
+        f_.assign(f)
+        self.function_assigner[i].assign(self.split()[i], f_)
+        
+            
 
 
 class BaseExpression(Expression):

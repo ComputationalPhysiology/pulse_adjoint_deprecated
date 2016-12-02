@@ -27,6 +27,7 @@ from adjoint_contraction_args import *
 import numpy as np
 from numpy_mpi import *
 from utils import Text, list_sum, Object, TablePrint
+from setup_optimization import RegionalParameter
 
 
 
@@ -44,15 +45,15 @@ class BasicForwardRunner(object):
                  params):
         """Initialize base class for forward solver
 
-        :param solver_parameters: solver parameters coming from 
-        setup_optimization.make_solver_paramerters()
-        :param pressure: list of pressure that should be solved for, 
-        starting with the current pressure
-        :param bcs: Dictionary with boundary conditions coming from
-        run_optimization.load_target_data()
-        :param optimization_targets: Dictionary with optimization 
-        targets,  coming from run_optimization.load_target_data()
-        :param params: adjoint contraction paramters
+        :param dict solver_parameters: solver parameters coming from 
+                                       setup_optimization.make_solver_paramerters()
+        :param list pressure: list of pressure that should be solved for, 
+                              starting with the current pressure
+        :param dict bcs: Dictionary with boundary conditions coming from
+                         run_optimization.load_target_data()
+        :param dict optimization_targets: Dictionary with optimization targets,  
+                                          coming from run_optimization.load_target_data()
+        :param dict params: adjoint contraction paramters
         
         """
         
@@ -249,6 +250,37 @@ class BasicForwardRunner(object):
 
 
 class ActiveForwardRunner(BasicForwardRunner):
+    """
+    The active forward runner 
+
+    **Example of usage**::
+
+          # Setup compiler parameters
+          setup_general_parameters()
+          params = setup_adjoint_contraction_parameter()
+          params['phase'] = 'active_contraction'
+          # Initialize patient data
+          patient = initialize_patient_data(param['Patient_parameters'], False)
+
+          # Start with the first point with active contraction.
+          # Make sure to run the passive inflation first!
+          params["active_contraction_iteration_number"] = 0
+
+          #Load patient data, and set up the simulation
+          measurements, solver_parameters, pressure, gamma = setup_simulation(params, patient)
+
+          # Load targets
+          optimization_targets, bcs = load_targets(params, solver_parameters, measurements)
+
+       
+          #Initialize the solver for the Forward problem
+          for_run = ActiveForwardRunner(solver_parameters, 
+                                        pressure, 
+                                        bcs,
+                                        optimization_targets,
+                                        params, 
+                                        paramvec)
+    """
     def __init__(self, 
                  solver_parameters, 
                  pressure, 
@@ -256,6 +288,22 @@ class ActiveForwardRunner(BasicForwardRunner):
                  optimization_targets,
                  params,
                  gamma_previous):
+        """
+        Initialize class for active forward solver
+
+        :param dict solver_parameters: solver parameters coming from 
+                                       setup_optimization.make_solver_paramerters()
+        :param list pressure: list of pressure that should be solved for, 
+                              starting with the current pressure
+        :param dict bcs: Dictionary with boundary conditions coming from
+                         run_optimization.load_target_data()
+        :param dict optimization_targets: Dictionary with optimization targets,  
+                                          coming from run_optimization.load_target_data()
+        :param dict params: adjoint contraction paramters
+        :param gamma_previous: The active contraction parameter
+        :type gamma_previous: :py:class`dolfin.function`
+
+        """
 
 
 
@@ -380,10 +428,54 @@ class ActiveForwardRunner(BasicForwardRunner):
 
 
 class PassiveForwardRunner(BasicForwardRunner):
+    """
+    The passive forward runner
+
+    **Example of usage**::
+
+          # Setup compiler parameters
+          setup_general_parameters()
+          params = setup_adjoint_contraction_parameter()
+          params['phase'] = 'passive_inflation'
+          # Initialize patient data
+          patient = initialize_patient_data(param['Patient_parameters'], False)
+
+          #Load patient data, and set up the simulation
+          measurements, solver_parameters, pressure, paramvec = setup_simulation(params, patient)
+
+          # Load targets
+          optimization_targets, bcs = load_targets(params, solver_parameters, measurements)
+
+       
+          #Initialize the solver for the Forward problem
+          for_run = PassiveForwardRunner(solver_parameters, 
+                                         pressure, 
+                                         bcs,
+                                         optimization_targets,
+                                         params, 
+                                         paramvec)
+    """
     def __init__(self, solver_parameters, pressure, 
                  bcs, optimization_targets,
                  params, paramvec):
+        """
+        Initialize class for passive forward solver
 
+        :param dict solver_parameters: solver parameters coming from 
+                                       setup_optimization.make_solver_paramerters()
+        :param list pressure: list of pressure that should be solved for, 
+                              starting with the current pressure
+        :param dict bcs: Dictionary with boundary conditions coming from
+                         run_optimization.load_target_data()
+        :param dict optimization_targets: Dictionary with optimization targets,  
+                                          coming from run_optimization.load_target_data()
+        :param dict params: adjoint contraction paramters
+        :param paramvec: A function containing the material parameters
+                         which should be optimized
+        :type paramvec: :py:class`dolfin.function`
+
+        """
+        
         
         BasicForwardRunner.__init__(self,
                                     solver_parameters,
@@ -421,9 +513,19 @@ class PassiveForwardRunner(BasicForwardRunner):
         else:
             paramvec_split = split(self.paramvec)
             fixed_idx = np.nonzero([not self.params["Optimization_parmeteres"][k] for k in lst])[0]
+
+            
             for it, idx in enumerate(fixed_idx):
                 par = lst[idx].split("fix_")[-1]
-                setattr(self.solver_parameters["material"], par, paramvec_split[it])
+
+                if self.params["matparams_space"] == "regional":
+                    rg = RegionalParameter(self.paramvec._meshfunction)
+                    rg.assign(project(paramvec_split[it], rg.function_space()))
+                    v = rg.get_function()
+                else:
+                    v = paramvec_split[it]
+                    
+                setattr(self.solver_parameters["material"], par, v)
                 
      
         phm = PassiveHeartProblem(self.bcs,

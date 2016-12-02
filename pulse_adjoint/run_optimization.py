@@ -43,6 +43,10 @@ def run_passive_optimization(params, patient):
     """
     Main function for the passive phase
 
+    :param dict params: adjoin_contraction_parameters
+    :param patient: A patient instance
+    :type patient: :py:class`patient_data.Patient`
+
     **Example of usage**::
 
       # Setup compiler parameters
@@ -51,10 +55,6 @@ def run_passive_optimization(params, patient):
       params['phase'] = 'passive_inflation'
       patient = initialize_patient_data(param['Patient_parameters'], False)
       run_passive_optimization(params, patient)
-
-    :param dict params: adjoin_contraction_parameters
-    :param patient: A patient instance
-    :type patient: :py:class`patient_data.Patient`
 
 
     """
@@ -77,26 +77,21 @@ def run_passive_optimization(params, patient):
 
 
 def run_passive_optimization_step(params, patient, solver_parameters, measurements, pressure, paramvec):
-    
-    #Solve calls are not registred by libajoint
-    logger.debug(Text.yellow("Stop annotating"))
-    parameters["adjoint"]["stop_annotating"] = True
+    """FIXME! briefly describe function
 
-    
-    # Load optimization targets
-    optimization_targets = get_optimization_targets(params, solver_parameters)
+    :param params: 
+    :param patient: 
+    :param solver_parameters: 
+    :param measurements: 
+    :param pressure: 
+    :param paramvec: 
+    :returns: 
+    :rtype: 
 
-    # Load target data
-    optimization_targets, bcs = \
-        load_target_data(measurements, params, optimization_targets)
-
+    """
     
-    
-    
-    # Start recording for dolfin adjoint 
-    logger.debug(Text.yellow("Start annotating"))
-    parameters["adjoint"]["stop_annotating"] = False
-
+    # Load targets
+    optimization_targets, bcs = load_targets(params, solver_parameters, measurements)
        
     #Initialize the solver for the Forward problem
     for_run = PassiveForwardRunner(solver_parameters, 
@@ -112,6 +107,7 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     forward_result, _ = for_run(paramvec, False)
     
 
+    # Update the weights for the functional
     weights = {}
     for k, v in for_run.opt_weights.iteritems():
         weights[k] = v/(10*forward_result["func_value"])
@@ -136,6 +132,15 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
 
 
 def run_active_optimization(params, patient):
+    """FIXME! briefly describe function
+
+    :param params: 
+    :param patient: 
+    :returns: 
+    :rtype: 
+
+    """
+    
     
     logger.info(Text.blue("\nRun Active Optimization"))
 
@@ -194,6 +199,19 @@ def run_active_optimization(params, patient):
         i += 1
 
 def run_active_optimization_step(params, patient, solver_parameters, measurements, pressure, gamma):
+    """FIXME! briefly describe function
+
+    :param params: 
+    :param patient: 
+    :param solver_parameters: 
+    :param measurements: 
+    :param pressure: 
+    :param gamma: 
+    :returns: 
+    :rtype: 
+
+    """
+    
 
     #Get initial guess for gamma
     if not params["nonzero_initial_guess"] or params["active_contraction_iteration_number"] == 0:
@@ -211,20 +229,10 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
             h5file.read(g_temp, "active_contraction/contract_point_{}/optimal_control".format(params["active_contraction_iteration_number"]-1))
         gamma.assign(g_temp)
         
-    
-    logger.debug(Text.yellow("Stop annotating"))
-    parameters["adjoint"]["stop_annotating"] = True
-    
-    # Load optimization targets
-    optimization_targets = get_optimization_targets(params, solver_parameters)
 
-    # Load target data
-    optimization_targets, bcs = \
-        load_target_data(measurements, params, optimization_targets)
-
-    logger.debug(Text.yellow("Start annotating"))
-    parameters["adjoint"]["stop_annotating"] = False
-   
+    # Load targets
+    optimization_targets, bcs = load_targets(params, solver_parameters, measurements)
+    
     for_run = ActiveForwardRunner(solver_parameters,
                                   pressure,
                                   bcs,
@@ -756,3 +764,36 @@ def get_optimization_targets(params, solver_parameters):
     return targets
         
     
+def load_targets(params, solver_parameters, measurements):
+    """FIXME! briefly describe function
+
+    :param dict params: 
+    :param dict solver_parameters: 
+    :param dict measurements: 
+    :returns: A tuple containing 1. a dictionary with
+              optimization targets and 2. boundary conditions
+    :rtype: tuple
+
+    """
+    
+    
+    #Solve calls are not registred by libajoint
+    logger.debug(Text.yellow("Stop annotating"))
+    parameters["adjoint"]["stop_annotating"] = True
+
+    
+    # Load optimization targets
+    optimization_targets = get_optimization_targets(params, solver_parameters)
+
+    # Load target data
+    optimization_targets, bcs = \
+        load_target_data(measurements, params, optimization_targets)
+
+    
+    
+    
+    # Start recording for dolfin adjoint 
+    logger.debug(Text.yellow("Start annotating"))
+    parameters["adjoint"]["stop_annotating"] = False
+
+    return optimization_targets, bcs
