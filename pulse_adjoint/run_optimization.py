@@ -197,15 +197,9 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
 
     #Get initial guess for gamma
     if not params["nonzero_initial_guess"] or params["active_contraction_iteration_number"] == 0:
-        # Use zero initial guess
+        # Use zero initial gubess
         zero = Constant(0.0) if gamma.value_size() == 1 \
           else Constant([0.0]*gamma.value_size())
-
-        # if params["active_model"] == "active_stress":
-        #     # Just give it an easier starting point
-        #     zero = Constant(30.0) if gamma.value_size() == 1 \
-        #            else Constant([30.0]*gamma.value_size())
-
 
         gamma.assign(zero)
        
@@ -434,8 +428,9 @@ def solve_oc_problem(params, rd, paramvec):
             max_iter = opt_params["active_maxiter"]
 
 
-        # Use 1D optimization method
+        
         if nvar == 1:
+            # Use 1D optimization method
 
             kwargs = {"method": opt_params["method_1d"],
                       "bounds":zip(lb,ub)[0],
@@ -468,7 +463,8 @@ def solve_oc_problem(params, rd, paramvec):
             for k in ["message", "status", "success"]:
                 opt_result.pop(k, None)
         else:
-        
+            # Use a gradient based optimization method
+            
             if has_pyipopt and opt_params["method"] == "ipopt":
 
                 rd(paramvec_arr)

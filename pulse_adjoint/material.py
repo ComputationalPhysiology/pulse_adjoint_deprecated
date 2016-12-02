@@ -473,8 +473,17 @@ class HolzapfelOgden(Material):
         if params is None:
             params = self.default_parameters()
 
-        for k,v in params.iteritems():
-            setattr(self, k, Constant(v))
+            for k,v in params.iteritems():
+                setattr(self, k, Constant(v))
+        else:
+
+            for k,v in params.iteritems():
+                if isinstance(v, (float, int)):
+                    setattr(self, k, Constant(v))
+                elif isinstance(v, RegionalGamma):
+                    setattr(self, k, v.get_function())
+                else:
+                    setattr(self, k, v)
 
         self._active_model = active_model
 

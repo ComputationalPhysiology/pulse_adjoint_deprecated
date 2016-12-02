@@ -584,49 +584,11 @@ def get_simulated_strain_traces(phm):
         return simulated_strains
 
 def make_solver_params(params, patient, measurements):
+
+
+
     
-    # Material parameters
-    npassive = sum([ not params["Optimization_parmeteres"][k] \
-                     for k in ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]])
-
-    if npassive == 1:
-        
-        if params["matparams_space"] == "regional":
-            paramvec = RegionalGamma(patient.strain_markers)
-        
-        else:
-        
-            family, degree = params["matparams_space"].split("_")
-            matparams_space = FunctionSpace(patient.mesh, family, int(degree))
-            paramvec = Function(matparams_space, name = "matparam vector")
-        
-    else:
-        if params["matparams_space"] != "R_0":
-            msg = "Non scalar space for material parameters " \
-                  "is currently only supported for single materal paramters. " \
-                  "Scalar space will be used."
-            logger.warning(msg)
-        paramvec = Function(VectorFunctionSpace(patient.mesh, "R", 0, dim = npassive), name = "matparam vector")
-        
-    # If we want to estimate material parameters, use the materal parameters
-    # from the parameters
-    if params["phase"] in [PHASES[0], PHASES[2]]:
-        
-        material_parameters = params["Material_parameters"]
-        assign_to_vector(paramvec.vector(), np.array(material_parameters.values()))
-        
-
-    # Otherwise load the parameters from the result file  
-    else:
-
-        # Open simulation file
-        with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
-        
-                # Get material parameter from passive phase file
-                h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
-
-                
-    # Contraction parameter
+    ##  Contraction parameter
     if params["gamma_space"] == "regional":
         gamma = RegionalGamma(patient.strain_markers)
     else:
@@ -634,6 +596,87 @@ def make_solver_params(params, patient, measurements):
         gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
 
         gamma = Function(gamma_space, name = 'activation parameter')
+
+        
+
+    ##  Material parameters
+
+    # Number of passive parameters to optimize
+    fixed_matparams_keys = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
+    npassive = sum([ not params["Optimization_parmeteres"][k] \
+                     for k in fixed_matparams_keys])
+
+    # if npassive == 1:
+        
+    if params["matparams_space"] == "regional":
+        paramvec = RegionalGamma(patient.strain_markers)
+        
+    else:
+        
+        family, degree = params["matparams_space"].split("_")
+        matparams_space = FunctionSpace(patient.mesh, family, int(degree))
+        paramvec = Function(matparams_space, name = "matparam vector")
+        
+    # else:
+    #     if params["matparams_space"] != "R_0":
+    #         msg = "Non scalar space for material parameters " \
+    #               "is currently only supported for single materal paramters. " \
+    #               "Scalar space will be used."
+    #         logger.warning(msg)
+    #         params["matparams_space"] = "R_0"
+    #     paramvec = Function(VectorFunctionSpace(patient.mesh, "R", 0, dim = npassive), name = "matparam vector")
+
+    matparams = params["Material_parameters"].to_dict()
+
+    for par, val in matparams.iteritems():
+
+        # Check if material parameter should be fixed
+        if not params["Optimization_parmeteres"]["fix_{}".format(par)]:
+            # If not, then we need to put the parameter into some dolfin function
+
+            
+            # Use the materal parameters from the parameters as initial guess
+            if params["phase"] in [PHASES[0], PHASES[2]]:
+
+                
+                val_const = Constant(val) if paramvec.value_size() == 1 \
+                            else Constant([val]*paramvec.value_size())
+                
+                paramvec.assign(val_const)
+                matparams[par] = paramvec
+
+                
+            else:
+                # Otherwise load the parameters from the result file  
+                
+                # Open simulation file
+                with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
+                    
+                    # Get material parameter from passive phase file
+                    h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
+
+   
+    # Print the material parameter to stdout
+    logger.info("\nMaterial Parameters")
+    for par, v in matparams.iteritems():
+        if isinstance(v, (float, int)):
+            logger.info("\t{}\t= {:.3f}".format(par, v))
+        else:
+            v_ = gather_broadcast(v.vector().array()).mean()
+            # from IPython import embed; embed()
+            # exit()
+            logger.info("\t{}\t= {:.3f} (mean), spatially resolved".format(par, v_))
+
+    
+    ##  Material model
+    from material import HolzapfelOgden
+    
+    if params["active_model"] == "active_strain_rossi":
+        material = HolzapfelOgden(patient.e_f, gamma, matparams, params["active_model"],
+                                      patient.strain_markers, s0 = patient.e_s, n0 = patient.e_sn)
+    else:
+        material = HolzapfelOgden(patient.e_f, gamma, matparams,
+                                  params["active_model"], patient.strain_markers)
 
     
 
@@ -741,43 +784,6 @@ def make_solver_params(params, patient, measurements):
                                    name ="base_spring_constant"), patient.BASE]]
 
 
-    # Material model
-    from material import HolzapfelOgden
-    matparams = params["Material_parameters"].to_dict()
-    lst = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
-    pararr = gather_broadcast(paramvec.vector().array())
-    pars = []
-    logger.info("\nMaterial Parameters")
-    if npassive == 1:
-        fixed_idx = np.nonzero([not params["Optimization_parmeteres"][k] for k in lst])[0][0]
-        par = lst[fixed_idx].split("fix_")[-1]
-        pars.append(par)
-        matparams[par] = paramvec
-        logger.info("\t{}\t= {:.3f}".format(par, pararr[0]))
-        
-        
-    else:
-        paramvec_split = split(paramvec)
-        fixed_idx = np.nonzero([not params["Optimization_parmeteres"][k] for k in lst])[0]
-        
-        for it, idx in enumerate(fixed_idx):
-            par = lst[idx].split("fix_")[-1]
-            pars.append(par)
-            matparams[par] = paramvec_split[it]
-            logger.info("\t{}\t= {:.3f}".format(par, pararr[it]))
-
-    for par, v in matparams.iteritems():
-        if par not in pars:
-            logger.info("\t{}\t= {:.3f}".format(par, v))
-
-            
-    
-    if params["active_model"] == "active_strain_rossi":
-        material = HolzapfelOgden(patient.e_f, gamma, matparams, params["active_model"],
-                                      patient.strain_markers, s0 = patient.e_s, n0 = patient.e_sn)
-    else:
-        material = HolzapfelOgden(patient.e_f, gamma, matparams,
-                                      params["active_model"], patient.strain_markers)
 
     # Circumferential, Radial and Longitudinal basis vector
     crl_basis = {}
