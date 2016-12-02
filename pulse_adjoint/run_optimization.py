@@ -40,6 +40,25 @@ except:
 
 
 def run_passive_optimization(params, patient):
+    """
+    Main function for the passive phase
+
+    **Example of usage**::
+
+      # Setup compiler parameters
+      setup_general_parameters()
+      params = setup_adjoint_contraction_parameter()
+      params['phase'] = 'passive_inflation'
+      patient = initialize_patient_data(param['Patient_parameters'], False)
+      run_passive_optimization(params, patient)
+
+    :param dict params: adjoin_contraction_parameters
+    :param patient: A patient instance
+    :type patient: :py:class`patient_data.Patient`
+
+
+    """
+    
 
     logger.info(Text.blue("\nRun Passive Optimization"))
 

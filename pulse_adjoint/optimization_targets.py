@@ -3,14 +3,15 @@ The functional you want to minimize consists of
 different optimzation targets. 
 
 It may consist of a volume-target and a regional strain-target
-in which you functional may take the following form
+in which you functional may take the following form::
 
-functional = a*volume_target_form + b*strain_target_form
+    functional = a*volume_target_form + b*strain_target_form
 
-with
+with::
 
-volume_target = VolumeTarget()
-volume_target_form = volume_target.get_form()
+    volume_target = VolumeTarget()
+    volume_target_form = volume_target.get_form()
+
 """
 
 from dolfinimport import *
@@ -22,10 +23,16 @@ __all__ = ["RegionalStrainTarget", "FullStrainTarget",
            "VolumeTarget", "Regularization"]
 
 class OptimizationTarget(object):
-    """Base class for optimization
-    target
+    """Base class for optimization target
     """
     def __init__(self, mesh):
+        """
+        Initialize base class for optimization targets
+
+        :param mesh: The underlying mesh
+        :type mesh: :py:class:`dolfin.Mesh`
+
+        """
 
         # A real space for projecting the functional
         self.realspace = FunctionSpace(mesh, "R", 0)
@@ -134,7 +141,8 @@ class RegionalStrainTarget(OptimizationTarget):
     target
     """                                  
     def __init__(self, mesh, crl_basis, dmu, weights=np.ones((17,3)), nregions = None):
-        """Initialize regional strain target
+        """
+        Initialize regional strain target
 
         :param mesh: The mesh
         :type mesh: :py:class:`dolfin.Mesh`
@@ -244,7 +252,7 @@ class RegionalStrainTarget(OptimizationTarget):
         self._set_weights()        
         self._set_form()
 
-    def _set_weights():
+    def _set_weights(self):
 
         for i in range(self.nregions):
             weight = np.zeros(self.dim**2)

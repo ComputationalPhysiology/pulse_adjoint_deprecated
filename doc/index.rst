@@ -7,10 +7,7 @@ Welcome to Pulse Adjoint's documentation!
 =========================================
 
 
-pulse_adjoint is a Python-based lightweight solver collection for solving
-cardiac electrophysiology problems. cbcbeat efficiently solves single
-cardiac cell models, monodomain and bidomain, both forward and inverse
-problems.
+pulse_adjoint is a ..
 
 pulse_adjoint originates from the `Center for Cardiological Innovation
 <http://heart-sfi.no>`__, a Norwegian Centre of Research Based Innovation, hosted by
@@ -29,8 +26,6 @@ pulse_adjoint is based on
 * The FEniCS Project software (http://www.fenicsproject.org)
 * dolfin-adjoint (http://www.dolfin-adjoint.org)
 
-See the separate file ./INSTALL in the root directory of your cbcbeat
-source for a complete list of dependencies.
 
 Main authors:
 -------------

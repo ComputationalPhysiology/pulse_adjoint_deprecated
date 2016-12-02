@@ -126,6 +126,16 @@ def contract_point_exists(params):
         return False
 
 def get_simulated_pressure(params):
+    """
+    Get the last simulated pressure stored in
+    the result file specified by given parameters
+
+    :param dict params: adjoint contracion parameters
+    :returns: The final pressure
+    :rtype: float
+
+    """
+    
 
     import h5py, numpy
     from adjoint_contraction_args import ACTIVE_CONTRACTION, CONTRACTION_POINT, PASSIVE_INFLATION_GROUP, PHASES
@@ -143,6 +153,17 @@ def get_simulated_pressure(params):
     return pressure
 
 def list_sum(l):
+    """
+    Return the sum of a list, when the convetiional
+    method (like `sum`) it not working.
+    For example if you have a list of dolfin functions.
+
+    :param list l: a list of objects 
+    :returns: The sum of the list. The type depends on 
+              the type of elemets in the list
+
+    """
+    
     if not isinstance(l, list):
         return l
 
@@ -156,6 +177,17 @@ def list_sum(l):
 
 
 def get_spaces(mesh):
+    """
+    Return an object of dolfin FunctionSpace, to 
+    be used in the optimization pipeline
+
+    :param mesh: The mesh
+    :type mesh: :py:class:`dolfin.Mesh`
+    :returns: An object of functionspaces
+    :rtype: object
+
+    """
+    
     from dolfin import FunctionSpace, VectorFunctionSpace, TensorFunctionSpace
     
     # Make a dummy object
@@ -176,6 +208,23 @@ def get_spaces(mesh):
     return spaces
 
 def QuadratureSpace(mesh, degree, dim=3):
+    """
+    From FEniCS version 1.6 to 2016.1 there was a change in how 
+    FunctionSpace is defined for quadrature spaces.
+    This functions checks your dolfin version and returns the correct
+    quadrature space
+
+    :param mesh: The mesh
+    :type mesh: :py:class:`dolfin.Mesh`
+    :param int degree: The degree of the element 
+    :param int dim: For a mesh of topological dimension 3, 
+                    dim = 1 would be a scalar function, and 
+                    dim = 3 would be a vector function. 
+    :returns: The quadrature space
+    :rtype: :py:class:`dolfin.FunctionSpace`
+
+    """
+    
     import dolfin as d
     if d.DOLFIN_VERSION_MAJOR > 1.6:
         if dim == 1:
@@ -199,7 +248,8 @@ def QuadratureSpace(mesh, degree, dim=3):
 class TablePrint(object):
     """
     Print output in nice table format.
-    Example of use:
+    
+    **Example of use**::
 
       fldmap = (
          'LVP',  '0.5f',

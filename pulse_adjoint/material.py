@@ -20,13 +20,41 @@ from setup_optimization import RegionalGamma
 
 
 def subplus(x):
+    r"""
+    Ramp function
+
+    .. math::
+
+       \max\{x,0\}
+
+    """
+    
     return conditional(ge(x, 0.0), x, 0.0)
 
 def heaviside(x):
+    r"""
+    Heaviside function
+
+    .. math::
+
+       \frac{\mathrm{d}}{\mathrm{d}x} \max\{x,0\}
+
+    """
+    
     return conditional(ge(x, 0.0), 1.0, 0.0)
 
 class Material(object):
+    """
+    Base class for material
+    """
     def __init__(self, T_ref = None):
+        """
+        Initialize base class
+
+        :param float T_ref: Scale factor for active parameter
+
+        """
+        
         assert self._active_model in \
           ["active_stress", "active_strain", "active_strain_rossi"], \
           "The active model '{}' is not implemented.".format(self._active_model)
@@ -39,8 +67,28 @@ class Material(object):
 
 
     def strain_energy(self, F):
-        """
+        r"""
         Strain-energy density function.
+
+        .. math::
+        
+           \mathcal{W} = \mathcal{W}_1 + \mathcal{W}_{4f}
+           + \mathcal{W}_{\mathrm{active}}
+
+        where 
+
+        .. math::
+
+           \mathcal{W}_{\mathrm{active}} = 
+           \begin{cases} 
+             0 & \text{if acitve strain} \\
+             \gamma I_{4f} & \text{if active stress}
+           \end{cases}
+
+
+        :param F: Deformation gradient
+        :type F: :py:class:`dolfin.Function`
+
         """
 
         
@@ -87,13 +135,15 @@ class Material(object):
 
         .. math::
 
-           \sigma = \mathbf{F} \frac{\partial \Psi}{\partial \mathbf{F}} - p\mathbf{I}
+           \sigma = \mathbf{F} \frac{\partial \Psi}{\partial \mathbf{F}} 
+           - p\mathbf{I}
 
         Since the strain energy depends on the invariants we can write
 
         .. math::
 
-           \sigma = \mathbf{F} \sum_{i = 1, i\neq3}^{N} \psi_i \frac{\partial I1}{\partial \mathbf{F}} - p\mathbf{I} 
+           \sigma = \mathbf{F} \sum_{i = 1, i\neq3}^{N} \psi_i 
+           \frac{\partial I1}{\partial \mathbf{F}} - p\mathbf{I} 
 
         Compressible:
 
@@ -105,8 +155,15 @@ class Material(object):
 
         .. math::
 
-           \sigma = J^{-1} \mathbf{F} \sum_{i = 1}^{N} \psi_i \frac{\partial I1}{\partial \mathbf{F}}
+           \sigma = J^{-1} \mathbf{F} \sum_{i = 1}^{N} 
+           \psi_i \frac{\partial I1}{\partial \mathbf{F}}
+
         
+        :param F: Deformation gradient
+        :type F: :py:class:`dolfin.Function`
+        :param p: Hydrostatic pressure
+        :type p: :py:class:`dolfin.Function`
+
         """
         # Activation
         if isinstance(self.gamma, RegionalGamma):
@@ -144,6 +201,19 @@ class Material(object):
         return 2*w1*B + 2*w4f*ff + 2*wactive*ff - p*I
 
     def Wactive(self, gamma, I4f = 0, diff = 0):
+        """
+        Acitve term in strain energy function
+
+        :param gamma: Contraction parameter
+        :type gamma: :py:class:`dolfin.Function`
+        :param I4f: Quasi-invariant for fiber
+        :type I4f:  :py:class:`ulf`
+        :param int diff: Differentiantion number
+        :returns: Value of active term
+        :rtype: :py:class:`dolfin.Function` or int
+
+        """
+        
         if self._active_model == 'active_stress':
 
             if diff == 0:
@@ -156,11 +226,15 @@ class Material(object):
             return 0
     
     def I1(self, F):
-        """
+        r"""
         First Isotropic invariant
+
+        .. math::
+
+           I_1 = \mathrm{tr}(\mathbf{C})
+
         """
 
-        J = det(F)
         C =  F.T * F
         return tr(C)
         
@@ -169,11 +243,15 @@ class Material(object):
     def I4f(self, F):
         """
         Quasi invariant in fiber direction
+
+        .. math::
+
+           I_{4f_0} = \mathbf{f}_0 \cdot ( \mathbf{C} \mathbf{f}_0)
+
         """
         if self.f0 is None:
             return Constant(0.0)
 
-        J = det(F)
         C =  F.T * F
         return inner(C*self.f0, self.f0)
 
@@ -182,23 +260,33 @@ class Material(object):
 
     def I4s(self, F):
         """
-        Quasi invariant in fiber direction
+        Quasi invariant in sheet direction
+
+        .. math::
+
+           I_{4s_0} = \mathbf{s}_0 \cdot ( \mathbf{C} \mathbf{s}_0)
+
         """
         if self.s0 is None:
             return Constant(0.0)
 
-        J = det(F)
+      
         C =  F.T * F 
         return  inner(C*self.s0, self.s0)
 
     def I4n(self, F):
         """
-        Quasi invariant in fiber direction
+        Quasi invariant in cross fiber-sheet direction
+
+        .. math::
+
+           I_{4n_0} = \mathbf{n}_0 \cdot ( \mathbf{C} \mathbf{n}_0)
+
+
         """
         if self.n0 is None:
             return Constant(0.0)
 
-        J = det(F)
         C =  F.T * F
         
         return  inner(C*self.n0, self.n0)
@@ -216,8 +304,45 @@ class Material(object):
         return  inner(C*self.f0, self.s0)
 
     def I1e(self, F, gamma):
-        """
+        r"""
         First isotropic invariant in the elastic configuration
+        (active strain)
+
+        If active stress, return the normal isotropic invariant.
+        Let :math:`d` be the geometric dimension.
+        If
+
+        .. math:: 
+
+           \mathbf{F}_a = (1 - \gamma) \mathbf{f}_0 \otimes \mathbf{f}_0  + 
+           \frac{1}{\sqrt{1 - \gamma}} (\mathbf{I} - \mathbf{f}_0 \otimes \mathbf{f}_0)
+
+        then
+
+        .. math::
+
+           I_1^E = I_1(1 - \gamma)^{4-d} +  
+           I_{4f_0}\left(\frac{1}{(1-\gamma)^2} - (1-\gamma)^{4-d}\right) 
+
+        If 
+
+        .. math:: 
+
+           \mathbf{F}_a = (1 + \gamma) \mathbf{f}_0 \otimes \mathbf{f}_0  + 
+           \frac{1}{\sqrt{1 + \gamma}} (\mathbf{I} - \mathbf{f}_0 \otimes \mathbf{f}_0)
+
+        then
+
+        .. math::
+
+           I_1^E = I_1(1 + \gamma)^{4-d} +  
+           I_{4f_0}\left(\frac{1}{(1+\gamma)^2} - (1+\gamma)^{4-d}\right) 
+
+        :param F: Deformation gradient
+        :type F: :py:class:`dolfin.Function`
+        :param gamma: Contraction parameter
+        :type gamma: :py:class:`dolfin.Function`
+
         """
 
         I1  = self.I1(F)
@@ -249,8 +374,42 @@ class Material(object):
         
 
     def I4fe(self, F, gamma):
-        """
-        First isotropic invariant in the elastic configuration
+        r"""
+        Quasi-invariant in the elastic configuration
+
+        If active stress, return the normal quasi-invariant.
+        Let :math:`d` be the geometric dimension.
+        If
+
+        .. math:: 
+
+           \mathbf{F}_a = (1 - \gamma) \mathbf{f}_0 \otimes \mathbf{f}_0  + 
+           \frac{1}{\sqrt{1 - \gamma}} (\mathbf{I} - \mathbf{f}_0 \otimes \mathbf{f}_0)
+
+        then
+
+        .. math::
+
+           I_{4f_0}^E = I_{4f_0} \frac{1}{(1+\gamma)^2}
+
+        If 
+
+        .. math:: 
+
+           \mathbf{F}_a = (1 + \gamma) \mathbf{f}_0 \otimes \mathbf{f}_0  + 
+           \frac{1}{\sqrt{1 + \gamma}} (\mathbf{I} - \mathbf{f}_0 \otimes \mathbf{f}_0)
+
+        then
+
+        .. math::
+
+           I_{4f_0}^E = I_{4f_0} \frac{1}{(1+\gamma)^2}
+
+        :param F: Deformation gradient
+        :type F: :py:class:`dolfin.Function`
+        :param gamma: Contraction parameter
+        :type gamma: :py:class:`dolfin.Function`
+
         """
 
         I4f = self.I4f(F)
@@ -277,7 +436,30 @@ class Material(object):
 
 
 class HolzapfelOgden(Material):
-    def __init__(self, f0 = None, gamma = None, params = None, active_model = "active_strain", strain_markers = None, s0 = None, n0 = None, T_ref = None):
+    r"""
+    Transversally isotropic version of the
+    Holzapfel and Ogden material model
+
+    .. math::
+
+       \mathcal{W}(I_1, I_{4f_0})  
+       = \frac{a}{2 b} \left( e^{ b (I_1 - 3)}  -1 \right)
+       + \frac{a_f}{2 b_f} \left( e^{ b_f (I_{4f_0} - 1)_+^2} -1 \right)
+    
+
+    *Reference*:
+
+       Holzapfel, Gerhard A., and Ray W. Ogden. 
+       "Constitutive modelling of passive myocardium: a 
+       structurally based framework for material characterization.
+       " Philosophical Transactions of the Royal Society of London A: 
+       Mathematical, Physical and Engineering Sciences 367.1902 (2009): 3445-3475.
+    
+    
+    """
+    def __init__(self, f0 = None, gamma = None, params = None,
+                 active_model = "active_strain",
+                 s0 = None, n0 = None, T_ref = None):
 
 
         # Fiber system
