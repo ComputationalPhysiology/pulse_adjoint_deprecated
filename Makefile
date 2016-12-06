@@ -17,5 +17,8 @@ clean:
 	rm -rf build;
 
 test:
+	# python -m pytest -v tests/test_spatial_matparams.py
 	python -m pytest -v tests/test_run.py
 
+test_adjoint:
+	python -m pytest -v tests/test_adjoint_calculations.py
