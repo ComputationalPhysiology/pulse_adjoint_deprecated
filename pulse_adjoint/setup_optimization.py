@@ -388,6 +388,9 @@ def setup_application_parameters():
     
 
     ## Additional setup ##
+
+    # Update weights so that the initial value of the functional is 0.1
+    params.add("adaptive_weights", True)
     
     # Space for active parameter
     params.add("gamma_space", "CG_1", ["CG_1", "R_0", "regional"])
@@ -675,18 +678,21 @@ def make_solver_params(params, patient, measurements):
     # Print the material parameter to stdout
     logger.info("\nMaterial Parameters")
     nopts_par = 0
+
     for par, v in matparams.iteritems():
         if isinstance(v, (float, int)):
             logger.info("\t{}\t= {:.3f}".format(par, v))
         else:
             
             if npassive <= 1:
-                v_ = gather_broadcast(v.vector().array()).mean()
+                v_ = gather_broadcast(v.vector().array())
+                
             else:
-                v_ = gather_broadcast(paramvec.split(deepcopy=True)[nopts_par].vector().array()).mean()
+                v_ = gather_broadcast(paramvec.split(deepcopy=True)[nopts_par].vector().array())
                 nopts_par += 1
-       
-            logger.info("\t{}\t= {:.3f} (mean), spatially resolved".format(par, v_))
+            
+            sp_str = "(mean), spatially resolved" if len(v_) > 1 else ""
+            logger.info("\t{}\t= {:.3f} {}".format(par, v_.mean(), sp_str))
 
     
     ##  Material model

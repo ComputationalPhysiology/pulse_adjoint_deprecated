@@ -108,12 +108,13 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     
 
     # Update the weights for the functional
-    weights = {}
-    for k, v in for_run.opt_weights.iteritems():
-        weights[k] = v/(10*forward_result["func_value"])
-    for_run.opt_weights.update(**weights)
-    logger.info("Update weights for functional")
-    logger.info(for_run._print_functional())
+    if params["adaptive_weights"]:
+        weights = {}
+        for k, v in for_run.opt_weights.iteritems():
+            weights[k] = v/(10*forward_result["func_value"])
+        for_run.opt_weights.update(**weights)
+        logger.info("Update weights for functional")
+        logger.info(for_run._print_functional())
     
     # Stop recording
     logger.debug(Text.yellow("Stop annotating"))
@@ -244,12 +245,15 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     logger.info(Text.blue("\nForward solution at guess parameters"))
     forward_result, _ = for_run(gamma, False)
 
-    weights = {}
-    for k, v in for_run.opt_weights.iteritems():
-        weights[k] = v/(10*forward_result["func_value"])
-    for_run.opt_weights.update(**weights)
-    logger.info("Update weights for functional")
-    logger.info(for_run._print_functional())
+    # Update weights so that the initial value of the
+    # functional is 0.1
+    if params["adaptive_weights"]:
+        weights = {}
+        for k, v in for_run.opt_weights.iteritems():
+            weights[k] = v/(10*forward_result["func_value"])
+        for_run.opt_weights.update(**weights)
+        logger.info("Update weights for functional")
+        logger.info(for_run._print_functional())
     
     # Stop recording
     logger.debug(Text.yellow("Stop annotating"))
