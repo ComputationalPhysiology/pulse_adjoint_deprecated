@@ -391,6 +391,9 @@ class Postprocess(object):
         
         return self.solver.parameters["material"].CauchyStress(self._F, self._p)
 
+    def deformation_gradient(self):
+        return self._F
+    
     def work(self):
         r"""
         Compute Work
@@ -483,13 +486,25 @@ class Postprocess(object):
         
         return inner((self.chaucy_stress()*f)/f**2, f)
     
-    def stress_component(self, n0):
+    def cauchy_stress_component(self, n0):
 
         # Push forward to current configuration
         n = self._F*n0
         return inner((self.chaucy_stress()*n)/n**2, n)
 
-    def strain_component(self, n0):
+    def piola2_stress_component(self, n0):
+        
+        return inner((self.second_piola_stress()*n0)/n0**2, n0)
+
+    def piola1_stress_component(self, n0):
+
+        return inner((self.first_piola_stress()*n0)/n0**2, n0)
+
+
+    def green_strain_component(self, n0):
+        return inner(self.GreenLagrange()*n0/n0**2, n0)
+
+    def deformation_gradient_component(self, n0):
         return inner(self.GreenLagrange()*n0/n0**2, n0)
 
     def _localproject(self, fun, V) :
