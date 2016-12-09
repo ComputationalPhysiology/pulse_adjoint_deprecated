@@ -723,12 +723,12 @@ def get_optimization_targets(params, solver_parameters):
     mesh = solver_parameters["mesh"]
     if params["phase"] == PHASES[0]:
         reg_par = params["Passive_optimization_weigths"]["regularization"]
+        space = params["matparams_space"]
     else:
         reg_par = params["Active_optimization_weigths"]["regularization"]
+        space = params["gamma_space"]
 
-    targets = {"regularization": Regularization(mesh,
-                                                params["gamma_space"],
-                                                reg_par)}
+    targets = {"regularization": Regularization(mesh,space, reg_par)}
 
     if p["volume"]:
         

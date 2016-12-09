@@ -172,13 +172,17 @@ class BasicForwardRunner(object):
             # Add regulatization term to the functional
             m = phm.solver.parameters['material'].gamma
 
-            functional += self.regularization.get_functional(m)
-            reg_term =  self.regularization.get_value()
-
         else:
+
+            # FIXE : assume for now that only a is optimized
+            m = phm.solver.parameters['material'].a
+            
             # Add the initial state to the recording
             functionals_time.append(functional*dt[0.0])
-            reg_term = 0.0
+
+        functional += self.regularization.get_functional(m)
+        reg_term =  self.regularization.get_value()
+           
 
         
         for it, p in enumerate(self.bcs["pressure"][1:], start=1):
