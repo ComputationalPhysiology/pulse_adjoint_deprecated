@@ -171,17 +171,17 @@ class BasicForwardRunner(object):
         if phase == "active":
             # Add regulatization term to the functional
             m = phm.solver.parameters['material'].gamma
-
+            functional += self.regularization.get_functional(m)
+            reg_term =  self.regularization.get_value()
         else:
 
             # FIXE : assume for now that only a is optimized
-            m = phm.solver.parameters['material'].a
-            
+            # m = phm.solver.parameters['material'].a
+            reg_term = 0
             # Add the initial state to the recording
             functionals_time.append(functional*dt[0.0])
 
-        functional += self.regularization.get_functional(m)
-        reg_term =  self.regularization.get_value()
+        
            
 
         
@@ -513,7 +513,8 @@ class PassiveForwardRunner(BasicForwardRunner):
                 paramvec = self.paramvec.get_function()
             else:
                 paramvec = self.paramvec
-            setattr(self.solver_parameters["material"], par, paramvec)
+            mat = getattr(self.solver_parameters["material"], par)
+            mat.assign(paramvec)
         else:
             paramvec_split = split(self.paramvec)
             fixed_idx = np.nonzero([not self.params["Optimization_parmeteres"][k] for k in lst])[0]
@@ -529,8 +530,8 @@ class PassiveForwardRunner(BasicForwardRunner):
                 else:
                     v = paramvec_split[it]
                     
-                setattr(self.solver_parameters["material"], par, v)
-                
+                mat = getattr(self.solver_parameters["material"], par)
+                mat.assign(v)
      
         phm = PassiveHeartProblem(self.bcs,
                                   self.solver_parameters,
