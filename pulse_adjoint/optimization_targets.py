@@ -434,7 +434,7 @@ class Regularization(object):
     """Class for regularization
     of the control parameter
     """
-    def __init__(self, mesh, space = "CG_1", lmbda = 0.0):
+    def __init__(self, mesh, spacestr = "CG_1", lmbda = 0.0):
         """Initialize regularization object
 
         :param space: The mesh
@@ -442,14 +442,25 @@ class Regularization(object):
         :param lmbda: regularization parameter
         
         """
-        assert space in ["CG_1", "regional", "R_0"], \
+        assert spacestr in ["CG_1", "regional", "R_0"], \
             "Unknown regularization space {}".format(space)
         
-        self.space = space
+        self.spacestr = spacestr
         self.lmbda = lmbda
         self._value = 0.0
         self.meshvol = Constant(assemble(Constant(1.0)*dx(mesh)),
                                 name = "mesh volume")
+        # A real space for projecting the functional
+        self._realspace = FunctionSpace(mesh, "R", 0)
+
+        if spacestr in ["CG_1", "R_0"]:
+            family, degree = spacestr.split("_")
+            self._space = FunctionSpace(mesh, family, int(degree))
+            
+        else: # "regional"
+            self._space = FunctionSpace(mesh, "DG", 0)
+        
+        
         self.dx = dx(mesh)
         self.results = {"func_value":[]}
         self.reset()
@@ -468,30 +479,33 @@ class Regularization(object):
         self.results["func_value"].append(self.func_value)
 
     def set_target_functions(self):
-        pass
+        
+        self.functional = Function(self._realspace, name = "regularization_functional")
+        self._m = Function(self._space)
 
-    def get_form(self, m):
+    def get_form(self):
         """Get the ufl form
 
-        :param m: The function to be regularized
         :returns: The functional form
         :rtype: (:py:class:`ufl.Form`)
 
         """
 
-        if self.space == "CG_1":
-            return (inner(grad(m), grad(m))/self.meshvol)*self.dx
+        if self.spacestr in ["CG_1", "regional"]:
+            return (inner(grad(self._m), grad(self._m))/self.meshvol)*self.dx
         
-        elif self.space == "regional":
-            m_arr = gather_broadcast(m.vector().array())
+        # elif self.space == "regional":
+            # m_arr = gather_broadcast(m.vector().array())
           
-            m_mean = Constant([m_arr.mean()]*m._nvalues)
-            return (inner(m-m_mean, m-m_mean)/self.meshvol)*self.dx
+            # m_mean = Constant([m_arr.mean()]*m._nvalues)
+            # return (inner(m-m_mean, m-m_mean)/self.meshvol)*self.dx
         else:
             return Constant(0.0)*self.dx
 
+    def assign(self, m, annotate = False):
+        self._m.assign(m, annotate = annotate)
         
-    def get_functional(self, m):
+    def get_functional(self):
         """Get the functional form 
         (included regularization parameter)
 
@@ -500,7 +514,7 @@ class Regularization(object):
         :rtype: (:py:class:`ufl.Form`)
 
         """
-        form = self.get_form(m)
+        form = self.get_form()
         self._value = assemble(form)
         return self.lmbda*form
 

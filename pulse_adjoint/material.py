@@ -503,7 +503,11 @@ class HolzapfelOgden(Material):
             if isinstance(v, (float, int)):
                 setattr(self, k, Constant(v))
             elif isinstance(v, RegionalParameter):
-                setattr(self, k, v.get_function())
+
+                setattr(self, k, Function(v.get_ind_space(), name = k))
+                mat = getattr(self, k)
+                mat.assign(project(v.get_function(), v.get_ind_space()))
+                # setattr(self, k, v.get_function())
             else:
                 setattr(self, k, v)
 

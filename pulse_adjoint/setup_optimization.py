@@ -842,14 +842,6 @@ def make_solver_params(params, patient, measurements):
                          "solve":setup_solver_parameters()}
 
 
-    
-    
-    
-    # logger.info("\ta_f   = {:.3f}".format(pararr[1]))
-    # logger.info("\tb     = {:.3f}".format(pararr[2]))
-    # logger.info("\tb_f   = {:.3f}".format(pararr[3]))
-
-
     if params["phase"] in [PHASES[0], PHASES[2]]:
         return solver_parameters, pressure, paramvec
     elif params["phase"] == PHASES[1]:
@@ -1130,10 +1122,13 @@ class RegionalParameter(dolfin.Function):
         for v in self._values:
             self._ind_functions.append(self._make_indicator_function(v))
 
+    def get_ind_space(self):
+        return self._IndSpace
+    
     def get_values(self):
         return self._values
     
-    def get_function(self):        
+    def get_function(self):
         """
         Return linear combination of coefficents
         and basis functions

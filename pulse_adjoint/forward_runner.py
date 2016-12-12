@@ -71,11 +71,13 @@ class BasicForwardRunner(object):
         self.meshvol = Constant(assemble(Constant(1.0)*dx(solver_parameters["mesh"])),
                                 name = "mesh volume")
 
-        self.regularization = optimization_targets.pop("regularization", None)
+        
         # Initialize target functions
         for target in optimization_targets.values():
             target.set_target_functions()
 
+        self.regularization = optimization_targets.pop("regularization", None)
+        
         self.optimization_targets = optimization_targets
 
     def _print_head(self):
@@ -171,19 +173,17 @@ class BasicForwardRunner(object):
         if phase == "active":
             # Add regulatization term to the functional
             m = phm.solver.parameters['material'].gamma
-            functional += self.regularization.get_functional(m)
-            reg_term =  self.regularization.get_value()
+            
         else:
 
             # FIXE : assume for now that only a is optimized
-            # m = phm.solver.parameters['material'].a
-            reg_term = 0
+            m = self.paramvec#phm.solver.parameters['material'].a
+        
             # Add the initial state to the recording
             functionals_time.append(functional*dt[0.0])
-
-        
-           
-
+            
+        # self.regularization.assign(m, annotate = annotate)
+        functional += self.regularization.get_functional()
         
         for it, p in enumerate(self.bcs["pressure"][1:], start=1):
 
@@ -197,7 +197,9 @@ class BasicForwardRunner(object):
                     self.optimization_targets[key].assign_simulated(split(sol)[0])
                     self.optimization_targets[key].assign_functional()
                     self.optimization_targets[key].save()
-                    
+
+
+            self.regularization.assign(m, annotate = annotate)
             self.regularization.save()
             
             # Print the values
@@ -510,9 +512,10 @@ class PassiveForwardRunner(BasicForwardRunner):
             fixed_idx = np.nonzero([not self.params["Optimization_parmeteres"][k] for k in lst])[0][0]
             par = lst[fixed_idx].split("fix_")[-1]
             if self.params["matparams_space"] == "regional":
-                paramvec = self.paramvec.get_function()
+                paramvec = project(self.paramvec.get_function(), self.paramvec.get_ind_space())
             else:
                 paramvec = self.paramvec
+                
             mat = getattr(self.solver_parameters["material"], par)
             mat.assign(paramvec)
         else:
