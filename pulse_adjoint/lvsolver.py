@@ -505,7 +505,11 @@ class Postprocess(object):
         return inner(self.GreenLagrange()*n0/n0**2, n0)
 
     def deformation_gradient_component(self, n0):
-        return inner(self.GreenLagrange()*n0/n0**2, n0)
+        return inner(self._F*n0/n0**2, n0)
+
+    def gradu_component(self, n0):
+        return inner((self._F - self._I)*n0/n0**2, n0)
+
 
     def _localproject(self, fun, V) :
         a = inner(TestFunction(V), TrialFunction(V)) * dx
