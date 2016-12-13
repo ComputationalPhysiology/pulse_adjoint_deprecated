@@ -141,9 +141,9 @@ def active(params):
 def test_adjoint_calculations(mesh_type, space, phase, active_model):
 
     if mesh_type == "lv":
-        opt_targets = ["volume", "regional_strain"]
+        opt_targets = ["volume", "regional_strain", "regularization"]
     else:
-        opt_targets = ["volume", "rv_volume"]
+        opt_targets = ["volume", "rv_volume", "regularization"]
 
     params = setup_params(phase, space, mesh_type, opt_targets, active_model)
 
@@ -157,5 +157,5 @@ def test_adjoint_calculations(mesh_type, space, phase, active_model):
         assert False
     
 if __name__ == "__main__":
-    test_adjoint_calculations("biv", "R_0", "passive", "active_stress")
+    test_adjoint_calculations("biv", "regional", "passive", "active_strain")
     

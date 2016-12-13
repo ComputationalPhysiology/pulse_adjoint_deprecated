@@ -43,7 +43,8 @@ def setup_params(phase, space = "CG_1", mesh_type = "lv", opt_targets = ["volume
     params.remove('Active_optimization_weigths')
     params.add(aparams)
 
-    params['Active_optimization_weigths']["regularization"] = 0.0
+    params['Active_optimization_weigths']["regularization"] = 0.01
+    params['Passive_optimization_weigths']["regularization"] = 0.01
     
     if phase == "passive":
         params["phase"] = "passive_inflation"
