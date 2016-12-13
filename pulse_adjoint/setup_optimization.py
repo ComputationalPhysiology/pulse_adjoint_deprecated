@@ -388,6 +388,9 @@ def setup_application_parameters():
     
 
     ## Additional setup ##
+
+    # Update weights so that the initial value of the functional is 0.1
+    params.add("adaptive_weights", True)
     
     # Space for active parameter
     params.add("gamma_space", "CG_1", ["CG_1", "R_0", "regional"])
@@ -584,56 +587,123 @@ def get_simulated_strain_traces(phm):
         return simulated_strains
 
 def make_solver_params(params, patient, measurements):
+
+
+
     
-    # Material parameters
-    npassive = sum([ not params["Optimization_parmeteres"][k] \
-                     for k in ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]])
-
-    if npassive == 1:
-        
-        if params["matparams_space"] == "regional":
-            paramvec = RegionalGamma(patient.strain_markers)
-        
-        else:
-        
-            family, degree = params["matparams_space"].split("_")
-            matparams_space = FunctionSpace(patient.mesh, family, int(degree))
-            paramvec = Function(matparams_space, name = "matparam vector")
-        
-    else:
-        if params["matparams_space"] != "R_0":
-            msg = "Non scalar space for material parameters " \
-                  "is currently only supported for single materal paramters. " \
-                  "Scalar space will be used."
-            logger.warning(msg)
-        paramvec = Function(VectorFunctionSpace(patient.mesh, "R", 0, dim = npassive), name = "matparam vector")
-        
-    # If we want to estimate material parameters, use the materal parameters
-    # from the parameters
-    if params["phase"] in [PHASES[0], PHASES[2]]:
-        
-        material_parameters = params["Material_parameters"]
-        assign_to_vector(paramvec.vector(), np.array(material_parameters.values()))
-        
-
-    # Otherwise load the parameters from the result file  
-    else:
-
-        # Open simulation file
-        with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
-        
-                # Get material parameter from passive phase file
-                h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
-
-                
-    # Contraction parameter
+    ##  Contraction parameter
     if params["gamma_space"] == "regional":
-        gamma = RegionalGamma(patient.strain_markers)
+        gamma = RegionalParameter(patient.strain_markers)
     else:
         gamma_family, gamma_degree = params["gamma_space"].split("_")
         gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
 
         gamma = Function(gamma_space, name = 'activation parameter')
+
+        
+
+    ##  Material parameters
+
+    # Number of passive parameters to optimize
+    fixed_matparams_keys = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
+    npassive = sum([ not params["Optimization_parmeteres"][k] \
+                     for k in fixed_matparams_keys])
+
+    
+    # Create an object for each single material parameter
+    if params["matparams_space"] == "regional":
+        paramvec_ = RegionalParameter(patient.strain_markers)
+        
+    else:
+        
+        family, degree = params["matparams_space"].split("_")
+        matparams_space = FunctionSpace(patient.mesh, family, int(degree))
+        paramvec_ = Function(matparams_space, name = "matparam vector")
+
+        
+    if npassive <= 1:
+        # If there is only one parameter, just pick the same object
+        paramvec = paramvec_
+
+        # If there is none then 
+        if npassive == 0:
+            logger.debug("All material paramters are fixed")
+            params["optimize_matparams"] = False
+
+    else:
+        
+        # Otherwise, we make a mixed parameter
+        paramvec = MixedParameter(paramvec_, npassive)
+        # Make an iterator for the function assigment
+        nopts_par = 0
+
+    
+    matparams = params["Material_parameters"].to_dict()
+    for par, val in matparams.iteritems():
+
+        # Check if material parameter should be fixed
+        if not params["Optimization_parmeteres"]["fix_{}".format(par)]:
+            # If not, then we need to put the parameter into some dolfin function
+
+            
+            # Use the materal parameters from the parameters as initial guess
+            if params["phase"] in [PHASES[0], PHASES[2]]:
+
+                
+                val_const = Constant(val) if paramvec_.value_size() == 1 \
+                            else Constant([val]*paramvec_.value_size())
+
+                if npassive <= 1:
+                    paramvec.assign(val_const)
+                    matparams[par] = paramvec
+
+                else:
+                  
+                    paramvec.assign_sub(val_const, nopts_par)
+                    
+                    matparams[par] = split(paramvec)[nopts_par]
+                    nopts_par += 1
+                    
+                
+            else:
+                # Otherwise load the parameters from the result file  
+                
+                # Open simulation file
+                with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
+                    
+                    # Get material parameter from passive phase file
+                    h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
+
+   
+    # Print the material parameter to stdout
+    logger.info("\nMaterial Parameters")
+    nopts_par = 0
+
+    for par, v in matparams.iteritems():
+        if isinstance(v, (float, int)):
+            logger.info("\t{}\t= {:.3f}".format(par, v))
+        else:
+            
+            if npassive <= 1:
+                v_ = gather_broadcast(v.vector().array())
+                
+            else:
+                v_ = gather_broadcast(paramvec.split(deepcopy=True)[nopts_par].vector().array())
+                nopts_par += 1
+            
+            sp_str = "(mean), spatially resolved" if len(v_) > 1 else ""
+            logger.info("\t{}\t= {:.3f} {}".format(par, v_.mean(), sp_str))
+
+    
+    ##  Material model
+    from material import HolzapfelOgden
+    
+    if params["active_model"] == "active_strain_rossi":
+        material = HolzapfelOgden(patient.e_f, gamma, matparams, params["active_model"],
+                                      patient.strain_markers, s0 = patient.e_s, n0 = patient.e_sn)
+    else:
+        material = HolzapfelOgden(patient.e_f, gamma, matparams,
+                                  params["active_model"], patient.strain_markers)
 
     
 
@@ -741,43 +811,6 @@ def make_solver_params(params, patient, measurements):
                                    name ="base_spring_constant"), patient.BASE]]
 
 
-    # Material model
-    from material import HolzapfelOgden
-    matparams = params["Material_parameters"].to_dict()
-    lst = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
-    pararr = gather_broadcast(paramvec.vector().array())
-    pars = []
-    logger.info("\nMaterial Parameters")
-    if npassive == 1:
-        fixed_idx = np.nonzero([not params["Optimization_parmeteres"][k] for k in lst])[0][0]
-        par = lst[fixed_idx].split("fix_")[-1]
-        pars.append(par)
-        matparams[par] = paramvec
-        logger.info("\t{}\t= {:.3f}".format(par, pararr[0]))
-        
-        
-    else:
-        paramvec_split = split(paramvec)
-        fixed_idx = np.nonzero([not params["Optimization_parmeteres"][k] for k in lst])[0]
-        
-        for it, idx in enumerate(fixed_idx):
-            par = lst[idx].split("fix_")[-1]
-            pars.append(par)
-            matparams[par] = paramvec_split[it]
-            logger.info("\t{}\t= {:.3f}".format(par, pararr[it]))
-
-    for par, v in matparams.iteritems():
-        if par not in pars:
-            logger.info("\t{}\t= {:.3f}".format(par, v))
-
-            
-    
-    if params["active_model"] == "active_strain_rossi":
-        material = HolzapfelOgden(patient.e_f, gamma, matparams, params["active_model"],
-                                      patient.strain_markers, s0 = patient.e_s, n0 = patient.e_sn)
-    else:
-        material = HolzapfelOgden(patient.e_f, gamma, matparams,
-                                      params["active_model"], patient.strain_markers)
 
     # Circumferential, Radial and Longitudinal basis vector
     crl_basis = {}
@@ -807,14 +840,6 @@ def make_solver_params(params, patient, measurements):
                                "neumann":neumann_bc,
                                "robin": robin_bc},
                          "solve":setup_solver_parameters()}
-
-
-    
-    
-    
-    # logger.info("\ta_f   = {:.3f}".format(pararr[1]))
-    # logger.info("\tb     = {:.3f}".format(pararr[2]))
-    # logger.info("\tb_f   = {:.3f}".format(pararr[3]))
 
 
     if params["phase"] in [PHASES[0], PHASES[2]]:
@@ -982,11 +1007,12 @@ class MyReducedFunctional(ReducedFunctional):
 
 
     def __call__(self, value):
+        
         adj_reset()
         self.iter += 1
         paramvec_new = Function(self.paramvec.function_space(), name = "new control")
 
-        if isinstance(value, Function) or isinstance(value, RegionalGamma):
+        if isinstance(value, (Function, RegionalParameter, MixedParameter)):
             paramvec_new.assign(value)
         elif isinstance(value, float) or isinstance(value, int):
             assign_to_vector(paramvec_new.vector(), np.array([value]))
@@ -1071,7 +1097,7 @@ class MyReducedFunctional(ReducedFunctional):
         return self.scale*gathered_out
 
 
-class RegionalGamma(dolfin.Function):
+class RegionalParameter(dolfin.Function):
     def __init__(self, meshfunction):
 
         assert isinstance(meshfunction, MeshFunctionSizet), \
@@ -1096,6 +1122,9 @@ class RegionalGamma(dolfin.Function):
         for v in self._values:
             self._ind_functions.append(self._make_indicator_function(v))
 
+    def get_ind_space(self):
+        return self._IndSpace
+    
     def get_values(self):
         return self._values
     
@@ -1104,9 +1133,9 @@ class RegionalGamma(dolfin.Function):
         Return linear combination of coefficents
         and basis functions
 
-        *Returns*
-           fun (dolfin.Function)
-             A function with gamma values at each segment
+        :returns: A function with parameter values at each segment
+                  specified by the meshfunction
+        :rtype:  :py:class`dolfin.Function             
              
         """
         return self._sum()
@@ -1130,6 +1159,70 @@ class RegionalGamma(dolfin.Function):
 
         return fun
 
+
+class MixedParameter(dolfin.Function):
+    def __init__(self, fun, n, name = "material_parameters"):
+        """
+        Initialize Mixed parameter.
+
+        This will instanciate a function in a dolfin.MixedFunctionSpace
+        consiting of `n` subspaces of the same type as `fun`.
+        This is of course easy for the case when `fun` is a normal
+        dolfin function, but in the case of a `RegionalParameter` it
+        is not that straight forward. 
+        This class handles this case as well. 
+
+        
+
+        :param fun: The type of you want to make a du
+        :type fun: (:py:class:`dolfin.Function`)
+        :param int n: number of subspaces 
+        :param str name: Name of the function
+
+        .. todo::
+        
+           Implement support for MixedParameter with different
+           types of subspaces, e.g [RegionalParamter, R_0, CG_1]
+
+        """
+        
+
+        msg = "Please provide a dolin function as argument to MixedParameter"
+        assert isinstance(fun, (dolfin.Function, RegionalParameter)), msg
+
+
+        # We can just make a usual mixed function space
+        # with n copies of the original one
+        V  = fun.function_space()
+        W = dolfin.MixedFunctionSpace([V]*n)
+        
+        dolfin.Function.__init__(self, W, name = name)
+        
+        # Create a function assigner
+        self.function_assigner \
+            =  [dolfin.FunctionAssigner(W.sub(i), V) for i in range(n)]
+
+        # Store the original function space
+        self.basespace = V
+
+        if isinstance(fun, RegionalParameter):
+            self._meshfunction = fun._meshfunction
+
+        
+            
+    def assign_sub(self, f, i):
+        """
+        Assign subfunction
+
+        :param f: The function you want to assign
+        :param int i: The subspace number
+
+        """
+        f_ = Function(self.basespace)
+        f_.assign(f)
+        self.function_assigner[i].assign(self.split()[i], f_)
+        
+            
 
 
 class BaseExpression(Expression):

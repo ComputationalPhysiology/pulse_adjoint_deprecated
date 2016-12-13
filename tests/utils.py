@@ -22,7 +22,7 @@ from pulse_adjoint.adjoint_contraction_args import *
 from pulse_adjoint.setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, setup_passive_optimization_weigths, setup_active_optimization_weigths
 from pulse_adjoint.numpy_mpi import *
 from pulse_adjoint.utils import Text
-def setup_params(space = "CG_1", mesh_type = "lv", opt_targets = ["volume"]):
+def setup_params(phase, space = "CG_1", mesh_type = "lv", opt_targets = ["volume"], active_model = "active_strain"):
     setup_general_parameters()
     params = setup_adjoint_contraction_parameters()
     
@@ -42,8 +42,22 @@ def setup_params(space = "CG_1", mesh_type = "lv", opt_targets = ["volume"]):
     params.add(pparams)
     params.remove('Active_optimization_weigths')
     params.add(aparams)
-                
-    params["gamma_space"] = space
+
+    params['Active_optimization_weigths']["regularization"] = 0.01
+    params['Passive_optimization_weigths']["regularization"] = 0.01
+    
+    if phase == "passive":
+        params["phase"] = "passive_inflation"
+        params["matparams_space"] = space
+        params["gamma_space"] = "R_0"
+
+    else:
+        params["phase"] = "active_contraction"
+        params["matparams_space"] = "R_0"
+        params["gamma_space"] = space
+
+    params["active_model"] = active_model
+        
     params["Patient_parameters"]["mesh_type"] = mesh_type
     params["Patient_parameters"]["patient"] = "test"
     params["Patient_parameters"]["patient_type"] = "test"
@@ -61,12 +75,14 @@ def my_taylor_test(Jhat, m0_fun):
       
     Jm0 = Jhat(m0)
     DJm0 = Jhat.derivative(forget=False)
+    
 
     d = np.array([1.0]*len(m0)) #perturbation direction
     grad_errors = []
     no_grad_errors = []
    
-    epsilons = [0.05, 0.025, 0.0125]
+    # epsilons = [0.05, 0.025, 0.0125]
+    epsilons = [0.005, 0.0025, 0.00125]
         
     for eps in epsilons:
         m = np.array(m0 + eps*d)
@@ -87,9 +103,10 @@ def my_taylor_test(Jhat, m0_fun):
     assert (np.array(con_ord) > 1.85).all()
 
 
-def store_results(params, rd, control):
+def store_results(params, rd, opt_result):
     from pulse_adjoint.run_optimization import store
     store(params, rd, opt_result)
+    # print "results saved to {}".params["simfile"]
 
 
 def plot_displacements():

@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfinimport import *
-from setup_optimization import RegionalGamma
+from setup_optimization import RegionalParameter
 
 
 def subplus(x):
@@ -93,7 +93,7 @@ class Material(object):
 
         
         # Activation
-        if isinstance(self.gamma, RegionalGamma):
+        if isinstance(self.gamma, RegionalParameter):
             # This means a regional gamma
             # Could probably make this a bit more clean
             gamma = self.gamma.get_function()
@@ -143,7 +143,7 @@ class Material(object):
         .. math::
 
            \sigma = \mathbf{F} \sum_{i = 1, i\neq3}^{N} \psi_i 
-           \frac{\partial I1}{\partial \mathbf{F}} - p\mathbf{I} 
+           \frac{\partial I_1}{\partial \mathbf{F}} - p\mathbf{I} 
 
         Compressible:
 
@@ -156,7 +156,7 @@ class Material(object):
         .. math::
 
            \sigma = J^{-1} \mathbf{F} \sum_{i = 1}^{N} 
-           \psi_i \frac{\partial I1}{\partial \mathbf{F}}
+           \psi_i \frac{\partial I_i}{\partial \mathbf{F}}
 
         
         :param F: Deformation gradient
@@ -166,7 +166,7 @@ class Material(object):
 
         """
         # Activation
-        if isinstance(self.gamma, RegionalGamma):
+        if isinstance(self.gamma, RegionalParameter):
             # This means a regional gamma
             # Could probably make this a bit more clean
             gamma = self.gamma.get_function()
@@ -445,21 +445,46 @@ class HolzapfelOgden(Material):
        \mathcal{W}(I_1, I_{4f_0})  
        = \frac{a}{2 b} \left( e^{ b (I_1 - 3)}  -1 \right)
        + \frac{a_f}{2 b_f} \left( e^{ b_f (I_{4f_0} - 1)_+^2} -1 \right)
+
+    where 
+
+    .. math::
+
+       (\cdot)_+ = \max\{x,0\}
+
+
+    .. rubric:: Reference
+
+    [1] Holzapfel, Gerhard A., and Ray W. Ogden.  "Constitutive modelling of 
+    passive myocardium: a structurally based framework for material characterization.
+    "Philosophical Transactions of the Royal Society of London A: 
+    Mathematical, Physical and Engineering Sciences 367.1902 (2009): 3445-3475.
     
 
-    *Reference*:
-
-       Holzapfel, Gerhard A., and Ray W. Ogden. 
-       "Constitutive modelling of passive myocardium: a 
-       structurally based framework for material characterization.
-       " Philosophical Transactions of the Royal Society of London A: 
-       Mathematical, Physical and Engineering Sciences 367.1902 (2009): 3445-3475.
-    
-    
     """
     def __init__(self, f0 = None, gamma = None, params = None,
                  active_model = "active_strain",
                  s0 = None, n0 = None, T_ref = None):
+        """
+        Initialize the Holzapfel and Ogden material model
+
+        :param f0: Fiber field
+        :type f0: :py:class`dolfin.Function`
+        :param gamma: Activation parameter
+        :type gamma: :py:class`dolfin.Function`
+        :param dict params: material parameters
+        :param str active_model: The active model. Possible values are
+                                 'active_stress', 'active_strain' and 
+                                 'active_strain_rossi'.
+        :param s0: Sheet field
+        :type s0: :py:class`dolfin.Function`
+        :param n0: Fiber-sheet field
+        :type n0: :py:class`dolfin.Function`
+        :param float T_ref: Scale factor for active parameter
+
+        """
+        
+        
 
 
         # Fiber system
@@ -469,12 +494,22 @@ class HolzapfelOgden(Material):
         
         self.gamma = Constant(0, name="gamma") if gamma is None else gamma
 
-        
+        # If no parameters are given, use the default ones
         if params is None:
             params = self.default_parameters()
 
+
         for k,v in params.iteritems():
-            setattr(self, k, Constant(v))
+            if isinstance(v, (float, int)):
+                setattr(self, k, Constant(v))
+            elif isinstance(v, RegionalParameter):
+
+                setattr(self, k, Function(v.get_ind_space(), name = k))
+                mat = getattr(self, k)
+                mat.assign(project(v.get_function(), v.get_ind_space()))
+                # setattr(self, k, v.get_function())
+            else:
+                setattr(self, k, v)
 
         self._active_model = active_model
 
@@ -484,15 +519,40 @@ class HolzapfelOgden(Material):
 
 
     def default_parameters(self):
+        """
+        Default matereial parameter for the Holzapfel Ogden model
+
+        Taken from Table 1 row 3 of [1]
+        """
+        
         return {"a":2.28, "a_f":1.685, 
                 "b":9.726, "b_f":15.779}
 
 
     def W_1(self, I_1, diff=0, *args, **kwargs):
-        """
+        r"""
         Isotropic contribution.
+
+        If `diff = 0`, return
+
+        .. math::
+
+           \frac{a}{2 b} \left( e^{ b (I_1 - 3)}  -1 \right)
+
+        If `diff = 1`, return
+
+        .. math::
+
+           \frac{a}{b} e^{ b (I_1 - 3)} 
+
+        If `diff = 2`, return
+
+        .. math::
+
+           \frac{a b}{2}  e^{ b (I_1 - 3)}     
+        
         """
-        # from IPython import embed; embed()
+      
         a = self.a
         b = self.b
         # if float(a) < DOLFIN_EPS:
@@ -513,8 +573,35 @@ class HolzapfelOgden(Material):
             return a*b/2.0 * exp(b * (I_1 - 3))
 
     def W_4(self, I_4, diff=0, *args, **kwargs):
-        """
+        r"""
         Anisotropic contribution.
+
+        If `diff = 0`, return
+
+        .. math::
+
+           \frac{a_f}{2 b_f} \left( e^{ b_f (I_{4f_0} - 1)_+^2} -1 \right)
+
+        If `diff = 1`, return
+
+        .. math::
+
+           a_f (I_{4f_0} - 1)_+ e^{ b_f (I_{4f_0} - 1)^2} 
+
+        If `diff = 2`, return
+
+        .. math::
+
+           a_f h(I_{4f_0} - 1) (1 + 2b(I_{4f_0} - 1)) e^{ b_f (I_{4f_0} - 1)_+^2} 
+
+        where
+        
+        .. math::
+
+           h(x) = \frac{\mathrm{d}}{\mathrm{d}x} \max\{x,0\}
+
+        is the Heaviside function.
+        
         """
         a = self.a_f
         b = self.b_f

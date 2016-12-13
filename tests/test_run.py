@@ -1,5 +1,6 @@
 import pulse_adjoint as pa
 from patient_data import TestPatient
+from utils import store_results
 
 pa.setup_optimization.setup_general_parameters()
 params = pa.setup_optimization.setup_adjoint_contraction_parameters()
@@ -51,17 +52,22 @@ def test_passive_forward_runner():
                                                      optimization_targets,
                                                      params, 
                                                      paramvec)
-
-    rd = pa.setup_optimization.MyReducedFunctional(for_run, paramvec)
-    rd(paramvec)
-    
-    
     
 
-def a_test_setup_active():
+def test_passive_optimization():
+
+    params["phase"] = pa.adjoint_contraction_args.PHASES[0]
+    params["matparams_space"] = "CG_1"
+    params["Optimization_parmeteres"]["passive_maxiter"] = 1
+    pa.run_optimization.run_passive_optimization(params, patient)
+    
+    
+
+def test_setup_active():
     params["phase"] = pa.adjoint_contraction_args.PHASES[1]
     measurements, solver_parameters, pressure, paramvec \
         = pa.setup_optimization.setup_simulation(params, patient)
+
 
 def test_store():
     pass
