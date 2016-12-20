@@ -43,7 +43,7 @@ def load_patient_data():
     
     patient = Object()
 
-    h5group = "26"
+    h5group = "22"
     ggroup = '{}/geometry'.format(h5group)
     mgroup = '{}/mesh'.format(ggroup)
     lgroup = "{}/local basis functions".format(h5group)
@@ -94,7 +94,7 @@ def load_patient_data():
             
         name = "fiber"
         l = Function(V, name = name)
-        fsubgroup = fgroup+"/fiber_epi50_endo40"
+        fsubgroup = fgroup+"/fiber_epi-60_endo60"
         h5file.read(l, fsubgroup)
         fsub_attrs = h5file.attributes(fsubgroup)
         setattr(patient, "e_f", l)
@@ -102,6 +102,7 @@ def load_patient_data():
     # You don't need sheets nor cross-sheets
     setattr(patient, "e_s", None)
     setattr(patient, "e_sn", None)
+    setattr(patient, "mesh_type", lambda: "lv")
         
     # Set some markers
     setattr(patient, 'ENDO',  30)
@@ -124,7 +125,8 @@ def load_patient_data():
     patient.passive_filling_duration = 3
     patient.num_contract_points = 31
     patient.num_points = 34
-    
+
+    patient.markers = {"BASE": (10, 2), "ENDO":(30, 2), "EPI": (40, 2)}
 
     return patient
 

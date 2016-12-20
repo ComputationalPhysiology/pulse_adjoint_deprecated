@@ -137,6 +137,8 @@ def setup_patient_parameters():
     +------------------+-----------------+---------------+
     | pressure_path    |                 |               |
     +------------------+-----------------+---------------+
+    | echo_path        |                 |               |
+    +------------------+-----------------+---------------+
     | resolution       | low_res         |               |
     +------------------+-----------------+---------------+
     | fiber_angle_endo | 60              |               |
@@ -152,6 +154,8 @@ def setup_patient_parameters():
     params.add("resolution", "low_res")
     params.add("pressure_path", "")
     params.add("mesh_path", "")
+    params.add("echo_path", "")
+    
     params.add("subsample", False)
     params.add("fiber_angle_epi", -60)
     params.add("fiber_angle_endo", 60)
@@ -724,7 +728,7 @@ def make_solver_params(params, patient, measurements):
                       name = "LV_endo_pressure", element = V_real.ufl_element())
     N = FacetNormal(patient.mesh)
 
-    if patient.mesh_type == "biv":
+    if patient.mesh_type() == "biv":
         p_rv = Expression("t", t = measurements["rv_pressure"][0],
                           name = "RV_endo_pressure")
         
@@ -909,7 +913,7 @@ def get_measurements(params, patient):
         
         measurements["pressure"] = pressure[start:end]
 
-        if patient.mesh_type == "biv":
+        if patient.mesh_type() == "biv":
             rv_pressure = np.array(patient.RVP)
             reference_pressure = rv_pressure[0]
             logger.info("RV Pressure offset = {} kPa".format(reference_pressure))
@@ -959,7 +963,7 @@ def get_volume_offset(patient, chamber = "lv"):
 
     if chamber == "lv":
     
-        if patient.mesh_type == "biv":
+        if patient.mesh_type() == "biv":
             endo_marker = patient.ENDO_LV
         else:
             endo_marker = patient.ENDO
