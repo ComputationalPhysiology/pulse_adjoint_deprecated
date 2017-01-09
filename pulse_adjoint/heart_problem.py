@@ -94,14 +94,18 @@ class BasicHeartProblem(collections.Iterator):
         """
         p_lv_next = self.lv_pressure_gen.next()
         p_lv_prev = self.p_lv.t
+        p_diff = abs(p_lv_next - p_lv_prev)
 
         if self.has_rv:
             p_rv_next = self.rv_pressure_gen.next()
             p_rv_prev = self.p_rv.t
             
-        # p_diff = abs(p_next - p_prev)
-        # if p_diff < DOLFIN_EPS:
-        #     return self.solver.solve()[0]
+            p_diff += abs(p_rv_next - p_rv_prev)
+            
+  
+        if p_diff < DOLFIN_EPS:
+            # return solver.solve()[0]
+            return self.solver.get_state()
 
         head = "{:<20}\t{:<15}\t{:<15}".format("Increase pressure:",
                                                "previous (lv)",

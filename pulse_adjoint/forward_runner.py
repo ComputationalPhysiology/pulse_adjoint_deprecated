@@ -35,6 +35,16 @@ class BasicForwardRunner(object):
     """
     Runs a simulation using a HeartProblem object
     and compares simulated observations to target data.
+
+    :param dict solver_parameters: solver parameters coming from 
+                                   setup_optimization.make_solver_paramerters()
+    :param list pressure: list of pressure that should be solved for, 
+                          starting with the current pressure
+    :param dict bcs: Dictionary with boundary conditions coming from
+                     run_optimization.load_target_data()
+    :param dict optimization_targets: Dictionary with optimization targets,  
+                                      coming from run_optimization.load_target_data()
+    :param dict params: adjoint contraction paramters
     """    
     
     def __init__(self,
@@ -45,16 +55,6 @@ class BasicForwardRunner(object):
                  params):
         """Initialize base class for forward solver
 
-        :param dict solver_parameters: solver parameters coming from 
-                                       setup_optimization.make_solver_paramerters()
-        :param list pressure: list of pressure that should be solved for, 
-                              starting with the current pressure
-        :param dict bcs: Dictionary with boundary conditions coming from
-                         run_optimization.load_target_data()
-        :param dict optimization_targets: Dictionary with optimization targets,  
-                                          coming from run_optimization.load_target_data()
-        :param dict params: adjoint contraction paramters
-        
         """
         
 
@@ -129,8 +129,7 @@ class BasicForwardRunner(object):
         :rtype: dict
 
         """
-        
-
+   
         # Set the functional value for each target to zero
         for key,val in self.target_params.iteritems():
             if val: self.optimization_targets[key].reset()
@@ -144,7 +143,6 @@ class BasicForwardRunner(object):
         
         functional_values = []
         functionals_time = []
-        
 
         if phase == "passive":
             for key,val in self.target_params.iteritems():
@@ -188,36 +186,40 @@ class BasicForwardRunner(object):
         for it, p in enumerate(self.bcs["pressure"][1:], start=1):
 
             sol = phm.next()
-           
-            for key,val in self.target_params.iteritems():
 
-                if val:
+                        
+            if self.params["passive_weights"] == "all" \
+               or it == len(self.bcs["pressure"])-1:
             
-                    self.optimization_targets[key].next_target(it, annotate=annotate)
-                    self.optimization_targets[key].assign_simulated(split(sol)[0])
-                    self.optimization_targets[key].assign_functional()
-                    self.optimization_targets[key].save()
+                for key,val in self.target_params.iteritems():
 
-
-            self.regularization.assign(m, annotate = annotate)
-            self.regularization.save()
+                    if val:
             
-            # Print the values
-            logger.info(self._print_line(it))
+                        self.optimization_targets[key].next_target(it, annotate=annotate)
+                        self.optimization_targets[key].assign_simulated(split(sol)[0])
+                        self.optimization_targets[key].assign_functional()
+                        self.optimization_targets[key].save()
+
+
+                        self.regularization.assign(m, annotate = annotate)
+                        self.regularization.save()
+            
+                # Print the values
+                logger.info(self._print_line(it))
             
 
-            if phase == "active":
-                # There is only on step, so we are done
-                adj_inc_timestep(1, True)
-                functionals_time.append(functional*dt[1])
-            else:
-                # Check if we are done with the passive phase
+                if phase == "active":
+                    # There is only on step, so we are done
+                    adj_inc_timestep(1, True)
+                    functionals_time.append(functional*dt[1])
+                else:
+                    # Check if we are done with the passive phase
+                    
+                    adj_inc_timestep(it, it == len(self.bcs["pressure"])-1)
+                    functionals_time.append(functional*dt[it+1])
                 
-                adj_inc_timestep(it, it == len(self.bcs["pressure"])-1)
-                functionals_time.append(functional*dt[it+1])
-                
-            functional_values.append(assemble(functional))
-            self.states.append(Vector(phm.solver.get_state().vector()))
+                functional_values.append(assemble(functional))
+                self.states.append(Vector(phm.solver.get_state().vector()))
             
         forward_result = self._make_forward_result(functional_values,
                                                    functionals_time)
@@ -227,8 +229,7 @@ class BasicForwardRunner(object):
     
     def _print_finished_report(self, forward_result):
 
-        # from IPython import embed; embed()
-        # exit()
+
         targets = forward_result["optimization_targets"]
         reg  = forward_result["regularization"]
 
@@ -251,7 +252,7 @@ class BasicForwardRunner(object):
               "bcs": self.bcs,
               "total_functional": list_sum(functionals_time),
               "func_value": sum(functional_values)}
-             
+
         return fr
 
 

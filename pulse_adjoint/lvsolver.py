@@ -379,7 +379,7 @@ class Postprocess(object):
 
         .. math::
 
-           \sigma = \mathbf{F} \frac{\partial \psi}{\partial \mathbf{F}} - pI
+           \sigma = \mathbf{F} \frac{\partial \psi}{\partial \mathbf{F}} - p\mathbf{I}
 
         Compressible:
 
