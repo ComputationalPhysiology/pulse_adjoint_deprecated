@@ -5,12 +5,12 @@ each function in the pipeline which can be used to check
 that new changes does not break the code.
 """
 import pulse_adjoint as pa
-from patient_data import TestPatient
+from patient_data import LVTestPatient
 
 pa.setup_optimization.setup_general_parameters()
 params = pa.setup_optimization.setup_adjoint_contraction_parameters()
 
-patient = TestPatient()
+patient = LVTestPatient()
 
 def test_setup_passive():
 
