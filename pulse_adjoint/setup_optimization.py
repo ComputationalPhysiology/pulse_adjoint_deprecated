@@ -356,7 +356,7 @@ def setup_application_parameters():
     # If optimization of multiple material parameters are selected,
     # then R_0 is currently the only applicable space
     params.add("matparams_space", "R_0", ["CG_1", "R_0", "regional"])
-
+    
 
     ## Models ##
 
@@ -393,6 +393,10 @@ def setup_application_parameters():
 
     ## Additional setup ##
 
+    # For passive optimization, include all passive points ('all')
+    # or only the final point ('final')
+    params.add("passive_weights", "final", ["final", "all"])
+    
     # Update weights so that the initial value of the functional is 0.1
     params.add("adaptive_weights", True)
     
@@ -592,8 +596,6 @@ def get_simulated_strain_traces(phm):
 
 def make_solver_params(params, patient, measurements):
 
-
-
     
     ##  Contraction parameter
     if params["gamma_space"] == "regional":
@@ -730,7 +732,7 @@ def make_solver_params(params, patient, measurements):
 
     if patient.mesh_type() == "biv":
         p_rv = Expression("t", t = measurements["rv_pressure"][0],
-                          name = "RV_endo_pressure")
+                          name = "RV_endo_pressure", element = V_real.ufl_element())
         
         neumann_bc = [[p_lv, patient.ENDO_LV],
                      [p_rv, patient.ENDO_RV]]
