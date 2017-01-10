@@ -219,7 +219,8 @@ class BasicForwardRunner(object):
                     functionals_time.append(functional*dt[it+1])
                 
                 functional_values.append(assemble(functional))
-                self.states.append(Vector(phm.solver.get_state().vector()))
+                
+            self.states.append(Vector(phm.solver.get_state().vector()))
             
         forward_result = self._make_forward_result(functional_values,
                                                    functionals_time)
@@ -509,6 +510,8 @@ class PassiveForwardRunner(BasicForwardRunner):
     
 
         lst = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
+
+        
         if npassive == 1:
             fixed_idx = np.nonzero([not self.params["Optimization_parmeteres"][k] for k in lst])[0][0]
             par = lst[fixed_idx].split("fix_")[-1]
@@ -535,7 +538,8 @@ class PassiveForwardRunner(BasicForwardRunner):
                     v = paramvec_split[it]
                     
                 mat = getattr(self.solver_parameters["material"], par)
-                mat.assign(v)
+                # mat.assign(v)
+                mat = v
      
         phm = PassiveHeartProblem(self.bcs,
                                   self.solver_parameters,
