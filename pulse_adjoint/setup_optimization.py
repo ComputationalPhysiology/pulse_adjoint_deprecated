@@ -395,7 +395,7 @@ def setup_application_parameters():
 
     # For passive optimization, include all passive points ('all')
     # or only the final point ('final')
-    params.add("passive_weights", "final", ["final", "all"])
+    params.add("passive_weights", "all", ["final", "all"])
     
     # Update weights so that the initial value of the functional is 0.1
     params.add("adaptive_weights", True)
@@ -417,6 +417,8 @@ def setup_application_parameters():
     params.add("synth_data", False)
     # Noise is added to synthetic data
     params.add("noise", False)
+
+    params.add("log_level", logging.INFO)
 
 
     return params
@@ -643,7 +645,17 @@ def make_solver_params(params, patient, measurements):
         # Make an iterator for the function assigment
         nopts_par = 0
 
-    
+
+    if params["phase"] in [PHASES[1]]:
+        # Load the parameters from the result file  
+                
+        # Open simulation file
+        with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
+            
+            # Get material parameter from passive phase file
+            h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
+            
+            
     matparams = params["Material_parameters"].to_dict()
     for par, val in matparams.iteritems():
 
@@ -658,27 +670,26 @@ def make_solver_params(params, patient, measurements):
                 
                 val_const = Constant(val) if paramvec_.value_size() == 1 \
                             else Constant([val]*paramvec_.value_size())
+                
 
                 if npassive <= 1:
                     paramvec.assign(val_const)
-                    matparams[par] = paramvec
 
                 else:
-                  
                     paramvec.assign_sub(val_const, nopts_par)
-                    
-                    matparams[par] = split(paramvec)[nopts_par]
-                    nopts_par += 1
-                    
                 
+                    
+            if npassive <= 1:
+                matparams[par] = paramvec
+
             else:
-                # Otherwise load the parameters from the result file  
-                
-                # Open simulation file
-                with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
+                matparams[par] = split(paramvec)[nopts_par]
+                nopts_par += 1
+
+            
                     
-                    # Get material parameter from passive phase file
-                    h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
+                
+            
 
    
     # Print the material parameter to stdout
@@ -1191,10 +1202,12 @@ class MixedParameter(dolfin.Function):
            types of subspaces, e.g [RegionalParamter, R_0, CG_1]
 
         """
-        
-
+    
         msg = "Please provide a dolin function as argument to MixedParameter"
         assert isinstance(fun, (dolfin.Function, RegionalParameter)), msg
+
+        if isinstance(fun, RegionalParameter):
+            raise NotImplementedError
 
 
         # We can just make a usual mixed function space
