@@ -33,19 +33,17 @@ def make_logger(name, level = logging.INFO):
     mpi_filt.filter = log_if_proc0
 
     logger = logging.getLogger(name)
-    logger.setLevel(log_level)
-
+    logger.setLevel(level)
+    
     ch = logging.StreamHandler()
-    ch.setLevel(level)
-
-
+    ch.setLevel(0)
     formatter = logging.Formatter('%(message)s') #'\n%(name)s - %(levelname)s - %(message)s\n'
     ch.setFormatter(formatter)
-    
-
     logger.addHandler(ch)
     logger.addFilter(mpi_filt)
 
+   
+    
     
     dolfin.set_log_active(False)
     dolfin.set_log_level(dolfin.WARNING)

@@ -473,7 +473,10 @@ def setup_optimization_parameters():
     params.add("passive_opt_tol", 1e-6)
     params.add("passive_maxiter", 30)
     params.add("scale", 1.0)
-    params.add("gamma_max", 0.9)
+    
+    params.add("gamma_min", 0.0)
+    params.add("gamma_max", 0.4)
+    
     params.add("matparams_min", 0.1)
     params.add("matparams_max", 50.0)
     params.add("fix_a", False)
@@ -1042,17 +1045,23 @@ class MyReducedFunctional(ReducedFunctional):
 
     
         logger.debug(Text.yellow("Start annotating"))
-        # arr = gather_broadcast(paramvec_new.vector().array())
-        # logger.info("Try value {} (mean)".format(arr.mean()))
         parameters["adjoint"]["stop_annotating"] = False
 
-        logger.setLevel(WARNING)
+       
+        # Change loglevel to avoid to much printing (do not change if in dbug mode)
+        change_log_level = logger.level == logging.INFO
+        if change_log_level:
+            logger.setLevel(WARNING)
+            
+            
         t = Timer("Forward run")
         t.start()
         self.for_res, crash= self.for_run(paramvec_new, True)
         for_time = t.stop()
         self.forward_times.append(for_time)
-        logger.setLevel(INFO)
+
+        if change_log_level:
+            logger.setLevel(INFO)
 
         if self.first_call:
             # Store initial results 
