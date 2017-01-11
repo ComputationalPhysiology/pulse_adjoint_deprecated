@@ -260,14 +260,13 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     parameters["adjoint"]["stop_annotating"] = True
 
     
-    rd = MyReducedFunctional(for_run, gamma)
+    rd = MyReducedFunctional(for_run, gamma, relax = True)
 
     
     # Evaluate the reduced functional in case the solver chrashes at the first point.
     # If this is not done, and the solver crashes in the first point
     # then Dolfin adjoit has no recording and will raise an exception.
     rd(gamma)
-
     
     return rd, gamma
 
