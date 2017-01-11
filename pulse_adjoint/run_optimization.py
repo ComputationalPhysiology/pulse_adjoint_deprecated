@@ -426,15 +426,9 @@ def solve_oc_problem(params, rd, paramvec):
 
         else:
 
-            if params["active_model"] == "active_strain":
-                lb = np.array([0.0]*nvar)
-                ub = np.array([0.9]*nvar)
-            elif params["active_model"] == "active_strain_rossi":
-                lb = np.array([-0.9]*nvar)
-                ub = np.array([0.0]*nvar)
-            else: # Active stress
-                lb = np.array([0.0]*nvar)
-                ub = np.array([1.0]*nvar)
+            lb = np.array([opt_params["gamma_min"]]*nvar)
+            ub = np.array([opt_params["gamma_max"]]*nvar)
+                
 
             tol= opt_params["active_opt_tol"]
             max_iter = opt_params["active_maxiter"]
