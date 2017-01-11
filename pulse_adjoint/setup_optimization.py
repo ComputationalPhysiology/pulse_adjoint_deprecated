@@ -1011,7 +1011,8 @@ def setup_simulation(params, patient):
 
 
 class MyReducedFunctional(ReducedFunctional):
-    def __init__(self, for_run, paramvec, scale = 1.0):
+    def __init__(self, for_run, paramvec, scale = 1.0, relax = False):
+        
         self.for_run = for_run
         self.paramvec = paramvec
         self.first_call = True
@@ -1024,6 +1025,8 @@ class MyReducedFunctional(ReducedFunctional):
         self.forward_times = []
         self.backward_times = []
         self.initial_paramvec = gather_broadcast(paramvec.vector().array())
+
+        self.derivative_scale = 0.0001 if relax else 1.0
 
 
     def __call__(self, value):
@@ -1118,7 +1121,8 @@ class MyReducedFunctional(ReducedFunctional):
             if math.isnan(num):
                 raise Exception("NaN in adjoint gradient calculation.")
 
-        gathered_out = gather_broadcast(out[0].vector().array())
+        # Multiply with some small number to that we take smaller steps
+        gathered_out = gather_broadcast(out[0].vector().array())*self.derivative_scale
         
         return self.scale*gathered_out
 
