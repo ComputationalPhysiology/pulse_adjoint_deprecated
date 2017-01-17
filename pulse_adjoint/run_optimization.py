@@ -575,7 +575,7 @@ def solve_oc_problem(params, rd, paramvec):
                           "tol":tol,
                           "options": {"disp": opt_params["disp"],
                                       # "iprint": 2,
-                                      "ftol": 1e-16,
+                                      "ftol": tol,
                                       "maxiter":max_iter}
                 }
                 # if method == "SLSQP":

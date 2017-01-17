@@ -26,7 +26,7 @@ from optimization_targets import *
 from adjoint_contraction_args import *
 import numpy as np
 from numpy_mpi import *
-from utils import Text, list_sum, Object, TablePrint
+from utils import Text, list_sum, Object, TablePrint, UnableToChangePressureExeption
 from setup_optimization import RegionalParameter
 
 
@@ -106,6 +106,7 @@ class BasicForwardRunner(object):
             if val: line+= self.optimization_targets[key].print_line()
 
         line += self.regularization.print_line()
+
         return line
 
     def _print_functional(self):
@@ -133,7 +134,8 @@ class BasicForwardRunner(object):
         # Set the functional value for each target to zero
         for key,val in self.target_params.iteritems():
             if val: self.optimization_targets[key].reset()
-                
+        self.regularization.reset()
+        
         # Start the clock
         adj_start_timestep(0.0)
 
@@ -182,29 +184,32 @@ class BasicForwardRunner(object):
             
         # self.regularization.assign(m, annotate = annotate)
         functional += self.regularization.get_functional()
+
         
         for it, p in enumerate(self.bcs["pressure"][1:], start=1):
-
+        
             sol = phm.next()
 
-                        
+        
             if self.params["passive_weights"] == "all" \
                or it == len(self.bcs["pressure"])-1:
             
                 for key,val in self.target_params.iteritems():
-
+                    
                     if val:
-            
+                       
                         self.optimization_targets[key].next_target(it, annotate=annotate)
                         self.optimization_targets[key].assign_simulated(split(sol)[0])
                         self.optimization_targets[key].assign_functional()
                         self.optimization_targets[key].save()
 
-
-                        self.regularization.assign(m, annotate = annotate)
-                        self.regularization.save()
+                        
+                self.regularization.assign(m, annotate = annotate)
+                
+                self.regularization.save()
             
                 # Print the values
+        
                 logger.info(self._print_line(it))
             
 
@@ -217,7 +222,7 @@ class BasicForwardRunner(object):
                     
                     adj_inc_timestep(it, it == len(self.bcs["pressure"])-1)
                     functionals_time.append(functional*dt[it+1])
-                
+     
                 functional_values.append(assemble(functional))
                 
             self.states.append(Vector(phm.solver.get_state().vector()))
@@ -360,7 +365,7 @@ class ActiveForwardRunner(BasicForwardRunner):
         try:
             # Try to step up gamma to the given one
             logger.debug("Try to step up gamma")
-            w_old = self.cphm.get_state()
+            w_old = self.cphm.get_state().copy()
             gamma_old = self.gamma_previous.copy()
             self.cphm.next_active(m, self.gamma_previous.copy())
 	    
@@ -491,7 +496,7 @@ class PassiveForwardRunner(BasicForwardRunner):
                                     bcs,
                                     optimization_targets,
                                     params)
-       
+   
         self.opt_weights = {}
         for k, v in params["Passive_optimization_weigths"].iteritems():
             if k in self.optimization_targets.keys() or \
@@ -502,8 +507,61 @@ class PassiveForwardRunner(BasicForwardRunner):
 
     def __call__(self, m, annotate = False):
 
+        paramvec_old = self.paramvec.copy()
         self.paramvec.assign(m)
+
+
+        try:
+            self.assign_material_parameters()
+            phm, w_old  =  self.get_phm(annotate=False,
+                                   return_state = True)
+            parameters["adjoint"]["stop_annotating"] = True
+            forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, False, "passive")
+  
+
+        except UnableToChangePressureExeption:
+
+            parameters["adjoint"]["stop_annotating"] = not annotate
+            self.paramvec.assign(paramvec_old)
+            self.assign_material_parameters()
+            phm = self.get_phm(annotate, return_state =False)
+            phm.get_state().assign(w_old)
+            forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, annotate, "passive")
+
+            return forward_result, True
+
+        else:
+            parameters["adjoint"]["stop_annotating"] = not annotate
+            phm   =  self.get_phm(annotate, return_state =False)
+            forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, annotate, "passive")
+            # self.lala += 1
+
+        return forward_result, False
+
+       #  paramvec_old = self.paramvec.copy()
+        
+    #     self.paramvec.assign(m)
        
+
+    #     phm = self.assign_material_parameters(annotate)
+     
+        
+
+    #     try:
+    #         # parameters["adjoint"]["stop_annotating"] = True
+    #         w_old = phm.get_state()
+    #         forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, annotate, "passive")
+    #         crash = False
+    #     except UnableToChangePressureExeption as ex:
+    #         print "CRASHCRASH!!!!!"
+
+    #         parameters["adjoint"]["stop_annotating"] = not annotate
+    #         self.paramvec.assign(paramvec_old)
+    #         phm = self.assign_material_parameters()
+
+    #     return forward_result, crash
+
+    def assign_material_parameters(self):
 
         npassive = sum([ not self.params["Optimization_parmeteres"][k] \
                      for k in ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]])
@@ -540,17 +598,25 @@ class PassiveForwardRunner(BasicForwardRunner):
                 mat = getattr(self.solver_parameters["material"], par)
                 # mat.assign(v)
                 mat = v
-     
+        
+
+        
+
+    def get_phm(self, annotate, return_state = False):
+
         phm = PassiveHeartProblem(self.bcs,
                                   self.solver_parameters,
                                   self.pressure)
+
+        if return_state:
+            w_old = phm.get_state().copy(deepcopy=True)
 
         # Do an initial solve for the initial point
         parameters["adjoint"]["stop_annotating"] = True
         phm.solver.solve()
         parameters["adjoint"]["stop_annotating"] = not annotate
+
+        if return_state:
+            return phm, w_old
         
-        forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, annotate, "passive")
-
-
-        return forward_result, False
+        return phm
