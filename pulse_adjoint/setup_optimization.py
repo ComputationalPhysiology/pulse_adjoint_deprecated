@@ -417,9 +417,14 @@ def setup_application_parameters():
     params.add("synth_data", False)
     # Noise is added to synthetic data
     params.add("noise", False)
-
+    # Log level
     params.add("log_level", logging.INFO)
 
+    # Relaxation parameters. If smaller than one, the step size
+    # in the direction will be smaller, and perhaps avoid the solver
+    # to crash.
+    params.add("passive_relax", 0.1)
+    params.add("active_relax", 0.001)
 
     return params
 
@@ -945,9 +950,13 @@ def get_measurements(params, patient):
             volume_offset = get_volume_offset(patient)
             logger.info("LV Volume offset = {} cm3".format(volume_offset))
 
+            logger.info("Measured LV volume = {}".format(patient.volume[0]))
+            
             
             # Subtract this offset from the volume data
             volume = np.subtract(patient.volume,volume_offset)
+
+            logger.info("Computed LV volume = {}".format(volume[0]))
 
             measurements["volume"] = volume[start:end]
 
@@ -957,9 +966,13 @@ def get_measurements(params, patient):
             volume_offset = get_volume_offset(patient, "rv")
             logger.info("RV Volume offset = {} cm3".format(volume_offset))
 
+            logger.info("Measured RV volume = {}".format(patient.RVV[0]))
+            
             # Subtract this offset from the volume data
             volume = np.subtract(patient.RVV ,volume_offset)
 
+            logger.info("Computed RV volume = {}".format(volume[0]))
+            
             measurements["rv_volume"] = volume[start:end]
                 
 
@@ -1011,7 +1024,7 @@ def setup_simulation(params, patient):
 
 
 class MyReducedFunctional(ReducedFunctional):
-    def __init__(self, for_run, paramvec, scale = 1.0, relax = False):
+    def __init__(self, for_run, paramvec, scale = 1.0, relax = 1.0):
         
         self.for_run = for_run
         self.paramvec = paramvec
@@ -1026,7 +1039,7 @@ class MyReducedFunctional(ReducedFunctional):
         self.backward_times = []
         self.initial_paramvec = gather_broadcast(paramvec.vector().array())
 
-        self.derivative_scale = 0.0001 if relax else 1.0
+        self.derivative_scale = relax
 
 
     def __call__(self, value):
