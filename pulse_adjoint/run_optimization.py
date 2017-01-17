@@ -121,7 +121,7 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     parameters["adjoint"]["stop_annotating"] = True
 
     # Initialize MyReducedFuctional
-    rd = MyReducedFunctional(for_run, paramvec)
+    rd = MyReducedFunctional(for_run, paramvec, relax = params["passive_relax"])
 
     
     # Evaluate the reduced functional in case the solver chrashes at the first point.
@@ -260,7 +260,7 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     parameters["adjoint"]["stop_annotating"] = True
 
     
-    rd = MyReducedFunctional(for_run, gamma, relax = True)
+    rd = MyReducedFunctional(for_run, gamma, relax = params["active_relax"])
 
     
     # Evaluate the reduced functional in case the solver chrashes at the first point.
