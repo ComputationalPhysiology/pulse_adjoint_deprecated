@@ -28,6 +28,7 @@ import numpy as np
 from numpy_mpi import *
 from utils import Text, list_sum, Object, TablePrint, UnableToChangePressureExeption
 from setup_optimization import RegionalParameter
+from lvsolver import SolverDidNotConverge
 
 
 
@@ -113,11 +114,13 @@ class BasicForwardRunner(object):
         """
         Print the terms in the functional in a mathematical way
         """
-        
-        return "\nFuncional = {}\n".format((len(self.opt_weights.keys())*" {{}}*I_{} +").\
-                                            format(*self.opt_weights.keys())[:-1].\
-                                            format(*self.opt_weights.values()))
-        
+
+        s = ("\n"+ "Functional".center(100, "-") +\
+             "\n"+"J = {}".format((len(self.opt_weights.keys())*" {{}}*I_{} +").\
+                                 format(*self.opt_weights.keys())[:-1].\
+                                  format(*self.opt_weights.values())).center(100, " ")+ "\n")
+        return s
+             
         
 
     def solve_the_forward_problem(self, phm, annotate = False, phase = "passive"):
@@ -251,8 +254,16 @@ class BasicForwardRunner(object):
 
 
     def _make_forward_result(self, functional_values, functionals_time):
+
+        target_values = {}
+        for k, v in self.optimization_targets.iteritems():
+            target_values[k] = v.func_value
+            
+        target_values["regularization"] = self.regularization.func_value
+        
         
         fr = {"optimization_targets": self.optimization_targets,
+              "target_values": target_values,
               "regularization": self.regularization,
               "states": self.states,
               "bcs": self.bcs,
@@ -347,14 +358,14 @@ class ActiveForwardRunner(BasicForwardRunner):
 
         self.cphm = ActiveHeartProblem(self.bcs,
                                        self.solver_parameters,
-                                       pressure,
-                                       params,
+                                       self.pressure,
+                                       self.params,
                                        annotate = False)
-	
-        # logger.debug("\nVolume before pressure change: {:.3f}".format(self.cphm.get_inner_cavity_volume()))
-        self.cphm.increase_pressure()
-        # logger.debug("Volume after pressure change: {:.3f}".format(self.cphm.get_inner_cavity_volume()))
 
+        self.cphm.increase_pressure()
+
+        
+        
     def __call__(self, m,  annotate = False):
 	    
         logger.info("Evaluating model")
@@ -362,14 +373,16 @@ class ActiveForwardRunner(BasicForwardRunner):
         # We do not want to record this as we only want to optimize the final value
         logger.debug(Text.yellow("Stop annotating"))
         parameters["adjoint"]["stop_annotating"] = True
+   
+        logger.debug("Try to step up gamma")
+        
+        w_old = self.cphm.get_state()
+        gamma_old = self.gamma_previous.copy()
+        
         try:
-            # Try to step up gamma to the given one
-            logger.debug("Try to step up gamma")
-            w_old = self.cphm.get_state().copy()
-            gamma_old = self.gamma_previous.copy()
             self.cphm.next_active(m, self.gamma_previous.copy())
-	    
-        except StopIteration:
+    	    
+        except SolverDidNotConverge as ex:
             logger.debug("Stepping up gamma failed")
 
             # Save the gamma
@@ -384,57 +397,50 @@ class ActiveForwardRunner(BasicForwardRunner):
                     while "crash_point_{}".format(p) in h5pyfile["point_{}".format(acin)].keys():
                         p += 1
 
-            with HDF5File(mpi_comm_world(), self.outdir+"/gamma_crash.h5", file_format) as h5file:
-                h5file.write(m, "point_{}/crash_point_{}".format(acin, p))
-                
+                with HDF5File(mpi_comm_world(), self.outdir+"/gamma_crash.h5", file_format) as h5file:
+                    h5file.write(m, "point_{}/crash_point_{}".format(acin, p))
                 
 
-            # If stepping up gamma fails, assign the previous gamma
-            # and return a crash=True, so that the Reduced functional
-            # knows that we were unable to step up gamma
-            logger.debug(Text.yellow("Start annotating"))
-            parameters["adjoint"]["stop_annotating"] = not annotate
 
             logger.debug("Assign the old state and old gamma")
             # Assign the old state
-            self.cphm.solver.get_state().assign(w_old, annotate=annotate)
+            self.cphm.solver.get_state().assign(w_old)
             # Assign the old gamma
-            self.cphm.solver.parameters['material'].gamma.assign(m)
+            self.cphm.solver.parameters['material'].gamma.assign(gamma_old)
             self.gamma_previous.assign(gamma_old)
 
-            # Solve the forward problem with the old gamma
-            logger.debug("Solve the forward problem with the old gamma")
-            forward_result = BasicForwardRunner.solve_the_forward_problem(self, self.cphm,
-                                                                          annotate, "active")
+           
+            raise ex
 
-            return forward_result, True
+
 
         else:
             # Stepping up gamma succeded
             logger.debug("Stepping up gamma succeded")
             # Get the current state
             w = self.cphm.get_state()
+          
+            self.gamma_previous.assign(m)
             logger.debug(Text.yellow("Start annotating"))
             parameters["adjoint"]["stop_annotating"] = not annotate
-
+            
             # Assign the state where we have only one step with gamma left, and make sure
             # that dolfin adjoint record this.
             logger.debug("Assign the new state and gamma")
             self.cphm.solver.get_state().assign(w, annotate=annotate)
-
+            
             # Now we make the final solve
             self.cphm.solver.parameters['material'].gamma.assign(m)
-            self.gamma_previous.assign(m)
-
+                        
+            w = self.cphm.get_state()
+                      
             logger.debug("Solve the forward problem with the new gamma")
-            # Relax on the convergence criteria in order to ensure convergence
-            self.cphm.solver.parameters["solve"]["snes_solver"]['absolute_tolerance']*= 100
-            self.cphm.solver.parameters["solve"]["snes_solver"]['relative_tolerance']*= 100
+            
             forward_result = BasicForwardRunner.solve_the_forward_problem(self, self.cphm,
                                                                           annotate, "active")
-            self.cphm.solver.parameters["solve"]["snes_solver"]['absolute_tolerance']*= 0.01
-            self.cphm.solver.parameters["solve"]["snes_solver"]['relative_tolerance']*= 0.01
-
+            w = self.cphm.get_state()
+           
+            
             return forward_result, False
 
 
@@ -510,56 +516,20 @@ class PassiveForwardRunner(BasicForwardRunner):
         paramvec_old = self.paramvec.copy()
         self.paramvec.assign(m)
 
+        self.assign_material_parameters()
+        phm, w_old  =  self.get_phm(annotate=False,
+                                    return_state = True)
+        parameters["adjoint"]["stop_annotating"] = True
+        forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, False, "passive")
 
-        try:
-            self.assign_material_parameters()
-            phm, w_old  =  self.get_phm(annotate=False,
-                                   return_state = True)
-            parameters["adjoint"]["stop_annotating"] = True
-            forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, False, "passive")
-  
-
-        except UnableToChangePressureExeption:
-
-            parameters["adjoint"]["stop_annotating"] = not annotate
-            self.paramvec.assign(paramvec_old)
-            self.assign_material_parameters()
-            phm = self.get_phm(annotate, return_state =False)
-            phm.get_state().assign(w_old)
-            forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, annotate, "passive")
-
-            return forward_result, True
-
-        else:
-            parameters["adjoint"]["stop_annotating"] = not annotate
-            phm   =  self.get_phm(annotate, return_state =False)
-            forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, annotate, "passive")
-            # self.lala += 1
+        parameters["adjoint"]["stop_annotating"] = not annotate
+        self.cphm   =  self.get_phm(annotate, return_state =False)
+        forward_result = BasicForwardRunner.solve_the_forward_problem(self, self.cphm, annotate, "passive")
+      
 
         return forward_result, False
 
-       #  paramvec_old = self.paramvec.copy()
-        
-    #     self.paramvec.assign(m)
-       
 
-    #     phm = self.assign_material_parameters(annotate)
-     
-        
-
-    #     try:
-    #         # parameters["adjoint"]["stop_annotating"] = True
-    #         w_old = phm.get_state()
-    #         forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, annotate, "passive")
-    #         crash = False
-    #     except UnableToChangePressureExeption as ex:
-    #         print "CRASHCRASH!!!!!"
-
-    #         parameters["adjoint"]["stop_annotating"] = not annotate
-    #         self.paramvec.assign(paramvec_old)
-    #         phm = self.assign_material_parameters()
-
-    #     return forward_result, crash
 
     def assign_material_parameters(self):
 

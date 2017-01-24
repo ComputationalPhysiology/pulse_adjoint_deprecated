@@ -25,6 +25,8 @@ from adjoint_contraction_args import *
 from scipy.optimize import minimize as scipy_minimize
 from scipy.optimize import minimize_scalar as scipy_minimize_1d
 from store_opt_results import write_opt_results_to_h5
+from optimal_control import OptimalControl
+from lvsolver import SolverDidNotConverge
 
 try:
     import pyipopt
@@ -92,7 +94,8 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     
     # Load targets
     optimization_targets, bcs = load_targets(params, solver_parameters, measurements)
-       
+
+           
     #Initialize the solver for the Forward problem
     for_run = PassiveForwardRunner(solver_parameters, 
                                    pressure, 
@@ -113,7 +116,7 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
         for k, v in for_run.opt_weights.iteritems():
             weights[k] = v/(10*forward_result["func_value"])
         for_run.opt_weights.update(**weights)
-        logger.info("Update weights for functional")
+        logger.info("\nUpdate weights for functional")
         logger.info(for_run._print_functional())
     
     # Stop recording
@@ -122,12 +125,6 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
 
     # Initialize MyReducedFuctional
     rd = MyReducedFunctional(for_run, paramvec, relax = params["passive_relax"])
-
-    
-    # Evaluate the reduced functional in case the solver chrashes at the first point.
-    # If this is not done, and the solver crashes in the first point
-    # then Dolfin adjoit has no recording and will raise an exception.
-    rd(paramvec)
     
     return rd, paramvec
 
@@ -259,14 +256,7 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
 
-    
     rd = MyReducedFunctional(for_run, gamma, relax = params["active_relax"])
-
-    
-    # Evaluate the reduced functional in case the solver chrashes at the first point.
-    # If this is not done, and the solver crashes in the first point
-    # then Dolfin adjoit has no recording and will raise an exception.
-    rd(gamma)
     
     return rd, gamma
 
@@ -297,91 +287,7 @@ def store(params, rd, opt_result):
                                 opt_result)
 
 
-def minimize_1d(f, x0, **kwargs):
 
-    # Initial step size
-    dx = np.abs(np.diff(kwargs["bounds"]))[0]/5.0
-   
-    # Initial functional value
-    f_prev = f.func_values_lst[0]
-
-    # If the initial step size is too large, reduce it
-    while x0 + dx > kwargs["bounds"][1]:
-        dx /= 2
-    
-
-    # Evaluate the functional at the new point
-    f_cur = f(x0 + dx)
-   
-    # If the current value is larger than the previous one, try to step in the other direction
-    if f_cur > f_prev:
-     
-        dx *= -1
-        while x0 + dx < kwargs["bounds"][0]:
-            dx /= 2
-        
-        f_cur = f(x0 + dx)
-
-    # If this still is true, then the minimum is witin the interval we just checked (assuming convexity).
-    if f_cur > f_prev:
-       
-        
-        if x0 - dx > x0:
-            a = x0 + dx
-            b = x0 - dx
-        else:
-            a = x0 - dx
-            b = x0 + dx
-       
-        return scipy_minimize_1d(f, bracket = (a,b), **kwargs)
-
-    # Otherwise we step up until the current value if larger then the previous one
-    else:
-            
-        while f_cur < f_prev:
-
-            # If the new value is outside the bounds reduce the step size
-            while x0 + dx > kwargs["bounds"][1] or x0 + dx < kwargs["bounds"][0]:
-                dx /= 2
-               
-            
-            x0 = x0 + dx
-            f_prev_tmp = f_cur
-            
-            ncrashes = f.nr_crashes
-            # Try to evaluate the functional at the new point
-            f_cur = f(x0 +dx)
-
-            # Check if the solver chrashed in the evaluation
-            if f.nr_crashes > ncrashes:
-                # We were not able to evaluate the funcitonal, reduce step size until convergence
-                crash = True
-                ncrashes = f.nr_crashes
-                x0 = x0 - dx
-                while crash:
-                    
-                    dx /= 2
-                    x0 = x0 +dx
-                    f_cur = f(x0 +dx)
-                    
-                    if ncrashes == f_cur.nr_crashes:
-                        crash = False
-                    else:
-                        x0 = x0-dx
-                    
-                    
-            # Assign the previous value
-            f_prev = f_prev_tmp
-
-        # If f_cur > f_prev we have a interval to search for the minimum (assuming convexity).
-        if x0 - dx > x0:
-            a = x0
-            b = x0 - dx
-        else:
-            a = x0 - dx
-            b = x0
-  
-        return scipy_minimize_1d(f, bracket = (a,b), **kwargs)
             
             
             
@@ -398,214 +304,102 @@ def solve_oc_problem(params, rd, paramvec):
     :param paramvec: The control parameter(s)
 
     """
-    
 
-    paramvec_arr = gather_broadcast(paramvec.vector().array())
     opt_params = params["Optimization_parmeteres"]
+    x = gather_broadcast(paramvec.vector().array())
+    nvar = len(x)
 
+    
     if params["phase"] == PHASES[0] and not params["optimize_matparams"]:
-
-        rd(paramvec_arr)
+        
+        
+        rd(x)
         rd.for_res["initial_control"] = rd.initial_paramvec,
         rd.for_res["optimal_control"] = rd.paramvec
         store(params, rd, {})
 
+    
     else:
-
-        # Number of control variables
-        nvar = len(paramvec_arr)
-
-        if params["phase"] == PHASES[0]:
-
-            lb = np.array([opt_params["matparams_min"]]*nvar)
-            ub = np.array([opt_params["matparams_max"]]*nvar)
-                
-            tol = opt_params["passive_opt_tol"]
-            max_iter = opt_params["passive_maxiter"]
-
-        else:
-
-            lb = np.array([opt_params["gamma_min"]]*nvar)
-            ub = np.array([opt_params["gamma_max"]]*nvar)
-                
-
-            tol= opt_params["active_opt_tol"]
-            max_iter = opt_params["active_maxiter"]
-
-
         
-        if nvar == 1:
-            # Use 1D optimization method
-
-            kwargs = {"method": opt_params["method_1d"],
-                      "bounds":zip(lb,ub)[0],
-                      "tol":tol,
-                      "options": {"maxiter":max_iter}
-            }
+        done = False
+        niter = 0
+        while not done and niter < 10:
+            # Evaluate the reduced functional in case the solver chrashes at the first point.
+            # If this is not done, and the solver crashes in the first point
+            # then Dolfin adjoit has no recording and will raise an exception.
             
-            t = Timer()
-            t.start()
-            # Solve the optimization problem
-            opt_result = minimize_1d(rd, paramvec_arr[0], **kwargs)
-
-            # scipy_minimize_1d(rd, **kwargs)
-            run_time = t.stop()
-
-            opt_result["status"] = ""
-            opt_result["message"] = ""
-            opt_result["njev"] = rd.nr_der_calls
-            opt_result["ncrash"] = rd.nr_crashes
-            opt_result["run_time"] = run_time
-            opt_result["controls"] = rd.controls_lst
-            opt_result["func_vals"] = rd.func_values_lst
-            opt_result["forward_times"] = rd.forward_times
-            opt_result["backward_times"] = rd.backward_times
-
-            
-            print_optimization_report(params, rd.paramvec, rd.initial_paramvec,
-                                      rd.ini_for_res, rd.for_res, opt_result)
-
-            for k in ["message", "status", "success"]:
-                opt_result.pop(k, None)
-        else:
-            # Use a gradient based optimization method
-            
-            if has_pyipopt and opt_params["method"] == "ipopt":
-
-                rd(paramvec_arr)
-
-                lb = opt_params["matparams_min"]
-                ub = opt_params["matparams_max"]
-                problem = MinimizationProblem(rd, bounds=(lb, ub))
-               
-                ipopt_parameters = {'maximum_iterations': max_iter, "tol": tol}
-
-                solver = IPOPTSolver(problem, parameters=ipopt_parameters)
-                x = solver.solve()
-
-                # Start a timer to measure duration of the optimization
-                t = Timer()
-                t.start()
-
-                run_time = t.stop()
-                
-                message_exit_status = {0:"Optimization terminated successfully", 
-                                   -1:"Iteration limit exceeded"}
-            
-                opt_result= {"ncrash":rd.nr_crashes, 
-                             "run_time": run_time, 
-                             "nfev":rd.iter,
-                             "nit":rd.iter,
-                             "njev":rd.nr_der_calls,
-                             # "status":status,
-                             # "message": message_exit_status[status],
-                             "x":x,
-                             "controls": rd.controls_lst,
-                             "func_vals": rd.func_values_lst,
-                             "forward_times": rd.forward_times,
-                             "backward_times": rd.backward_times}
-
-            elif has_moola and opt_params["method"] == "moola":
-
-                problem = MoolaOptimizationProblem(rd)
-                
-                paramvec_moola = moola.DolfinPrimalVector(paramvec)
-                # solver = moola.NewtonCG(problem, paramvec_moola, options={'gtol': 1e-9,
-                #                                                           'maxiter': 20, 
-                #                                                           'display': 3, 
-                #                                                           'ncg_hesstol': 0})
-                
-                
-                solver = moola.BFGS(problem, paramvec_moola, options={'jtol': 0,
-                                                                      'gtol': 1e-9,
-                                                                      'Hinit': "default",
-                                                                      'maxiter': 100,
-                                                                      'mem_lim': 10})
-                # solver = moola.NonLinearCG(problem, paramvec_moola, options={'jtol': 0,
-                #                                                              'gtol': 1e-9,
-                #                                                              'Hinit': "default",
-                #                                                              'maxiter': 100,
-                #                                                              'mem_lim': 10})
-            
-
-                
-                t = Timer()
-                t.start()
-                # Solve the optimization problem
-                sol = solver.solve()
-                x = sol['control'].data
-                
-                run_time = t.stop()
-
-                opt_result["x"] = x
-                opt_result["status"] = ""
-                opt_result["message"] = ""
-                opt_result["njev"] = rd.nr_der_calls
-                opt_result["ncrash"] = rd.nr_crashes
-                opt_result["run_time"] = run_time
-                opt_result["controls"] = rd.controls_lst
-                opt_result["func_vals"] = rd.func_values_lst
-                opt_result["forward_times"] = rd.forward_times
-                opt_result["backward_times"] = rd.backward_times
-                
-            else:
-            
-                if opt_params["method"] == "ipopt":
-                    logger.Warning("Warning: Ipopt is not installed. Use SLSQP")
-                    method = "SLSQP"
+            # If this fails, there is no hope.
+            try:
+                rd(paramvec)
+            except SolverDidNotConverge:
+                print "NOOOO!"
+                if len(rd.controls_lst) > 0:
+                    assign_to_vector(paramvec.vector(),
+                                     rd.controls_lst[-1].array())
                 else:
-                    method = opt_params["method"]
+                    msg = ("Unable to converge. "+
+                           "Choose a different initial guess")
+                    logger.error(msg)
+                try:
+                    rd(paramvec)
+                except:
+                    msg = ("Unable to converge. "+
+                           "Try changing the scales and restart")
+                    logger.error(msg)
                 
-                def lowerbound_constraint(m):
-                    return m - lb
+            # Create optimal control problem
+            oc_problem = OptimalControl()
+            oc_problem.build_problem(params, rd, paramvec)
+            
+            try:
+                # Try to solve the problem
+                rd, opt_result = oc_problem.solve()
+                
+            except SolverDidNotConverge:
 
-                def upperbound_constraint(m):
-                    return ub - m
-
-
-
-                cons = ({"type": "ineq", "fun": lowerbound_constraint},
-                        {"type": "ineq", "fun": upperbound_constraint})                
+                logger.warning(Text.red("Solver failed - reduce step size"))
+                # If the solver did not converge assign the state from
+                # previous iteration and reduce the step size and try again
+                rd.reset()
+                rd.derivative_scale /= 5
+                                
+            else:
                 
             
-                kwargs = {"method": method,
-                          "constraints": cons, 
-                          # "bounds":zip(lb,ub),
-                          "jac": rd.derivative,
-                          "tol":tol,
-                          "options": {"disp": opt_params["disp"],
-                                      # "iprint": 2,
-                                      "ftol": tol,
-                                      "maxiter":max_iter}
-                }
-                # if method == "SLSQP":
-                #     kwargs["constraints"] = cons
-                # else:
-                #     kwargs["bounds"] = zip(lb,ub)
+                dfunc_value_rel = rd.for_res["func_value"] \
+                                  /rd.ini_for_res["func_value"]
+
+              
+                # Take the mean of the last iterat
+                if len(rd.opt_funcvalues) == 1:
+                    dfunc_value = rd.opt_funcvalues[0]
+                else:
+                    dfunc_value = np.abs(np.mean(np.diff(rd.opt_funcvalues[-2:])))
+
                 
+                if dfunc_value_rel < 0.1 and dfunc_value < 1e-6:
+                    done = True
+                else:
+                    # We have not improved much from the initial guess
+                    logger.warning(Text.red("Poor imporovement- increase step size"))
+                    
+                    # Repeat and increase the sensitivity, i.e
+                    # increase the step size of the gradient. 
+                    rd.reset()
+                    rd.derivative_scale *= 2.0
+                    
+            niter += 1
+                    
 
-                # Start a timer to measure duration of the optimization
-                t = Timer()
-                t.start()
-                # Solve the optimization problem
-                opt_result = scipy_minimize(rd,paramvec_arr, **kwargs)
-                run_time = t.stop()
-                
-                opt_result["ncrash"] = rd.nr_crashes
-                opt_result["run_time"] = run_time
-                opt_result["controls"] = rd.controls_lst
-                opt_result["func_vals"] = rd.func_values_lst
-                opt_result["forward_times"] = rd.forward_times
-                opt_result["backward_times"] = rd.backward_times
 
-                print_optimization_report(params, rd.paramvec, rd.initial_paramvec,
-                                          rd.ini_for_res, rd.for_res, opt_result)
-
-                for k in ["message", "status", "success"]:
-                    opt_result.pop(k, None)
-
+        # Adapt the relaxation parameter for next point
+        params["active_relax"] = rd.derivative_scale
+        
+        
         x = np.array([opt_result.pop("x")]) if nvar == 1 else gather_broadcast(opt_result.pop("x"))
         assign_to_vector(paramvec.vector(), gather_broadcast(x))
+
+        
         logger.info(Text.blue("\nForward solution at optimal parameters"))
         val = rd.for_run(paramvec, False)
           
@@ -613,7 +407,8 @@ def solve_oc_problem(params, rd, paramvec):
         rd.for_res["optimal_control"] = rd.paramvec
         
         
-        
+        print_optimization_report(params, rd.paramvec, rd.initial_paramvec,
+                                  rd.ini_for_res, rd.for_res, opt_result)
         
         store(params, rd, opt_result)
 
@@ -624,8 +419,7 @@ def print_optimization_report(params, opt_controls, init_controls,
 
     if opt_result:
         logger.info("\nOptimization terminated...")
-        logger.info("\tExit status {}".format(opt_result["status"]))
-        logger.info("\tMessage: {}".format(opt_result["message"]))
+     
         logger.info("\tFunction Evaluations: {}".format(opt_result["nfev"]))
         logger.info("\tGradient Evaluations: {}".format(opt_result["njev"]))
         logger.info("\tNumber of iterations: {}".format(opt_result["nit"]))
@@ -634,9 +428,18 @@ def print_optimization_report(params, opt_controls, init_controls,
 
     logger.info("\nFunctional Values")
     logger.info(" "*7+"\t"+print_head(ini_for_res, False))
-    logger.info("{:7}\t{}".format("Initial", print_line(ini_for_res)))
-    logger.info("{:7}\t{}".format("Optimal", print_line(opt_for_res)))
 
+    if len(opt_result["grad_norm"]) == 0:
+        grad_norm_ini = 0.0
+        grad_norm_opt = 0.0
+    else:
+        grad_norm_ini = opt_result["grad_norm"][0]
+        grad_norm_opt = opt_result["grad_norm"][-1]
+        
+
+    logger.info("{:7}\t{}".format("Initial", print_line(ini_for_res, grad_norm=grad_norm_ini)))
+    logger.info("{:7}\t{}".format("Optimal", print_line(opt_for_res, grad_norm=grad_norm_opt)))
+    
     if params["phase"] == PHASES[0]:
         logger.info("\nMaterial Parameters")
         logger.info("Initial {}".format(init_controls))

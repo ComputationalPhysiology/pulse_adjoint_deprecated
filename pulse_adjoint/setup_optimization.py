@@ -401,7 +401,7 @@ def setup_application_parameters():
     params.add("adaptive_weights", True)
     
     # Space for active parameter
-    params.add("gamma_space", "CG_1", ["CG_1", "R_0", "regional"])
+    params.add("gamma_space", "CG_1")#, ["CG_1", "R_0", "regional"])
     
     # If you want to use pointswise strains as input (only synthetic)
     params.add("use_deintegrated_strains", False)
@@ -471,7 +471,7 @@ def setup_optimization_parameters():
     """
     # Parameters for the Optimization
     params = Parameters("Optimization_parmeteres")
-    params.add("method", "slsqp")
+    params.add("opt_type", "scipy_slsqp")
     params.add("method_1d", "brent")
     params.add("active_opt_tol", 1e-6)
     params.add("active_maxiter", 100)
@@ -1025,27 +1025,21 @@ def setup_simulation(params, patient):
 
 class MyReducedFunctional(ReducedFunctional):
     def __init__(self, for_run, paramvec, scale = 1.0, relax = 1.0):
-        
+
+        self.log_level = logger.level
+        self.reset()
         self.for_run = for_run
         self.paramvec = paramvec
-        self.first_call = True
-        self.scale = scale
-        self.nr_crashes = 0
-        self.iter = 0
-        self.nr_der_calls = 0
-        self.func_values_lst = []
-        self.controls_lst = []
-        self.forward_times = []
-        self.backward_times = []
-        self.initial_paramvec = gather_broadcast(paramvec.vector().array())
-
-        self.derivative_scale = relax
-
-
-    def __call__(self, value):
         
+        self.initial_paramvec = gather_broadcast(paramvec.vector().array())
+        self.scale = scale
+        self.derivative_scale = relax
+        
+    def __call__(self, value, return_fail = False):
+
         adj_reset()
         self.iter += 1
+            
         paramvec_new = Function(self.paramvec.function_space(), name = "new control")
 
         if isinstance(value, (Function, RegionalParameter, MixedParameter)):
@@ -1065,27 +1059,26 @@ class MyReducedFunctional(ReducedFunctional):
 
        
         # Change loglevel to avoid to much printing (do not change if in dbug mode)
-        change_log_level = logger.level == logging.INFO
+        change_log_level = self.log_level == logging.INFO
         if change_log_level:
             logger.setLevel(WARNING)
             
             
         t = Timer("Forward run")
         t.start()
+      
         self.for_res, crash= self.for_run(paramvec_new, True)
         for_time = t.stop()
         self.forward_times.append(for_time)
 
         if change_log_level:
-            logger.setLevel(INFO)
+            logger.setLevel(self.log_level)
 
         if self.first_call:
-            # Store initial results 
+            # Store initial results
             self.ini_for_res = self.for_res
             self.first_call = False
 
-            # Some printing
-            logger.info(print_head(self.for_res))
 	 
         
         control = Control(self.paramvec)
@@ -1105,7 +1098,10 @@ class MyReducedFunctional(ReducedFunctional):
         else:
             func_value = self.for_res["func_value"]
 
-        
+        grad_norm = None if len(self.grad_norm_scaled) == 0 \
+                    else self.grad_norm_scaled[-1]    
+        logger.debug(Text.yellow(print_line(self.for_res, self.iter,
+                                            grad_norm, func_value)))
         self.func_values_lst.append(func_value*self.scale)
         self.controls_lst.append(Vector(paramvec_new.vector()))
 
@@ -1113,11 +1109,36 @@ class MyReducedFunctional(ReducedFunctional):
         logger.debug(Text.yellow("Stop annotating"))
         parameters["adjoint"]["stop_annotating"] = True
 
-        # Some printing
-        logger.info(print_line(self.for_res, self.iter))
 
+        if return_fail:
+            return self.scale*func_value, crash
+
+        
         return self.scale*func_value
 
+    def reset(self):
+
+        logger.setLevel(self.log_level)
+        if not hasattr(self, "ini_for_res"):
+            
+            self.first_call = True
+            self.nr_crashes = 0
+            self.iter = 0
+            self.nr_der_calls = 0
+            self.func_values_lst = []
+            self.controls_lst = []
+            self.forward_times = []
+            self.backward_times = []
+            self.grad_norm = []
+            self.grad_norm_scaled = []
+        else:
+            self.func_values_lst.pop()
+            self.controls_lst.pop()
+            self.grad_norm.pop()
+            self.grad_norm_scaled.pop()
+
+
+        
     def derivative(self, *args, **kwargs):
         self.nr_der_calls += 1
         import math
@@ -1135,9 +1156,13 @@ class MyReducedFunctional(ReducedFunctional):
                 raise Exception("NaN in adjoint gradient calculation.")
 
         # Multiply with some small number to that we take smaller steps
-        gathered_out = gather_broadcast(out[0].vector().array())*self.derivative_scale
-        
-        return self.scale*gathered_out
+        gathered_out = gather_broadcast(out[0].vector().array())
+
+        self.grad_norm.append(np.linalg.norm(gathered_out))
+        self.grad_norm_scaled.append(np.linalg.norm(gathered_out)*self.scale*self.derivative_scale)
+        logger.debug("|dJ|(actual) = {}\t|dJ|(scaled) = {}".format(self.grad_norm[-1],
+                                                                   self.grad_norm_scaled[-1]))
+        return self.scale*gathered_out*self.derivative_scale
 
 
 class RegionalParameter(dolfin.Function):

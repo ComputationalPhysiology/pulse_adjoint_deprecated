@@ -22,7 +22,7 @@ import numpy as np
 from numpy_mpi import *
 from utils import Text, UnableToChangePressureExeption
 import collections
-from lvsolver import LVSolver
+from lvsolver import LVSolver, SolverDidNotConverge
 
 class BasicHeartProblem(collections.Iterator):
     """
@@ -42,9 +42,12 @@ class BasicHeartProblem(collections.Iterator):
 
         # Mechanical solver Active strain Holzapfel and Ogden
         self.solver = LVSolver(solver_parameters)
-    
-        self.base_bc_from_seg = solver_parameters["base_bc_y"] is not None
+        
 
+        if solver_parameters.has_key("base_bc_y"):
+            self.base_bc_from_seg = solver_parameters["base_bc_y"] is not None
+        else:
+            self.base_bc_from_seg = False
         if self.base_bc_from_seg:
             self.solver.parameters["base_bc_y"].reset()
             self.solver.parameters["base_bc_z"].reset()
@@ -92,6 +95,8 @@ class BasicHeartProblem(collections.Iterator):
         Step up the pressure to the next given
         pressure and solve the force-balance equations
         """
+
+
         p_lv_next = self.lv_pressure_gen.next()
         p_lv_prev = self.p_lv.t
         p_diff = abs(p_lv_next - p_lv_prev)
@@ -183,13 +188,14 @@ class BasicHeartProblem(collections.Iterator):
         
         return out
     
-    def get_state(self):
+    def get_state(self, copy = True):
         """
         Return a copy of the state
         """
-        return self.solver.get_state().copy(True)
-
-    
+        if copy:
+            return self.solver.get_state().copy(True)
+        else:
+            return self.solver.get_state()
 
     def get_inner_cavity_volume(self):
         """
@@ -330,7 +336,7 @@ class ActiveHeartProblem(BasicHeartProblem):
 
 
         self.solver.get_state().assign(w_temp, annotate = annotate)
-      
+        self.solver.solve()
        
     
     def next_active(self, gamma_current, gamma, assign_prev_state=True, steps = None):
@@ -370,14 +376,12 @@ class ActiveHeartProblem(BasicHeartProblem):
         nr_crashes = 0
         
         
-        logger.debug("\n\tIncrement gamma...")
-        logger.debug("\tMean \tMax")
+        logger.info("\n\tIncrement gamma...")
+        logger.info("\tMean \tMax")
         while not done:
             while not finished_stepping:
-
-                if nr_crashes > MAX_NR_CRASH:
-                    self.solver.parameters['material'].gamma.assign(g_old)
-                    raise StopIteration("Iteration have chrashed too many times")
+                
+                
 
                 
                 # Loop over the steps
@@ -390,17 +394,21 @@ class ActiveHeartProblem(BasicHeartProblem):
                         
 
                     # Try to solve
-                    logger.debug("\t{:.3f} \t{:.3f}".format(get_mean(g), get_max(g)))
+                    logger.info("\t{:.3f} \t{:.3f}".format(get_mean(g), get_max(g)))
 
-                    # Make the convergence criteria stricter so that it is more likely to converge
-                    # when annotating is on
-                    
-                    self.solver.parameters["solve"]["snes_solver"]['absolute_tolerance']*= 0.01
-                    self.solver.parameters["solve"]["snes_solver"]['relative_tolerance']*= 0.01
-                    out, crash = self.solver.solve()
-                    self.solver.parameters["solve"]["snes_solver"]['absolute_tolerance']*= 100
-                    self.solver.parameters["solve"]["snes_solver"]['relative_tolerance']*= 100
-
+                    try:
+                        
+                        out, crash = self.solver.solve()
+                
+                    except SolverDidNotConverge as ex:
+                        if nr_crashes > MAX_NR_CRASH:
+                            # Throw exception further
+                            raise ex
+                        else:
+                            crash = True
+                    else:
+                        crash = False
+ 
                     if crash:
                         # If that does not work increase the number of steps
                         logger.warning("Solver crashed. Reduce gamma step")
@@ -441,6 +449,7 @@ class ActiveHeartProblem(BasicHeartProblem):
             logger.debug("\t{:.3f} \t{:.3f}".format(get_mean(gamma_current), 
                                                        get_max(gamma_current)))
             out, crash = self.solver.solve()
+      
             
             if crash:
                 nr_steps *= 2
