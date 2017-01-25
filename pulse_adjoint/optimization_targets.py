@@ -19,6 +19,7 @@ from utils import list_sum
 import numpy as np
 from numpy_mpi import *
 
+
 __all__ = ["RegionalStrainTarget", "FullStrainTarget",
            "VolumeTarget", "Regularization"]
 
@@ -140,7 +141,7 @@ class RegionalStrainTarget(OptimizationTarget):
     """Class for regional strain optimization
     target
     """                                  
-    def __init__(self, mesh, crl_basis, dmu, weights=np.ones((17,3)), nregions = None):
+    def __init__(self, mesh, crl_basis, dmu, weights=np.ones((17,3)), nregions = None, tensor="gradu"):
         """
         Initialize regional strain target
 
@@ -153,9 +154,11 @@ class RegionalStrainTarget(OptimizationTarget):
         :type dmu: :py:class:`dolfin.Measure`
         :param weights: Weights on the different segements
         :type wieghts: :py:function:`numpy.array`
+        :param str tensor: Which strain tensor to use, e.g gradu, E, C, F
         
         """
         self._name = "Regional Strain"
+        self._tensor = tensor
         self.nregions = np.shape(weights)[0] if nregions is None else nregions
         dim = mesh.geometry().dim()
         self.dim = dim
@@ -174,7 +177,7 @@ class RegionalStrainTarget(OptimizationTarget):
                                                                                  self.nregions,
                                                                                  weights.shape[1],
                                                                                  weights.shape[0])
-            logger.warning(msg)
+            logger.debug(msg)
             self.weights_arr =np.ones((self.nregions,dim))
 
         self.crl_basis = []
@@ -291,14 +294,22 @@ class RegionalStrainTarget(OptimizationTarget):
         """
         
         # Compute the strains
-        gradu = grad(u)
-        grad_u_diag = as_vector([inner(e,gradu*e) for e in self.crl_basis])
+        if self._tensor == "gradu":
+            tensor = grad(u)
+        elif self._tensor == "E":
+            I = Identity(self.dim)
+            F = grad(u) + I
+            C = F.T * F
+            tensor = 0.5*(C-I)
+
+            
+        tensor_diag = as_vector([inner(e,tensor*e) for e in self.crl_basis])
 
         # Make a project for dolfin-adjoint recording
         for i in range(self.nregions):
             solve(inner(self._trial, self._test)*self.dmu(i+1) == \
-                  inner(grad_u_diag, self._test)*self.dmu(i+1), \
-                  self.simulated_fun[i])
+                  inner(tensor_diag, self._test)*self.dmu(i+1), \
+                  self.simulated_fun[i], solver_parameters={"linear_solver": "gmres"})
 
     def assign_functional(self):
         
@@ -409,7 +420,6 @@ class VolumeTarget(OptimizationTarget):
 
         :param u: New displacement
         """
-
         # Compute volume
         F = grad(u) + Identity(3)
         J = det(F)
@@ -434,7 +444,7 @@ class Regularization(object):
     """Class for regularization
     of the control parameter
     """
-    def __init__(self, mesh, spacestr = "CG_1", lmbda = 0.0):
+    def __init__(self, mesh, spacestr = "CG_1", lmbda = 0.0, regtype = "L2_grad", mshfun = None):
         """Initialize regularization object
 
         :param space: The mesh
@@ -442,23 +452,30 @@ class Regularization(object):
         :param lmbda: regularization parameter
         
         """
-        assert spacestr in ["CG_1", "regional", "R_0"], \
-            "Unknown regularization space {}".format(space)
+        # assert spacestr in ["CG_1", "regional", "R_0"], \
+        #     "Unknown regularization space {}".format(space)
         
         self.spacestr = spacestr
         self.lmbda = lmbda
         self._value = 0.0
+
+    
+        self._mshfun = mshfun if mshfun is not None \
+                       else MeshFunction("size_t",mesh,  mesh.geometry().dim(), mesh.domains()) 
+
         self.meshvol = Constant(assemble(Constant(1.0)*dx(mesh)),
                                 name = "mesh volume")
+        self._regtype = regtype
         # A real space for projecting the functional
         self._realspace = FunctionSpace(mesh, "R", 0)
 
-        if spacestr in ["CG_1", "R_0"]:
+        if spacestr == "regional":
+            self._space = FunctionSpace(mesh, "DG", 0)
+        else:
             family, degree = spacestr.split("_")
             self._space = FunctionSpace(mesh, family, int(degree))
+        
             
-        else: # "regional"
-            self._space = FunctionSpace(mesh, "DG", 0)
         
         
         self.dx = dx(mesh)
@@ -472,16 +489,23 @@ class Regularization(object):
         return "\t{:<10.2e}".format(I)
 
     def reset(self):
+       
         self.func_value = 0.0
+        self._value = 0.0
 
     def save(self):
+        
         self.func_value += self.get_value()
         self.results["func_value"].append(self.func_value)
 
     def set_target_functions(self):
         
         self.functional = Function(self._realspace, name = "regularization_functional")
-        self._m = Function(self._space)
+        if self.spacestr == "regional":
+            from setup_optimization import RegionalParameter
+            self._m = RegionalParameter(self._mshfun)
+        else:
+            self._m = Function(self._space)
 
     def get_form(self):
         """Get the ufl form
@@ -491,17 +515,19 @@ class Regularization(object):
 
         """
 
-        if self.spacestr in ["CG_1", "regional"]:
-            return (inner(grad(self._m), grad(self._m))/self.meshvol)*self.dx
-        
-        # elif self.space == "regional":
-            # m_arr = gather_broadcast(m.vector().array())
-          
-            # m_mean = Constant([m_arr.mean()]*m._nvalues)
-            # return (inner(m-m_mean, m-m_mean)/self.meshvol)*self.dx
-        else:
-            return Constant(0.0)*self.dx
+        if self._regtype == "L2":
+            
+            return (inner(self._m, self._m)/self.meshvol)*self.dx
 
+        else:
+            if self.spacestr in ["CG_1", "regional"]:
+                
+                return (inner(grad(self._m), grad(self._m))/self.meshvol)*self.dx
+            
+            else:
+                return Constant(0.0)*self.dx
+
+            
     def assign(self, m, annotate = False):
         self._m.assign(m, annotate = annotate)
         
@@ -514,8 +540,13 @@ class Regularization(object):
         :rtype: (:py:class:`ufl.Form`)
 
         """
-        form = self.get_form()
-        self._value = assemble(form)
+        # raise Exception
+        try:
+            form = self.get_form()
+            self._value = assemble(form)
+        except:
+            from IPython import embed; embed()
+            exit()
         return self.lmbda*form
 
         

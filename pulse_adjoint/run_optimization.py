@@ -210,12 +210,13 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
 
     """
     
-
+    
     #Get initial guess for gamma
     if not params["nonzero_initial_guess"] or params["active_contraction_iteration_number"] == 0:
+        val = 0.0
         # Use zero initial gubess
-        zero = Constant(0.0) if gamma.value_size() == 1 \
-          else Constant([0.0]*gamma.value_size())
+        zero = Constant(val) if gamma.value_size() == 1 \
+          else Constant([val]*gamma.value_size())
 
         gamma.assign(zero)
        
@@ -323,7 +324,7 @@ def solve_oc_problem(params, rd, paramvec):
         
         done = False
         niter = 0
-        while not done and niter < 10:
+        while not done and niter < 5:
             # Evaluate the reduced functional in case the solver chrashes at the first point.
             # If this is not done, and the solver crashes in the first point
             # then Dolfin adjoit has no recording and will raise an exception.
