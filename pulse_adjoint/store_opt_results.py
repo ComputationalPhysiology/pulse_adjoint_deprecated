@@ -86,24 +86,6 @@ def write_opt_results_to_h5(h5group,
                     # Do not save empty lists
                     if (hasattr(v, "__len__") and not len(v) == 0) or np.isscalar(v):
                         save_data(v, "/".join([h5group, k]))
-                  
-            # controls = opt_result.pop("controls", [0])
-            # for it, c in enumerate(controls):
-            #     h5file.write(c, h5group + "/controls/{}".format(it))
-
-            # func_vals= np.array(opt_result.pop("func_vals", [0]))
-            # save_data(func_vals, h5group + "/funtion_values")
-
-            # for_times= np.array(opt_result.pop("forward_times", [0]))
-            # save_data(for_times, h5group + "/forward_times")
-
-            # back_times= np.array(opt_result.pop("backward_times", [0]))
-            # save_data(back_times, h5group + "/backward_times")
-
-            
-            
-            # if opt_result and isinstance(opt_result, dict):
-            #     dump_parameters_to_attributes(opt_result, h5group)
                 
 
         # States

@@ -20,6 +20,10 @@ from compressibility import get_compressibility
 from adjoint_contraction_args import logger
 from copy import deepcopy
 
+class SolverDidNotConverge(Exception):
+    pass
+
+
 class LVSolver(object):
     """
     A Cardiac Mechanics Solver
@@ -167,7 +171,9 @@ class LVSolver(object):
             logger.warning("Solver did not converge")
             # Retrun the old state, and a flag crash = True
             self.reinit(w_old)
-            return w_old, True
+
+            raise SolverDidNotConverge(ex)
+            # return w_old, True
 
         else:
             # The solver converged

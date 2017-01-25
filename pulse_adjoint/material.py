@@ -47,7 +47,7 @@ class Material(object):
     """
     Base class for material
     """
-    def __init__(self, T_ref = None):
+    def __init__(self, T_ref = None, params = None):
         """
         Initialize base class
 
@@ -59,12 +59,24 @@ class Material(object):
           ["active_stress", "active_strain", "active_strain_rossi"], \
           "The active model '{}' is not implemented.".format(self._active_model)
 
-        # if T_ref is None:
-        #     self._T_ref = 100.0 if self._active_model == "active_stress"  else 1.0
-        # else:
+        if T_ref is None:
+            self._T_ref = 500.0 if self._active_model == "active_stress"  else 1.0
+        else:
+            self._T_ref = T_ref
+  
 
-        self._T_ref = 1.0
-            
+        if params:
+            for k,v in params.iteritems():
+                if isinstance(v, (float, int)):
+                    setattr(self, k, Constant(v))
+                elif isinstance(v, RegionalParameter):
+                    
+                    setattr(self, k, Function(v.get_ind_space(), name = k))
+                    mat = getattr(self, k)
+                    mat.assign(project(v.get_function(), v.get_ind_space()))
+                    # setattr(self, k, v.get_function())
+                else:
+                    setattr(self, k, v)
 
 
     def strain_energy(self, F):
@@ -499,23 +511,10 @@ class HolzapfelOgden(Material):
         if params is None:
             params = self.default_parameters()
 
-
-        for k,v in params.iteritems():
-            if isinstance(v, (float, int)):
-                setattr(self, k, Constant(v))
-            elif isinstance(v, RegionalParameter):
-
-                setattr(self, k, Function(v.get_ind_space(), name = k))
-                mat = getattr(self, k)
-                mat.assign(project(v.get_function(), v.get_ind_space()))
-                # setattr(self, k, v.get_function())
-            else:
-                setattr(self, k, v)
-
         self._active_model = active_model
 
         
-        Material.__init__(self, T_ref)
+        Material.__init__(self, T_ref, params)
         
 
 
@@ -743,7 +742,7 @@ class NeoHookean(Material):
 
         self._active_model = active_model
 
-        Material.__init__(self, T_ref)
+        Material.__init__(self, T_ref, params)
         
     def default_parameters(self):
         return {"mu": 0.385}

@@ -46,11 +46,11 @@ def main(params):
     save_logger(params)   
     
     setup_general_parameters()
-    
+
     
     logger.info(Text.blue("Start Adjoint Contraction"))
     logger.info(pformat(params.to_dict()))
-    
+    logger.setLevel(params["log_level"])
 
     ############# GET PATIENT DATA ##################
     patient = initialize_patient_data(params["Patient_parameters"], 

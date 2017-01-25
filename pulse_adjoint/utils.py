@@ -37,27 +37,35 @@ class AutoVivification(dict):
 # Dummy object
 class Object(object):pass
 def print_head(for_res, display_iter = True):
-        
+    
     targets = for_res["optimization_targets"]
     reg  = for_res["regularization"]
     keys = targets.keys()+["regularization"]
     n = len(keys)
 
     head = "\n{:<6}\t".format("Iter") if display_iter else "\n"+" "*7
-    head += "{:<7}\t".format("I_tot") + \
-           "\t"+(n*"I_{:<10}\t").format(*keys)
+    head += "{:<10}\t".format("Obj") + \
+            "{:<10}".format("||grad||") + \
+           "\t"+(n*"I_{:<10}\t").format(*keys) 
+    
     return head
 
-def print_line(for_res, it = None):
+def print_line(for_res, it = None, grad_norm = None, func_value = None):
     
-    func_value = for_res["func_value"]
-    targets = for_res["optimization_targets"]
-    reg  = for_res["regularization"]
-    values = [t.func_value for t in targets.values()] + \
-             [reg.func_value]
+    func_value = for_res["func_value"] if func_value is None else func_value
+    grad_norm = 0.0 if grad_norm is  None else grad_norm
+
+    targets = for_res["target_values"]
+    # reg  = for_res["regularization"]
+    
+    reg_func = targets.pop("regularization")
+    values = targets.values() + [reg_func]
+    targets["regularization"] = reg_func
+    
     n = len(values)
     line = "{:<6d}\t".format(it) if it is not None else ""
-    line += "{:<7.2e}".format(func_value) + \
+    line += "{:<10.2e}\t".format(func_value) + \
+            "{:<10.2e}".format(grad_norm) + \
            "\t"+(n*"{:<10.2e}\t").format(*values)
     return line
 
