@@ -192,7 +192,7 @@ class LVSolver(object):
                       annotate = True)
 
             # Return the new state, crash = False
-            return self._w, False
+            return self._w
 
     
         

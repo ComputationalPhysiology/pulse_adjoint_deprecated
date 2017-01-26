@@ -75,8 +75,14 @@ class BasicHeartProblem(collections.Iterator):
 
                 logger.debug("Iterator for BC = {}".format(i))
                 it.t = i
-                out, crash = self.solver.solve()
-                
+                try:
+                    out = self.solver.solve()
+                    
+                except SolverDidNotConverge:
+                    crash = True
+                else:
+                    crash = False
+                    
                 if crash:
                     logger.debug("Crashed when setting BC")
                     nsteps += 2
@@ -151,7 +157,12 @@ class BasicHeartProblem(collections.Iterator):
                     self.p_rv.t = p_rv
                 
                 logger.debug("\nSolve for lv pressure = {}".format(p_lv))
-                out, crash = self.solver.solve()
+                try:
+                    out = self.solver.solve()
+                except SolverDidNotConverge:
+                    crash = True
+                else:
+                    crash = False
                 
                 
                 if crash:
@@ -214,7 +225,9 @@ class BasicHeartProblem(collections.Iterator):
     def next(self):
         """Solve the system as it is
         """
-        out, crash = self.solver.solve()
+
+        
+        out = self.solver.solve()
 	
         return out
 
@@ -398,7 +411,7 @@ class ActiveHeartProblem(BasicHeartProblem):
 
                     try:
                         
-                        out, crash = self.solver.solve()
+                        out = self.solver.solve()
                 
                     except SolverDidNotConverge as ex:
                         if nr_crashes > MAX_NR_CRASH:
@@ -448,7 +461,7 @@ class ActiveHeartProblem(BasicHeartProblem):
             
             logger.debug("\t{:.3f} \t{:.3f}".format(get_mean(gamma_current), 
                                                        get_max(gamma_current)))
-            out, crash = self.solver.solve()
+            out = self.solver.solve()
       
             
             if crash:
