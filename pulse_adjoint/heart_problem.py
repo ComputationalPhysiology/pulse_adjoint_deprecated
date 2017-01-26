@@ -151,7 +151,12 @@ class BasicHeartProblem(collections.Iterator):
                     self.p_rv.t = p_rv
                 
                 logger.debug("\nSolve for lv pressure = {}".format(p_lv))
-                out, crash = self.solver.solve()
+                try:
+                    out = self.solver.solve()
+                except SolverDidNotConverge:
+                    crash = True
+                else:
+                    crash = False
                 
                 
                 if crash:
