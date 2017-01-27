@@ -488,7 +488,9 @@ def setup_optimization_parameters():
     params.add("fix_a_f", True)
     params.add("fix_b", True)
     params.add("fix_b_f", True)
-   
+
+    params.add("soft_tol", 1e-6)
+    params.add("soft_tol_rel", 0.1)
     
     params.add("disp", False)
 
@@ -1034,6 +1036,9 @@ class MyReducedFunctional(ReducedFunctional):
         self.initial_paramvec = gather_broadcast(paramvec.vector().array())
         self.scale = scale
         self.derivative_scale = relax
+
+        from optimal_control import has_scipy016
+        self.my_print_line = logger.debug if has_scipy016 else logger.info
         
     def __call__(self, value, return_fail = False):
 
@@ -1079,8 +1084,9 @@ class MyReducedFunctional(ReducedFunctional):
             self.ini_for_res = self.for_res
             self.first_call = False
 
-	 
-        
+	    # Some printing
+            self.my_print_line(print_head(self.for_res))
+            
         control = Control(self.paramvec)
             
 
@@ -1099,8 +1105,10 @@ class MyReducedFunctional(ReducedFunctional):
             func_value = self.for_res["func_value"]
 
         grad_norm = None if len(self.grad_norm_scaled) == 0 \
-                    else self.grad_norm_scaled[-1]    
-        logger.debug(Text.yellow(print_line(self.for_res, self.iter,
+                    else self.grad_norm_scaled[-1]
+
+
+        self.my_print_line(Text.yellow(print_line(self.for_res, self.iter,
                                             grad_norm, func_value)))
         self.func_values_lst.append(func_value*self.scale)
         self.controls_lst.append(Vector(paramvec_new.vector()))

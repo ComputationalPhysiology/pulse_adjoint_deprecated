@@ -53,11 +53,17 @@ from adjoint_contraction_args import logger
 from utils import print_line, print_head
 
 try:
+    import scipy
     from scipy.optimize import minimize as scipy_minimize
     from scipy.optimize import minimize_scalar as scipy_minimize_1d
     has_scipy = True
+    from distutils.version import StrictVersion
+    has_scipy016 = StrictVersion(scipy.version.version) >= StrictVersion ('0.16')
+    has_scipy016 = False
+    
 except:
     has_scipy = False
+    has_scipy016 = False
 
 try:
     import pyipopt
@@ -88,6 +94,7 @@ class MyCallBack(object):
     This makes sure it's being used.
     """
     def __init__(self, rd, tol, max_iter):
+
         
         self.ncalls = 0
         self.rd = rd
@@ -339,7 +346,12 @@ def get_scipy_options(method, rd, lb, ub, tol, max_iter, **kwargs):
             {"type": "ineq", "fun": upperbound_constraint})                
                 
 
-    callback = MyCallBack(rd, tol, max_iter)
+    if not has_scipy016 and method == "slsqp":
+        callback = None
+    else:
+        callback = MyCallBack(rd, tol, max_iter)
+
+    
     options = {"method": method,
                "jac": rd.derivative,
                "tol":tol,
@@ -588,3 +600,5 @@ class OptimalControl(object):
     
         return self.rd, opt_result
      
+
+
