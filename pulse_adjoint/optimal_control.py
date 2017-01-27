@@ -59,7 +59,6 @@ try:
     has_scipy = True
     from distutils.version import StrictVersion
     has_scipy016 = StrictVersion(scipy.version.version) >= StrictVersion ('0.16')
-    has_scipy016 = False
     
 except:
     has_scipy = False
