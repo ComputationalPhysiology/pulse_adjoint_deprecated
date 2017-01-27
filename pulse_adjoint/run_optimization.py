@@ -321,7 +321,7 @@ def solve_oc_problem(params, rd, paramvec):
 
     
     else:
-        
+        solved = False
         done = False
         niter = 0
         while not done and niter < 5:
@@ -362,23 +362,24 @@ def solve_oc_problem(params, rd, paramvec):
                 # If the solver did not converge assign the state from
                 # previous iteration and reduce the step size and try again
                 rd.reset()
-                rd.derivative_scale /= 5
+                rd.derivative_scale /= 10
                                 
             else:
                 
-            
+                solved = True
                 dfunc_value_rel = rd.for_res["func_value"] \
                                   /rd.ini_for_res["func_value"]
 
               
-                # Take the mean of the last iterat
-                if len(rd.opt_funcvalues) == 1:
-                    dfunc_value = rd.opt_funcvalues[0]
-                else:
-                    dfunc_value = np.abs(np.mean(np.diff(rd.opt_funcvalues[-2:])))
+                # # Take the mean of the last iterat
+                # if len(rd.opt_funcvalues) == 1:
+                #     dfunc_value = rd.opt_funcvalues[0]
+                # else:
+                #     dfunc_value = np.abs(np.mean(np.diff(rd.opt_funcvalues[-2:])))
 
                 
-                if dfunc_value_rel < 0.1 and dfunc_value < 1e-6:
+                if dfunc_value_rel < params["Optimization_parmeteres"]["soft_tol_rel"]: #\
+                   # and dfunc_value < params["Optimization_parmeteres"]["soft_tol"]:
                     done = True
                 else:
                     # We have not improved much from the initial guess
@@ -387,12 +388,15 @@ def solve_oc_problem(params, rd, paramvec):
                     # Repeat and increase the sensitivity, i.e
                     # increase the step size of the gradient. 
                     rd.reset()
-                    rd.derivative_scale *= 2.0
+                    rd.derivative_scale *= 3.0
                     
             niter += 1
                     
 
-
+        if not solved:
+            msg = "Unable to solve problem. Try to restart with smallar tolerance"
+            raise RuntimeError(msg)
+        
         # Adapt the relaxation parameter for next point
         params["active_relax"] = rd.derivative_scale
         
