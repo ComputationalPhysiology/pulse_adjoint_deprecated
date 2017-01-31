@@ -323,6 +323,8 @@ def solve_oc_problem(params, rd, paramvec):
     else:
         solved = False
         done = False
+        paramvec_start = paramvec.copy()
+        state_start = rd.for_run.cphm.get_state()
         niter = 0
         while not done and niter < 5:
             # Evaluate the reduced functional in case the solver chrashes at the first point.
@@ -362,7 +364,7 @@ def solve_oc_problem(params, rd, paramvec):
                 # If the solver did not converge assign the state from
                 # previous iteration and reduce the step size and try again
                 rd.reset()
-                rd.derivative_scale /= 10
+                rd.derivative_scale /= 2.0
                                 
             else:
                 
@@ -396,10 +398,18 @@ def solve_oc_problem(params, rd, paramvec):
         if not solved:
             msg = "Unable to solve problem. Try to restart with smallar tolerance"
             raise RuntimeError(msg)
-        
-        # Adapt the relaxation parameter for next point
-        params["active_relax"] = rd.derivative_scale
-        
+
+
+        dfunc_value_rel = rd.for_res["func_value"] \
+                          /rd.ini_for_res["func_value"]
+        if not done and dfunc_value_rel > 1.0:
+            
+            msg = ("Optimization provided a worse result than the initial guess. "
+                   "\nMake the initial guess the solution")
+            logger.warning(msg)
+            rd.for_run.cphm.get_state(False).assign(state_start)
+            paramvec.assign(paramvec_start)
+            
         
         x = np.array([opt_result.pop("x")]) if nvar == 1 else gather_broadcast(opt_result.pop("x"))
         assign_to_vector(paramvec.vector(), gather_broadcast(x))
