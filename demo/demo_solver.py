@@ -87,18 +87,13 @@ def load_patient_data():
 def demo_heart():
 
     setup_general_parameters()
-    from patient_data import FullPatient
-
     patient = load_patient_data()
-    # patient = FullPatient("Impact_p16_i43")
-
+    
     
     mesh = patient.mesh
     ffun = patient.facets_markers
     N = FacetNormal(mesh)
 
-    # from IPython import embed; embed()
-    # exit()
 
     # Dirichlet BC
     def make_dirichlet_bcs(W):
@@ -132,8 +127,8 @@ def demo_heart():
     solver_parameters = {"snes_solver":{}}
     solver_parameters["nonlinear_solver"] = "snes"
     solver_parameters["snes_solver"]["method"] = "newtontr"
-    solver_parameters["snes_solver"]["maximum_iterations"] = 15
-    solver_parameters["snes_solver"]["absolute_tolerance"] = 1e-1
+    solver_parameters["snes_solver"]["maximum_iterations"] = 50
+    solver_parameters["snes_solver"]["absolute_tolerance"] = 1e-5
     solver_parameters["snes_solver"]["linear_solver"] = "lu"
 
     # solver_parameters = {"newton_solver":{}}
