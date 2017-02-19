@@ -126,7 +126,7 @@ class BasicForwardRunner(object):
     def solve_the_forward_problem(self, phm, annotate = False, phase = "passive"):
         """Solve the forward model
 
-        :param annotate: 
+        :param bool annotate: 
         :param phm: A heart problem instance
         :param phase: Which phase of the cycle, options: ['passive', 'active']
         :returns: A dictionary with the results
