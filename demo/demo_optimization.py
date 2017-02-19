@@ -34,7 +34,7 @@ from pulse_adjoint.utils import passive_inflation_exists, Text, pformat, Object
 from pulse_adjoint.setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters
 
 path = os.path.dirname(os.path.abspath(__file__))
-
+logger.setLevel(10)
 
 def load_patient_data():
     import yaml
@@ -135,7 +135,9 @@ def main(params):
     setup_general_parameters()
     logger.info(Text.blue("Start Adjoint Contraction"))
     logger.info(pformat(params.to_dict()))
-    
+
+    # params["matparams_space"] = "regioal"
+    params["matparams_space"] = "CG_1"
 
     ############# GET PATIENT DATA ##################
     patient = load_patient_data()

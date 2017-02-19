@@ -548,14 +548,13 @@ class OptimalControl(object):
         t.start()
 
         if self.oneD:
-            res = minimize_1d(self.rd, paramvec_arr[0], **self.options)
+    
+            res = minimize_1d(self.rd, self.x[0], **self.options)
             x = res["x"]
             
         else:
         
             if module == "scipy":
-                # from IPython import embed; embed()
-                # exit()
                 res = scipy_minimize(self.rd,self.x, **self.options)
                 x = res["x"]
                 

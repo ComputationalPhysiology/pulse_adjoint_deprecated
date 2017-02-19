@@ -9,3 +9,5 @@ import numpy_mpi
 import heart_problem
 import lvsolver
 import optimal_control
+
+from adjoint_contraction_args import logger
