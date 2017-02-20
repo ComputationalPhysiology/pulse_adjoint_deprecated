@@ -491,7 +491,8 @@ def setup_optimization_parameters():
 
     params.add("soft_tol", 1e-6)
     params.add("soft_tol_rel", 0.1)
-    
+
+    params.add("adapt_scale", True)
     params.add("disp", False)
 
     return params
@@ -606,123 +607,11 @@ def get_simulated_strain_traces(phm):
                 simulated_strains[STRAIN_NUM_TO_KEY[direction]][region] = gather_broadcast(strains[region].vector().array())[direction]
         return simulated_strains
 
-def make_solver_params(params, patient, measurements):
+def make_solver_params(params, patient, measurements = None):
 
     
-    ##  Contraction parameter
-    if params["gamma_space"] == "regional":
-        gamma = RegionalParameter(patient.strain_markers)
-    else:
-        gamma_family, gamma_degree = params["gamma_space"].split("_")
-        gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
-
-        gamma = Function(gamma_space, name = 'activation parameter')
-
-        
-
-    ##  Material parameters
-
-    # Number of passive parameters to optimize
-    fixed_matparams_keys = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
-    npassive = sum([ not params["Optimization_parmeteres"][k] \
-                     for k in fixed_matparams_keys])
-
-    
-    # Create an object for each single material parameter
-    if params["matparams_space"] == "regional":
-        paramvec_ = RegionalParameter(patient.strain_markers)
-        
-    else:
-        
-        family, degree = params["matparams_space"].split("_")
-        matparams_space = FunctionSpace(patient.mesh, family, int(degree))
-        paramvec_ = Function(matparams_space, name = "matparam vector")
-
-        
-    if npassive <= 1:
-        # If there is only one parameter, just pick the same object
-        paramvec = paramvec_
-
-        # If there is none then 
-        if npassive == 0:
-            logger.debug("All material paramters are fixed")
-            params["optimize_matparams"] = False
-
-    else:
-        
-        # Otherwise, we make a mixed parameter
-        paramvec = MixedParameter(paramvec_, npassive)
-        # Make an iterator for the function assigment
-        nopts_par = 0
-
-
-    if params["phase"] in [PHASES[1]]:
-        # Load the parameters from the result file  
-                
-        # Open simulation file
-        with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
-            
-            # Get material parameter from passive phase file
-            h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
-            
-            
-    matparams = params["Material_parameters"].to_dict()
-    for par, val in matparams.iteritems():
-
-        # Check if material parameter should be fixed
-        if not params["Optimization_parmeteres"]["fix_{}".format(par)]:
-            # If not, then we need to put the parameter into some dolfin function
-
-            
-            # Use the materal parameters from the parameters as initial guess
-            if params["phase"] in [PHASES[0], PHASES[2]]:
-
-                
-                val_const = Constant(val) if paramvec_.value_size() == 1 \
-                            else Constant([val]*paramvec_.value_size())
-                
-
-                if npassive <= 1:
-                    paramvec.assign(val_const)
-
-                else:
-                    paramvec.assign_sub(val_const, nopts_par)
-                
-                    
-            if npassive <= 1:
-                matparams[par] = paramvec
-
-            else:
-                matparams[par] = split(paramvec)[nopts_par]
-                nopts_par += 1
-
-            
-                    
-                
-            
-
-   
-    # Print the material parameter to stdout
-    logger.info("\nMaterial Parameters")
-    nopts_par = 0
-
-    for par, v in matparams.iteritems():
-        if isinstance(v, (float, int)):
-            logger.info("\t{}\t= {:.3f}".format(par, v))
-        else:
-            
-            if npassive <= 1:
-                v_ = gather_broadcast(v.vector().array())
-                
-            else:
-                v_ = gather_broadcast(paramvec.split(deepcopy=True)[nopts_par].vector().array())
-                nopts_par += 1
-            
-            sp_str = "(mean), spatially resolved" if len(v_) > 1 else ""
-            logger.info("\t{}\t= {:.3f} {}".format(par, v_.mean(), sp_str))
-
-    
-    ##  Material model
+    paramvec, gamma, matparams = make_control(params, patient)
+     ##  Material model
     from material import HolzapfelOgden
     
     if params["active_model"] == "active_strain_rossi":
@@ -732,8 +621,6 @@ def make_solver_params(params, patient, measurements):
         material = HolzapfelOgden(patient.e_f, gamma, matparams,
                                   params["active_model"], patient.strain_markers)
 
-    
-
 
     strain_weights = None if not hasattr(patient, "strain_weights") else patient.strain_weights
 
@@ -742,18 +629,23 @@ def make_solver_params(params, patient, measurements):
       if params["use_deintegrated_strains"] else None
     
         
-
+    if measurements is None:
+        p_lv_ = 0.0
+        p_rv_ = 0.0
+    else:
+        p_lv_  = measurements["pressure"][0]
+        if measurements.has_key("rv_pressure"):
+            p_rv_ =  measurements["rv_pressure"][0]
+            
     # Neumann BC
     neuman_bc = []
 
     V_real = FunctionSpace(patient.mesh, "R", 0)
-    p_lv = Expression("t", t = measurements["pressure"][0],
-                      name = "LV_endo_pressure", element = V_real.ufl_element())
+    p_lv = Expression("t", t = p_lv_, name = "LV_endo_pressure", element = V_real.ufl_element())
     N = FacetNormal(patient.mesh)
 
     if patient.mesh_type() == "biv":
-        p_rv = Expression("t", t = measurements["rv_pressure"][0],
-                          name = "RV_endo_pressure", element = V_real.ufl_element())
+        p_rv = Expression("t", t = p_rv_, name = "RV_endo_pressure", element = V_real.ufl_element())
         
         neumann_bc = [[p_lv, patient.ENDO_LV],
                      [p_rv, patient.ENDO_RV]]
@@ -876,6 +768,127 @@ def make_solver_params(params, patient, measurements):
     else:
         return solver_parameters, pressure
 
+
+def make_control(params, patient):
+
+    ##  Contraction parameter
+    if params["gamma_space"] == "regional":
+        gamma = RegionalParameter(patient.strain_markers)
+    else:
+        gamma_family, gamma_degree = params["gamma_space"].split("_")
+        gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
+
+        gamma = Function(gamma_space, name = 'activation parameter')
+
+        
+
+    ##  Material parameters
+    
+    # Create an object for each single material parameter
+    if params["matparams_space"] == "regional":
+        paramvec_ = RegionalParameter(patient.strain_markers)
+        
+    else:
+        
+        family, degree = params["matparams_space"].split("_")
+        matparams_space = FunctionSpace(patient.mesh, family, int(degree))
+        paramvec_ = Function(matparams_space, name = "matparam vector")
+
+
+    # Number of passive parameters to optimize
+    fixed_matparams_keys = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
+    npassive = sum([ not params["Optimization_parmeteres"][k] \
+                     for k in fixed_matparams_keys])
+
+        
+    if npassive <= 1:
+        # If there is only one parameter, just pick the same object
+        paramvec = paramvec_
+
+        # If there is none then 
+        if npassive == 0:
+            logger.debug("All material paramters are fixed")
+            params["optimize_matparams"] = False
+
+    else:
+        
+        # Otherwise, we make a mixed parameter
+        paramvec = MixedParameter(paramvec_, npassive)
+        # Make an iterator for the function assigment
+        nopts_par = 0
+
+
+
+
+
+    if params["phase"] in [PHASES[1]]:
+        # Load the parameters from the result file  
+                
+        # Open simulation file
+        with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
+            
+            # Get material parameter from passive phase file
+            h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
+            
+            
+    matparams = params["Material_parameters"].to_dict()
+    for par, val in matparams.iteritems():
+
+        # Check if material parameter should be fixed
+        if not params["Optimization_parmeteres"]["fix_{}".format(par)]:
+            # If not, then we need to put the parameter into some dolfin function
+
+            
+            # Use the materal parameters from the parameters as initial guess
+            if params["phase"] in [PHASES[0], PHASES[2]]:
+
+                
+                val_const = Constant(val) if paramvec_.value_size() == 1 \
+                            else Constant([val]*paramvec_.value_size())
+                
+
+                if npassive <= 1:
+                    paramvec.assign(val_const)
+
+                else:
+                    paramvec.assign_sub(val_const, nopts_par)
+                
+                    
+            if npassive <= 1:
+                matparams[par] = paramvec
+
+            else:
+                matparams[par] = split(paramvec)[nopts_par]
+                nopts_par += 1
+
+   
+    # Print the material parameter to stdout
+    logger.info("\nMaterial Parameters")
+    nopts_par = 0
+
+    for par, v in matparams.iteritems():
+        if isinstance(v, (float, int)):
+            logger.info("\t{}\t= {:.3f}".format(par, v))
+        else:
+            
+            if npassive <= 1:
+                v_ = gather_broadcast(v.vector().array())
+                
+            else:
+                v_ = gather_broadcast(paramvec.split(deepcopy=True)[nopts_par].vector().array())
+                nopts_par += 1
+            
+            sp_str = "(mean), spatially resolved" if len(v_) > 1 else ""
+            logger.info("\t{}\t= {:.3f} {}".format(par, v_.mean(), sp_str))
+
+    
+   
+
+
+    return paramvec, gamma, matparams
+
+    
+    
 def get_measurements(params, patient):
     """Get the measurement or the synthetic data
     to be used as BC or targets in the optimization

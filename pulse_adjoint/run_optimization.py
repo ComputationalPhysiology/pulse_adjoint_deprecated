@@ -151,8 +151,9 @@ def run_active_optimization(params, patient):
     
     while i < patient.num_contract_points:
         params["active_contraction_iteration_number"] = i
-        if not contract_point_exists(params):
 
+        if not contract_point_exists(params):
+            
             # Number of times we have interpolated in order
             # to be able to change the pressure
             attempts = 0
@@ -391,7 +392,9 @@ def solve_oc_problem(params, rd, paramvec):
                     # increase the step size of the gradient. 
                     rd.reset()
                     rd.derivative_scale *= 3.0
-                    
+
+            if not params["Optimization_parmeteres"]["adapt_scale"]: done = True
+            
             niter += 1
                     
 

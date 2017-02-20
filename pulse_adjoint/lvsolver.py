@@ -263,7 +263,7 @@ class LVSolver(object):
             for neumann_bc in self.parameters["bc"]["neumann"]:
                 p, marker = neumann_bc
 
-                self._G += derivative(inner(p*N, u)*ds(marker), self._w, self._w_test)
+                self._G += derivative(inner(p*J*inv(self._F).T*N, u)*ds(marker), self._w, self._w_test)
                 # self._G += inner(J*p*dot(inv(F).T, N), v)*ds(marker)
                 # self._G += p*inner(v, cofac(F)*N)*ds(marker)
 
@@ -302,7 +302,8 @@ class LVSolver(object):
             beta_value = 10
             beta = Constant(beta_value)
             
-            h_E = MaxFacetEdgeLength(self.parameters["mesh"])
+            h_E = CellSize(mesh)
+            #MaxFacetEdgeLength(self.parameters["mesh"])
             for nitsche in self.parameters["bc"]["nitsche"]:
                 
                 val, dS = nitsche
@@ -319,12 +320,16 @@ class LVSolver(object):
         bcs = []
         D = self._compressibility.get_displacement_space()
         for bc_spec in self.parameters["bc"]["dirichlet"]:
-            val, marker = bc_spec
-            if type(marker) == int:
-                args = [D, val, self.parameters["facet_function"], marker]
+            if isinstance(bc_spec, DirichletBC):
+                bcs.append(bc_spec)
             else:
-                args = [D, val, marker]
-            bcs.append(DirichletBC(*args))
+                val, marker = bc_spec
+                if type(marker) == int:
+                    args = [D, val, self.parameters["facet_function"], marker]
+                else:
+                    args = [D, val, marker]
+                bcs.append(DirichletBC(*args))
+                
         return bcs
 
 
