@@ -191,8 +191,7 @@ class Material(object):
 
         # Fibers on the current configuration
         f = F*self.f0
-        # Normalize fibers
-        f = f / sqrt(dot(f,f))
+        
         # The outer product of the fibers
         ff = outer(f,f)
 
@@ -210,8 +209,11 @@ class Material(object):
         w1 = self.W_1(I1, diff = 1, dim = dim)
         w4f = self.W_4(I4f, diff = 1)
         wactive = self.Wactive(gamma, diff = 1)
-        
-        return 2*w1*B + 2*w4f*ff + 2*wactive*ff - p*I
+
+        if p is None:
+            return 2*w1*B + 2*w4f*ff + 2*wactive*ff 
+        else:
+            return 2*w1*B + 2*w4f*ff + 2*wactive*ff + p*I
 
     def Wactive(self, gamma, I4f = 0, diff = 0):
         """
