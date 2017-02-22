@@ -274,27 +274,15 @@ def store(params, rd, opt_result):
     if params["phase"] == PHASES[0]:
 
         h5group =  PASSIVE_INFLATION_GROUP
-        write_opt_results_to_h5(h5group,
-                                params,
-                                rd.for_res,
-                                solver,
-                                opt_result)
     else:
         
         h5group =  ACTIVE_CONTRACTION_GROUP.format(params["active_contraction_iteration_number"])
-        write_opt_results_to_h5(h5group,
-                                params,
-                                rd.for_res,
-                                solver, 
-                                opt_result)
-
-
-
-            
-            
-            
-    
-    
+        
+    write_opt_results_to_h5(h5group,
+                            params,
+                            rd.for_res,
+                            solver, 
+                            opt_result)
     
     
         
@@ -327,6 +315,7 @@ def solve_oc_problem(params, rd, paramvec):
         paramvec_start = paramvec.copy()
         state_start = rd.for_run.cphm.get_state()
         niter = 0
+    
         while not done and niter < 5:
             # Evaluate the reduced functional in case the solver chrashes at the first point.
             # If this is not done, and the solver crashes in the first point
@@ -334,6 +323,7 @@ def solve_oc_problem(params, rd, paramvec):
             
             # If this fails, there is no hope.
             try:
+              
                 rd(paramvec)
             except SolverDidNotConverge:
                 print "NOOOO!"
@@ -368,7 +358,7 @@ def solve_oc_problem(params, rd, paramvec):
                 rd.derivative_scale /= 2.0
                                 
             else:
-                
+               
                 solved = True
                 dfunc_value_rel = rd.for_res["func_value"] \
                                   /rd.ini_for_res["func_value"]
@@ -380,9 +370,10 @@ def solve_oc_problem(params, rd, paramvec):
                 # else:
                 #     dfunc_value = np.abs(np.mean(np.diff(rd.opt_funcvalues[-2:])))
 
+               
                 
-                if dfunc_value_rel < params["Optimization_parmeteres"]["soft_tol_rel"]: #\
-                   # and dfunc_value < params["Optimization_parmeteres"]["soft_tol"]:
+                if not params["Optimization_parmeteres"]["adapt_scale"] or \
+                   dfunc_value_rel < params["Optimization_parmeteres"]["soft_tol_rel"]: 
                     done = True
                 else:
                     # We have not improved much from the initial guess
@@ -393,7 +384,7 @@ def solve_oc_problem(params, rd, paramvec):
                     rd.reset()
                     rd.derivative_scale *= 3.0
 
-            if not params["Optimization_parmeteres"]["adapt_scale"]: done = True
+            
             
             niter += 1
                     

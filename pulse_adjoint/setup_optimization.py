@@ -395,7 +395,7 @@ def setup_application_parameters():
 
     # For passive optimization, include all passive points ('all')
     # or only the final point ('final')
-    params.add("passive_weights", "all", ["final", "all"])
+    params.add("passive_weights", "all")
     
     # Update weights so that the initial value of the functional is 0.1
     params.add("adaptive_weights", True)
@@ -408,6 +408,9 @@ def setup_application_parameters():
 
     # If you want to optimize passive parameters
     params.add("optimize_matparams", True)
+
+    # Normalization factor for active contraction
+    params.add("T_ref", 1.0)
 
     # If you want to use a zero initial guess for gamma (False),
     # or use gamma from previous iteration as initial guess (True)
@@ -472,7 +475,7 @@ def setup_optimization_parameters():
     # Parameters for the Optimization
     params = Parameters("Optimization_parmeteres")
     params.add("opt_type", "scipy_slsqp")
-    params.add("method_1d", "brent")
+    params.add("method_1d", "bounded")
     params.add("active_opt_tol", 1e-6)
     params.add("active_maxiter", 100)
     params.add("passive_opt_tol", 1e-6)
@@ -526,6 +529,79 @@ def initialize_patient_data(patient_parameters, synth_data=False):
         patient.num_points = SYNTH_PASSIVE_FILLING + NSYNTH_POINTS + 1
 
     return patient
+
+
+def check_patient_attributes(patient):
+    """
+    Check that the object contains the minimum 
+    required attributes. 
+    """
+
+    msg = "Patient is missing attribute {}"
+
+    if not hasattr(patient, 'mesh'):
+        raise AttributeError(msg.format("mesh"))
+    else:
+        dim = patient.mesh.topology().dim()
+
+    if not hasattr(patient, 'markers'):
+        raise AttributeError(msg.format("markers"))
+   
+    
+    if not hasattr(patient, 'fiber'):
+
+        no_fiber = True
+        if hasattr(patient, 'e_f'):
+            rename_attribute(patient, 'e_f', 'fiber')
+            no_fiber = False
+            
+        if no_fiber:
+
+            idx_arr = np.where([item.startswith("fiber") \
+                                for item in dir(patient)])[0]
+            if len(idx) == 0:
+                raise AttributeError(msg.format("fiber"))
+            else:
+                att = dir(patient)[idx_arr[0]]
+                rename_attribute(patient, att, 'fiber')
+                
+    if not hasattr(patient, 'sheet') and hasattr(patient, 'e_s'):
+        rename_attribute(patient, 'e_s', 'sheet')
+    else:
+        setattr(patient, 'sheet', None)
+
+    if not hasattr(patient, 'sheet_normal') and hasattr(patient, 'e_sn'):
+        rename_attribute(patient, 'e_sn', 'sheet_normal')
+    else:
+        setattr(patient, 'sheet_normal', None)
+        
+    if not hasattr(patient, 'ffun'):
+
+        no_ffun = True 
+        if hasattr(patient, 'facets_markers'):
+            rename_attribute(patient, 'facets_markers', 'ffun')
+            no_ffun = False
+
+        if no_ffun:
+            setattr(patient, 'strain_weights',
+                    MeshFunction("size_t", mesh, 2, mesh.domains()))
+          
+
+    if not hasattr(patient, 'strain_weights'):
+        setattr(patient, 'strain_weights', None)
+
+    if dim == 3 and not hasattr(patient, 'sfun'):
+        
+        no_sfun = True 
+        if no_sfun and hasattr(patient, 'strain_markers'):
+            rename_attribute(patient, 'strain_markers', 'sfun')
+            no_sfun = False
+
+        if no_sfun:
+            setattr(patient, 'strain_weights',
+                    MeshFunction("size_t", mesh, 3, mesh.domains()))
+
+                    
 
 def save_patient_data_to_simfile(patient, sim_file):
 
@@ -609,24 +685,18 @@ def get_simulated_strain_traces(phm):
 
 def make_solver_params(params, patient, measurements = None):
 
+    check_patient_attributes(patient)
     
     paramvec, gamma, matparams = make_control(params, patient)
      ##  Material model
     from material import HolzapfelOgden
     
-    if params["active_model"] == "active_strain_rossi":
-        material = HolzapfelOgden(patient.e_f, gamma, matparams, params["active_model"],
-                                      patient.strain_markers, s0 = patient.e_s, n0 = patient.e_sn)
-    else:
-        material = HolzapfelOgden(patient.e_f, gamma, matparams,
-                                  params["active_model"], patient.strain_markers)
-
-
-    strain_weights = None if not hasattr(patient, "strain_weights") else patient.strain_weights
-
-    
-    strain_weights_deintegrated = patient.strain_weights_deintegrated \
-      if params["use_deintegrated_strains"] else None
+    material = HolzapfelOgden(patient.fiber, gamma,
+                              matparams,
+                              params["active_model"],
+                              s0 = patient.sheet,
+                              n0 = patient.sheet_normal,
+                              T_ref = params["T_ref"])
     
         
     if measurements is None:
@@ -642,30 +712,33 @@ def make_solver_params(params, patient, measurements = None):
 
     V_real = FunctionSpace(patient.mesh, "R", 0)
     p_lv = Expression("t", t = p_lv_, name = "LV_endo_pressure", element = V_real.ufl_element())
-    N = FacetNormal(patient.mesh)
+    
 
     if patient.mesh_type() == "biv":
         p_rv = Expression("t", t = p_rv_, name = "RV_endo_pressure", element = V_real.ufl_element())
         
-        neumann_bc = [[p_lv, patient.ENDO_LV],
-                     [p_rv, patient.ENDO_RV]]
+        neumann_bc = [[p_lv, patient.markers["ENDO_LV"][0]],
+                     [p_rv, patient.markers["ENDO_RV"][0]]]
 
         pressure = {"p_lv":p_lv, "p_rv":p_rv}
     else:
-        neumann_bc = [[p_lv, patient.ENDO]]
+        neumann_bc = [[p_lv, patient.markers["ENDO"][0]]]
         pressure = {"p_lv":p_lv}
     
 
-    # Direchlet BC at the Base
-    try:
-        mesh_verts = patient.mesh_verts
-        seg_verts = measurements.seg_verts
-    except:
-        logger.debug("No mesh vertices found. Fix base is the only applicable Direchlet BC")
-        mesh_verts = None
+    
 
 
-    if params["base_bc"] == "from_seg_base" and (mesh_verts is not None):
+    if params["base_bc"] == "from_seg_base":
+
+        # Direchlet BC at the Base
+        try:
+            mesh_verts = patient.mesh_verts
+            seg_verts = measurements.seg_verts
+        except:
+            raise ValueError(("No mesh vertices found. Fix base "+
+                              "is the only applicable Direchlet BC"))
+
 
         endoring = VertexDomain(mesh_verts)
         base_it = Expression("t", t = 0.0, name = "base_iterator")
@@ -700,16 +773,14 @@ def make_solver_params(params, patient, measurements = None):
             '''Fix the basal plane.
             '''
             V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-            bc = [DirichletBC(V, Constant((0, 0, 0)), patient.BASE)]
+            bc = [DirichletBC(V, Constant((0, 0, 0)), patient.markers["BASE"][0])]
             return bc
         
         
     else:
-        if not params["base_bc"] == "fix_x":
-            if mesh_verts is None:
-                logger.warning("No mesh vertices found. This must be set in the patient class")
-            else:
-                logger.warning("Unknown Base BC")
+       
+        if not (params["base_bc"] == "fix_x"):
+            logger.warning("Unknown Base BC {}".format(params["base_bc"]))
             logger.warning("Fix base in x direction")
     
         def base_bc(W):
@@ -717,17 +788,14 @@ def make_solver_params(params, patient, measurements = None):
             in the x = 0 plane.
             '''
             V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-            bc = [DirichletBC(V.sub(0), 0, patient.BASE)]
+            bc = [DirichletBC(V.sub(0), 0, patient.markers["BASE"][0])]
             return bc
     
         
-        base_bc_y = None
-        base_bc_z = None
-        base_it = None
-        
         # Apply a linear sprint robin type BC to limit motion
         robin_bc = [[-Constant(params["base_spring_k"], 
-                                   name ="base_spring_constant"), patient.BASE]]
+                                   name ="base_spring_constant"),
+                     patient.markers["BASE"][0]]]
 
 
 
@@ -740,17 +808,12 @@ def make_solver_params(params, patient, measurements = None):
     
     
     solver_parameters = {"mesh": patient.mesh,
-                         "facet_function": patient.facets_markers,
-                         "facet_normal": N,
-                         "crl_basis":crl_basis,
-                         "passive_filling_duration": patient.passive_filling_duration, 
-                         "mesh_function": patient.strain_markers,
-                         "base_bc_y":base_bc_y,
-                         "base_bc_z":base_bc_z,
-                         "base_it":base_it,
+                         "facet_function": patient.ffun,
+                         "facet_normal": FacetNormal(patient.mesh),
+                         "crl_basis": crl_basis,
+                         "mesh_function": patient.sfun,
                          "markers":patient.markers,
-                         "strain_weights": strain_weights, 
-                         "strain_weights_deintegrated": strain_weights_deintegrated,
+                         "strain_weights": patient.strain_weights,
                          "state_space": "P_2:P_1",
                          "compressibility":{"type": params["compressibility"],
                                             "lambda": params["incompressibility_penalty"]},
@@ -1017,7 +1080,10 @@ def get_volume_offset(patient, chamber = "lv"):
     else:
         endo_marker = patient.ENDO_RV
         volume = patient.RVV[0]
-        
+
+    if volume == -1:
+        return 0
+    
     ds = Measure("exterior_facet",
                  subdomain_data = patient.facets_markers,
                  domain = patient.mesh)(endo_marker)
@@ -1153,10 +1219,10 @@ class MyReducedFunctional(ReducedFunctional):
             self.grad_norm = []
             self.grad_norm_scaled = []
         else:
-            self.func_values_lst.pop()
-            self.controls_lst.pop()
-            self.grad_norm.pop()
-            self.grad_norm_scaled.pop()
+            if len(self.func_values_lst): self.func_values_lst.pop()
+            if len(self.controls_lst): self.controls_lst.pop()
+            if len(self.grad_norm): self.grad_norm.pop()
+            if len(self.grad_norm_scaled): self.grad_norm_scaled.pop()
 
 
         
