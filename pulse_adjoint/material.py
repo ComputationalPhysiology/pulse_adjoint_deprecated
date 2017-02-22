@@ -213,7 +213,7 @@ class Material(object):
         if p is None:
             return 2*w1*B + 2*w4f*ff + 2*wactive*ff 
         else:
-            return 2*w1*B + 2*w4f*ff + 2*wactive*ff + p*I
+            return 2*w1*B + 2*w4f*ff + 2*wactive*ff - p*I
 
     def Wactive(self, gamma, I4f = 0, diff = 0):
         """
