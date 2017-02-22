@@ -134,7 +134,7 @@ class BasicHeartProblem(collections.Iterator):
 
         converged = False
 
-        nsteps = 2
+        nsteps = np.rint(p_diff/0.4)
         n_max = 100
         
         lv_pressures = np.linspace(p_lv_prev, p_lv_next, nsteps)
