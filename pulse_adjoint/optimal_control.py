@@ -133,90 +133,7 @@ def minimize_1d(f, x0, **kwargs):
 
     """
     
-
-    # Initial step size
-    dx = np.abs(np.diff(kwargs["bounds"]))[0]/5.0
-   
-    # Initial functional value
-    f_prev = f.func_values_lst[0]
-
-    # If the initial step size is too large, reduce it
-    while x0 + dx > kwargs["bounds"][1]:
-        dx /= 2
-    
-
-    # Evaluate the functional at the new point
-    f_cur = f(x0 + dx)
-   
-    # If the current value is larger than the previous one, try to step in the other direction
-    if f_cur > f_prev:
-     
-        dx *= -1
-        while x0 + dx < kwargs["bounds"][0]:
-            dx /= 2
-        
-        f_cur = f(x0 + dx)
-
-    # If this still is true, then the minimum is witin the interval we just checked (assuming convexity).
-    if f_cur > f_prev:
-       
-        
-        if x0 - dx > x0:
-            a = x0 + dx
-            b = x0 - dx
-        else:
-            a = x0 - dx
-            b = x0 + dx
-       
-        return scipy_minimize_1d(f, bracket = (a,b), **kwargs)
-
-    # Otherwise we step up until the current value if larger then the previous one
-    else:
-            
-        while f_cur < f_prev:
-
-            # If the new value is outside the bounds reduce the step size
-            while x0 + dx > kwargs["bounds"][1] or x0 + dx < kwargs["bounds"][0]:
-                dx /= 2
-               
-            
-            x0 = x0 + dx
-            f_prev_tmp = f_cur
-            
-            ncrashes = f.nr_crashes
-            # Try to evaluate the functional at the new point
-            f_cur = f(x0 +dx)
-
-            # Check if the solver chrashed in the evaluation
-            if f.nr_crashes > ncrashes:
-                # We were not able to evaluate the funcitonal, reduce step size until convergence
-                crash = True
-                ncrashes = f.nr_crashes
-                x0 = x0 - dx
-                while crash:
-                    
-                    dx /= 2
-                    x0 = x0 +dx
-                    f_cur = f(x0 +dx)
-                    
-                    if ncrashes == f_cur.nr_crashes:
-                        crash = False
-                    else:
-                        x0 = x0-dx
-                    
-                    
-            # Assign the previous value
-            f_prev = f_prev_tmp
-
-        # If f_cur > f_prev we have a interval to search for the minimum (assuming convexity).
-        if x0 - dx > x0:
-            a = x0
-            b = x0 - dx
-        else:
-            a = x0 - dx
-            b = x0
-  
-        return scipy_minimize_1d(f, bracket = (a,b), **kwargs)
+    return scipy_minimize_1d(f, **kwargs)
 
 def get_ipopt_options(rd, lb, ub, tol, max_iter, **kwargs):
     """Get options for IPOPT module (interior point algorithm)
@@ -546,7 +463,7 @@ class OptimalControl(object):
 
         t = Timer()
         t.start()
-
+      
         if self.oneD:
     
             res = minimize_1d(self.rd, self.x[0], **self.options)
