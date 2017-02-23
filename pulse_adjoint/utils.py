@@ -182,7 +182,8 @@ def list_sum(l):
 
         
 def rename_attribute(object_, old_attribute_name, new_attribute_name):
-    setattr(object_, new_attribute_name, getattr(object_, old_attribute_name))
+    setattr(object_, new_attribute_name,
+            getattr(object_, old_attribute_name))
     delattr(object_, old_attribute_name)
 
 

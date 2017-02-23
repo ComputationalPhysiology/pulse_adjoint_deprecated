@@ -163,14 +163,7 @@ class BasicForwardRunner(object):
         # Print the head of table 
         logger.info(self._print_head())
        
-        # Get the functional value of each term in the functional
-        func_lst = []
-        for key,val in self.target_params.iteritems():
-            if val:
-                func_lst.append(self.opt_weights[key]*self.optimization_targets[key].get_functional())
-
-        # Collect the terms in the functional
-        functional = list_sum(func_lst)
+        functional = self.make_functional()
               
        
         if phase == "active":
@@ -179,40 +172,28 @@ class BasicForwardRunner(object):
             
         else:
 
-            # FIXE : assume for now that only a is optimized
-            m = self.paramvec#phm.solver.parameters['material'].a
+            # FIXME : assume for now that only a is optimized
+            m = self.paramvec
         
             # Add the initial state to the recording
             functionals_time.append(functional*dt[0.0])
             
-        # self.regularization.assign(m, annotate = annotate)
-        functional += self.regularization.get_functional()
-
-        
+               
         for it, p in enumerate(self.bcs["pressure"][1:], start=1):
         
             sol = phm.next()
 
         
             if self.params["passive_weights"] == "all" \
-               or it == len(self.bcs["pressure"])-1:
-            
-                for key,val in self.target_params.iteritems():
-                    
-                    if val:
-                       
-                        self.optimization_targets[key].next_target(it, annotate=annotate)
-                        self.optimization_targets[key].assign_simulated(split(sol)[0])
-                        self.optimization_targets[key].assign_functional()
-                        self.optimization_targets[key].save()
+               or (self.params["passive_weights"] == "all" \
+                   and it == len(self.bcs["pressure"])-1) \
+                   or int(self.params["passive_weights"]) == it:
 
-                        
-                self.regularization.assign(m, annotate = annotate)
+
+                self.update_targets(it, split(sol)[0], m, annotate = annotate)
                 
-                self.regularization.save()
             
                 # Print the values
-        
                 logger.info(self._print_line(it))
             
 
@@ -235,6 +216,37 @@ class BasicForwardRunner(object):
 
         # self._print_finished_report(forward_result)
         return forward_result
+
+    def make_functional(self):
+
+        # Get the functional value of each term in the functional
+        func_lst = []
+        for key,val in self.target_params.iteritems():
+            if val:
+                func_lst.append(self.opt_weights[key]*self.optimization_targets[key].get_functional())
+
+        # Collect the terms in the functional
+        functional = list_sum(func_lst)
+        # Add the regularization term
+        functional += self.regularization.get_functional()
+
+        return functional
+    
+    def update_targets(self, it, u, m, annotate=False):
+
+        for key,val in self.target_params.iteritems():
+            
+            if val:
+                       
+                self.optimization_targets[key].next_target(it, annotate=annotate)
+                self.optimization_targets[key].assign_simulated(u)
+                self.optimization_targets[key].assign_functional()
+                self.optimization_targets[key].save()
+
+                        
+        self.regularization.assign(m, annotate = annotate)
+        self.regularization.save()
+        
     
     def _print_finished_report(self, forward_result):
 
@@ -513,10 +525,7 @@ class PassiveForwardRunner(BasicForwardRunner):
 
     def __call__(self, m, annotate = False):
 
-        paramvec_old = self.paramvec.copy()
-        self.paramvec.assign(m)
-
-        self.assign_material_parameters()
+        self.assign_material_parameters(m)
         phm, w_old  =  self.get_phm(annotate=False,
                                     return_state = True)
         parameters["adjoint"]["stop_annotating"] = True
@@ -531,8 +540,9 @@ class PassiveForwardRunner(BasicForwardRunner):
 
 
 
-    def assign_material_parameters(self):
+    def assign_material_parameters(self, m):
 
+        self.paramvec.assign(m)
         npassive = sum([ not self.params["Optimization_parmeteres"][k] \
                      for k in ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]])
     

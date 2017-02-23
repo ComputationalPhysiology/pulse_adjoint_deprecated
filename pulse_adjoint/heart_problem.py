@@ -31,6 +31,7 @@ class BasicHeartProblem(collections.Iterator):
     def __init__(self, bcs, solver_parameters, pressure):
 
         self._init_pressures(bcs["pressure"], pressure["p_lv"], "lv")
+
         self.p_lv.t = self.lv_pressure[0]
         
         if pressure.has_key("p_rv"):
@@ -217,9 +218,11 @@ class BasicHeartProblem(collections.Iterator):
     def _init_pressures(self, pressure, p, chamber = "lv"):
 
         setattr(self, "{}_pressure".format(chamber), pressure)
-        setattr(self, "{}_pressure_gen".format(chamber),  (p for p in pressure[1:]))
+        setattr(self, "{}_pressure_gen".format(chamber),
+                (p for p in pressure[1:]))
         setattr(self, "p_{}".format(chamber), p)
-       
+
+        
         
 
     def next(self):

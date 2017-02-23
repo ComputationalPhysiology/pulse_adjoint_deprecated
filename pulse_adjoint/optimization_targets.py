@@ -141,7 +141,7 @@ class RegionalStrainTarget(OptimizationTarget):
     """Class for regional strain optimization
     target
     """                                  
-    def __init__(self, mesh, crl_basis, dmu, weights=np.ones((17,3)), nregions = None, tensor="gradu"):
+    def __init__(self, mesh, crl_basis, dmu, weights=None, nregions = None, tensor="gradu"):
         """
         Initialize regional strain target
 
@@ -159,6 +159,8 @@ class RegionalStrainTarget(OptimizationTarget):
         """
         self._name = "Regional Strain"
         self._tensor = tensor
+
+        if weights is None: weights = np.ones((17,3))
         self.nregions = np.shape(weights)[0] if nregions is None else nregions
         dim = mesh.geometry().dim()
         self.dim = dim
@@ -181,7 +183,7 @@ class RegionalStrainTarget(OptimizationTarget):
             self.weights_arr =np.ones((self.nregions,dim))
 
         self.crl_basis = []
-        for l in ["e_circ", "e_rad", "e_long"]:
+        for l in ["circumferential", "radial", "longitudinal"]:
             if crl_basis.has_key(l):
                 self.crl_basis.append(crl_basis[l])
         
