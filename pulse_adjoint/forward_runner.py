@@ -289,6 +289,23 @@ class ActiveForwardRunner(BasicForwardRunner):
     """
     The active forward runner 
 
+    Parameters
+    ----------
+        
+    solver_parameters : dict
+        solver parameters coming from setup_optimization.make_solver_paramerters()
+    pressure : list 
+        list of pressure that should be solved for, starting with the current pressure
+    bcs : dict
+        Dictionary with boundary conditions coming from run_optimization.load_target_data()
+    optimization_targets : dict
+        Dictionary with optimization targets, coming from run_optimization.load_target_data()
+    params : dict
+        adjoint contraction paramters
+    gamma_previous: :py:class`dolfin.function`
+        The active contraction parameter
+
+
     **Example of usage**::
 
           # Setup compiler parameters
@@ -324,22 +341,7 @@ class ActiveForwardRunner(BasicForwardRunner):
                  optimization_targets,
                  params,
                  gamma_previous):
-        """
-        Initialize class for active forward solver
-
-        :param dict solver_parameters: solver parameters coming from 
-                                       setup_optimization.make_solver_paramerters()
-        :param list pressure: list of pressure that should be solved for, 
-                              starting with the current pressure
-        :param dict bcs: Dictionary with boundary conditions coming from
-                         run_optimization.load_target_data()
-        :param dict optimization_targets: Dictionary with optimization targets,  
-                                          coming from run_optimization.load_target_data()
-        :param dict params: adjoint contraction paramters
-        :param gamma_previous: The active contraction parameter
-        :type gamma_previous: :py:class`dolfin.function`
-
-        """
+        
 
 
 
@@ -522,20 +524,16 @@ class PassiveForwardRunner(BasicForwardRunner):
                 self.opt_weights[k] = v
                 
         self.paramvec = paramvec
+        self.cphm  =  self.get_phm(annotate, return_state =False)
 
     def __call__(self, m, annotate = False):
 
         self.assign_material_parameters(m)
-        phm, w_old  =  self.get_phm(annotate=False,
-                                    return_state = True)
-        parameters["adjoint"]["stop_annotating"] = True
-        forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, False, "passive")
-
+        self.cphm  =  self.get_phm(annotate, return_state =False)
         parameters["adjoint"]["stop_annotating"] = not annotate
-        self.cphm   =  self.get_phm(annotate, return_state =False)
         forward_result = BasicForwardRunner.solve_the_forward_problem(self, self.cphm, annotate, "passive")
       
-
+        
         return forward_result, False
 
 

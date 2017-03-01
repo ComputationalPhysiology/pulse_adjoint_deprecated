@@ -28,15 +28,22 @@ def initialize_patient_data(patient_parameters, synth_data=False):
     Make an instance of patient from :py:module`patient_data`
     baed on th given parameters
 
+    Parameters
+    ----------
+    patient_parameters: dict
+        the parameters 
+    synth_data: bool
+        If synthetic data or not
+
+    Returns
+    -------
+    patient: :py:class`patient_data.Patient`
+        A patient instance
+
     **Example of usage**::
     
       params = setup_patient_parameters()
       patient = initialize_patient_data(params, False)
-
-    :param dict patient_parameters: the parameters 
-    :param bool synth_data: If synthetic data or not
-    :returns: A patient instance
-    :rtype: :py:class`patient_data.Patient`
 
     """
     
@@ -160,7 +167,15 @@ def check_patient_attributes(patient):
 
     # Mesh type
     if not hasattr(patient, 'mesh_type'):
-        setattr(patient, 'mesh_type', lambda : 'lv')
+        # If markers are according to fiberrules, 
+        # rv should be marked with 20
+        if 20 in set(patient.ffun.array()):
+            setattr(patient, 'mesh_type', lambda : 'biv')
+        else:
+            setattr(patient, 'mesh_type', lambda : 'lv')
+
+    if not hasattr(patient, 'passive_filling_duration'):
+        setattr(patient, 'passive_filling_duration', 1)
                     
 
 def save_patient_data_to_simfile(patient, sim_file):
@@ -169,12 +184,12 @@ def save_patient_data_to_simfile(patient, sim_file):
     from mesh_generation.mesh_utils import save_geometry_to_h5
 
     fields = []
-    for att in ["e_f", "e_s", "e_sn"]:
+    for att in ["fiber", "sheet", "sheet_normal"]:
         if hasattr(patient, att):
             fields.append(getattr(patient, att))
 
     local_basis = []
-    for att in ["e_circ", "e_rad", "e_long"]:
+    for att in ["circumferential", "radial", "longitudinal"]:
         if hasattr(patient, att):
             local_basis.append(getattr(patient, att))
     
@@ -245,9 +260,15 @@ def get_simulated_strain_traces(phm):
 
 def make_solver_params(params, patient, measurements = None):
 
-    check_patient_attributes(patient)
-    
     paramvec, gamma, matparams = make_control(params, patient)
+    return make_solver_parameters(params, patient, matparams,
+                                  gamma, paramvec, measurements)
+
+
+def make_solver_parameters(params, patient, matparams,
+                           gamma = Constant(0.0),
+                           paramvec = None, measurements = None):
+
      ##  Material model
     from material import HolzapfelOgden
     
@@ -353,7 +374,7 @@ def make_solver_params(params, patient, measurements = None):
     
         
         # Apply a linear sprint robin type BC to limit motion
-        robin_bc = [[-Constant(params["base_spring_k"], 
+        robin_bc = [[Constant(params["base_spring_k"], 
                                    name ="base_spring_constant"),
                      patient.markers["BASE"][0]]]
 
@@ -373,6 +394,7 @@ def make_solver_params(params, patient, measurements = None):
                          "crl_basis": crl_basis,
                          "mesh_function": patient.sfun,
                          "markers":patient.markers,
+                         "passive_filling_duration": patient.passive_filling_duration,
                          "strain_weights": patient.strain_weights,
                          "state_space": "P_2:P_1",
                          "compressibility":{"type": params["compressibility"],
@@ -396,7 +418,7 @@ def make_control(params, patient):
 
     ##  Contraction parameter
     if params["gamma_space"] == "regional":
-        gamma = RegionalParameter(patient.strain_markers)
+        gamma = RegionalParameter(patient.sfun)
     else:
         gamma_family, gamma_degree = params["gamma_space"].split("_")
         gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
@@ -409,7 +431,7 @@ def make_control(params, patient):
     
     # Create an object for each single material parameter
     if params["matparams_space"] == "regional":
-        paramvec_ = RegionalParameter(patient.strain_markers)
+        paramvec_ = RegionalParameter(patient.sfun)
         
     else:
         
@@ -631,21 +653,21 @@ def get_volume_offset(patient, chamber = "lv"):
     if chamber == "lv":
     
         if patient.mesh_type() == "biv":
-            endo_marker = patient.ENDO_LV
+            endo_marker = patient.markers["ENDO_LV"][0]
         else:
-            endo_marker = patient.ENDO
+            endo_marker = patient.markers["ENDO"][0]
 
         volume = patient.volume[0]
         
     else:
-        endo_marker = patient.ENDO_RV
+        endo_marker = patient.markers["ENDO_RV"][0]
         volume = patient.RVV[0]
 
     if volume == -1:
         return 0
     
     ds = Measure("exterior_facet",
-                 subdomain_data = patient.facets_markers,
+                 subdomain_data = patient.ffun,
                  domain = patient.mesh)(endo_marker)
     
     X = SpatialCoordinate(patient.mesh)
@@ -657,6 +679,7 @@ def get_volume_offset(patient, chamber = "lv"):
 
 def setup_simulation(params, patient):
 
+    check_patient_attributes(patient)
     # Load measurements
     measurements = get_measurements(params, patient)
     solver_parameters, pressure, controls = make_solver_params(params, patient, measurements)
@@ -665,7 +688,25 @@ def setup_simulation(params, patient):
 
 
 class MyReducedFunctional(ReducedFunctional):
-    def __init__(self, for_run, paramvec, scale = 1.0, relax = 1.0):
+    """
+    A modified reduced functional of the `dolfin_adjoint.ReducedFuctionl`
+
+    Parameters
+    ----------
+    for_run: callable
+        The forward model, which can be called with the control parameter
+        as first argument, and a boolean as second, indicating that annotation is on/off.
+    paramvec: :py:class`dolfin_adjoint.function`
+        The control parameter
+    scale: float
+        Scale factor for the functional
+    relax: float
+        Scale factor for the derivative. Note the total scale factor for the 
+        derivative will be scale*relax
+
+
+    """
+    def __init__(self, for_run, paramvec, scale = 1.0, relax = 1.0, verbose = False):
 
         self.log_level = logger.level
         self.reset()
@@ -676,11 +717,14 @@ class MyReducedFunctional(ReducedFunctional):
         self.scale = scale
         self.derivative_scale = relax
 
+        self.verbose = verbose
         from optimal_control import has_scipy016
         self.my_print_line = logger.debug if has_scipy016 else logger.info
         
     def __call__(self, value, return_fail = False):
 
+
+        logger.debug("\nEvaluate functional...")
         adj_reset()
         self.iter += 1
             
@@ -703,16 +747,20 @@ class MyReducedFunctional(ReducedFunctional):
 
        
         # Change loglevel to avoid to much printing (do not change if in dbug mode)
-        change_log_level = self.log_level == logging.INFO
+        change_log_level = (self.log_level == logging.INFO) and not self.verbose
+        
         if change_log_level:
             logger.setLevel(WARNING)
             
             
         t = Timer("Forward run")
         t.start()
-      
+
+        logger.debug("\nEvaluate forward model")
         self.for_res, crash= self.for_run(paramvec_new, True)
         for_time = t.stop()
+        logger.debug(("Evaluating forward model done. "+\
+                      "Time to evaluate = {} seconds".format(for_time)))
         self.forward_times.append(for_time)
 
         if change_log_level:
@@ -787,6 +835,8 @@ class MyReducedFunctional(ReducedFunctional):
 
         
     def derivative(self, *args, **kwargs):
+
+        logger.debug("\nEvaluate gradient...")
         self.nr_der_calls += 1
         import math
 
@@ -794,8 +844,9 @@ class MyReducedFunctional(ReducedFunctional):
         t.start()
         
         out = ReducedFunctional.derivative(self, forget = False)
-        
         back_time = t.stop()
+        logger.debug(("Evaluating gradient done. "+\
+                      "Time to evaluate = {} seconds".format(back_time)))
         self.backward_times.append(back_time)
         
         for num in out[0].vector().array():
