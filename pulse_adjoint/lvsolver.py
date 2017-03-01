@@ -169,11 +169,12 @@ class LVSolver(object):
             
             # Solver did not converge
             logger.warning("Solver did not converge")
-            # Retrun the old state, and a flag crash = True
+            # Reinitialze forms with old state
             self.reinit(w_old)
-
+            # Raise my own exception, so that other
+            # in order to separate this exepction from
+            # other RuntimeErrors
             raise SolverDidNotConverge(ex)
-            # return w_old, True
 
         else:
             # The solver converged
@@ -259,7 +260,7 @@ class LVSolver(object):
         ## Internal virtual work
         self._G = derivative(self._pi_int*dx, self._w, self._w_test) 
 
-        
+        # This is the equivalent formulation
         # T = material.CauchyStress(F_iso, p)
         # P = J*T*inv(F_iso).T
         # self._G = inner(P, grad(du))*dx
@@ -272,11 +273,8 @@ class LVSolver(object):
         if self.parameters["bc"].has_key("neumann"):
             for neumann_bc in self.parameters["bc"]["neumann"]:
                 p, marker = neumann_bc
-
-                # self._G += derivative(inner(p*J*inv(self._F).T*N, u)*ds(marker), self._w, self._w_test)
-                # self._G += derivative(inner(p*N, u)*ds(marker), self._w, self._w_test)
                 self._G += inner(J*p*dot(inv(self._F).T, N), du)*ds(marker)
-                # self._G += p*inner(v, cofac(F)*N)*ds(marker)
+
 
         # Other body forces
         if self.parameters["bc"].has_key("body_force"):
@@ -289,7 +287,7 @@ class LVSolver(object):
             for robin_bc in self.parameters["bc"]["robin"]:
                 if robin_bc is not None:
                     val, marker = robin_bc
-                    self._G += -inner(val*u, du)*ds(marker)
+                    self._G += inner(val*u, du)*ds(marker)
         
        
         # Penalty term

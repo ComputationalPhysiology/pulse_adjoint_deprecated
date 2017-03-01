@@ -333,6 +333,8 @@ def setup_application_parameters():
     
     # Location of output
     params.add("sim_file", "result.h5")
+    # Store the results in the file within a folder
+    params.add("h5group", "")
     params.add("outdir", os.path.dirname(params["sim_file"]))
 
     ## Parameters ##
@@ -381,7 +383,7 @@ def setup_application_parameters():
     ## Iterators ##
 
     # Active of passive phase
-    params.add("phase", PHASES[0], PHASES)
+    params.add("phase", PHASES[0])
 
     # Iteration for active phase
     params.add("active_contraction_iteration_number", 0)
@@ -389,6 +391,9 @@ def setup_application_parameters():
 
     ## Additional setup ##
 
+    # Do you want to find the unloaded geometry and use that?
+    params.add("unload", True)
+    
     # For passive optimization, include all passive points ('all')
     # or only the final point ('final')
     params.add("passive_weights", "all")
@@ -418,6 +423,8 @@ def setup_application_parameters():
     params.add("noise", False)
     # Log level
     params.add("log_level", logging.INFO)
+    # If False turn of logging of the forward model during functional evaluation
+    params.add("verbose", False)
 
     # Relaxation parameters. If smaller than one, the step size
     # in the direction will be smaller, and perhaps avoid the solver

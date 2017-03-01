@@ -125,11 +125,15 @@ def minimize_1d(f, x0, **kwargs):
     """Minimize functional with one variable using the 
     brent algorithm from scpiy.
 
-    :param f: Objective functional
-    :type f: :py:class:`setup_optimization.MyReducedFuntional`
-    :param float x0: initial guess
-    :returns: Scipy results from the opimization
-    :rtype: 
+    f: callable
+        Objective functional
+    x0: float
+        initial guess
+
+    Returns
+    -------
+    res: dict
+        Scipy results from the opimization
 
     """
     
@@ -140,14 +144,21 @@ def get_ipopt_options(rd, lb, ub, tol, max_iter, **kwargs):
 
     See `<https://projects.coin-or.org/Ipopt>`
 
-    :param rd: The reduced functional
-    :param list lb: Lower bound on the control
-    :param list ub: Upper bound on the control
-    :param tol: Tolerance
-    :param max_iter: Maximum number of iterations
-    :returns: The optimization solver and the options
-    :rtype: dict
+    rd : :py:class`dolfin_adjoint.ReducedFunctional` 
+            The reduced functional
+    lb : list 
+        Lower bound on the control
+    ub : list
+        Upper bound on the control
+    tol : float
+        Tolerance
+    max_iter : int
+        Maximum number of iterations
 
+    Returns
+    -------
+    nlp : ipopt instance
+        A nonlinear ipopt problem
     """
     
     ncontrols = len(ub)
@@ -189,19 +200,10 @@ def get_ipopt_options(rd, lb, ub, tol, max_iter, **kwargs):
     return nlp
 
 
-def get_moola_options(method, rd, lb, ub, tol, max_iter, **kwargs):
+def get_moola_options(*args, **kwargs):
     """Get options for moola module.
 
     See `<https://github.com/funsim/moola>`
-
-    :param str method: Which optimization algorithm
-    :param rd: The reduced functional
-    :param list lb: Lower bound on the control
-    :param list ub: Upper bound on the control
-    :param tol: Tolerance
-    :param max_iter: Maximum number of iterations
-    :returns: The optimization solver and the options
-    :rtype: dict
 
     .. note::
     
@@ -237,15 +239,24 @@ def get_scipy_options(method, rd, lb, ub, tol, max_iter, **kwargs):
     """Get options for scipy module
 
     See `<https://docs.scipy.org/doc/scipy-0.18.1/reference/optimize.html>`
+ 
+    method : str
+        Which optimization algorithm 'LBFGS' or 'SLSQP'.
+    rd : :py:class`dolfin_adjoint.ReducedFunctional` 
+            The reduced functional
+    lb : list 
+        Lower bound on the control
+    ub : list
+        Upper bound on the control
+    tol : float
+        Tolerance
+    max_iter : int
+        Maximum number of iterations
 
-    :param str method: Which optimization algorithm 'LBFGS' or 'SLSQP'
-    :param rd: The reduced functional
-    :param list lb: Lower bound on the control
-    :param list ub: Upper bound on the control
-    :param tol: Tolerance
-    :param max_iter: Maximum number of iterations
-    :returns: The optimization solver and the options
-    :rtype: dict
+    Returns
+    -------
+    options : dict
+        The options to be passed to the scipy optimization
 
     """
 
@@ -267,7 +278,6 @@ def get_scipy_options(method, rd, lb, ub, tol, max_iter, **kwargs):
     else:
         callback = MyCallBack(rd, tol, max_iter)
 
-    
     options = {"method": method,
                "jac": rd.derivative,
                "tol":tol,
@@ -289,14 +299,23 @@ def get_pyOpt_options(method, rd, lb, ub, tol, max_iter, **kwargs):
 
     See `<http://www.pyopt.org>`
 
-    :param str method: Which optimization algorithm `not working` SLSQP will be chosen.
-    :param rd: The reduced functional
-    :param list lb: Lower bound on the control
-    :param list ub: Upper bound on the control
-    :param tol: Tolerance
-    :param max_iter: Maximum number of iterations
-    :returns: The optimization solver and the options
-    :rtype: dict
+    method : str
+        Which optimization algorithm `not working` SLSQP will be chosen.
+    rd : :py:class`dolfin_adjoint.ReducedFunctional` 
+            The reduced functional
+    lb : list 
+        Lower bound on the control
+    ub : list
+        Upper bound on the control
+    tol : float
+        Tolerance
+    max_iter : int
+        Maximum number of iterations
+
+    Returns
+    -------
+    opt : tuple
+        The optimization solver and the options, (solver, options)
 
     """
     
@@ -357,9 +376,12 @@ class OptimalControl(object):
     def build_problem(self, params, rd, paramvec):
         """Build optimal control problem
 
-        :param dict params: Application parameter
-        :param rd: The reduced functional
-        :param paramvec: Control parameter
+        params : dict
+            Application parameter
+        rd : :py:class`dolfin_adjoint.ReducedFunctional` 
+            The reduced functional
+        paramvec : :py:class`dolfin_adjoint.function`
+            Control parameter
        
         """
         

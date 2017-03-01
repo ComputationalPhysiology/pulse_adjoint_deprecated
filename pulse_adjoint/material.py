@@ -66,6 +66,7 @@ class Material(object):
   
 
         if params:
+            self.parameters = params
             for k,v in params.iteritems():
                 if isinstance(v, (float, int)):
                     setattr(self, k, Constant(v))
@@ -74,7 +75,6 @@ class Material(object):
                     setattr(self, k, Function(v.get_ind_space(), name = k))
                     mat = getattr(self, k)
                     mat.assign(project(v.get_function(), v.get_ind_space()))
-                    # setattr(self, k, v.get_function())
                 else:
                     setattr(self, k, v)
 
@@ -567,6 +567,7 @@ class HolzapfelOgden(Material):
         #     elif diff == 2:
         #         return 0
         # else:
+     
         if diff == 0:
             return a/(2.0*b) * (exp(b*(I_1 - 3)) - 1)
         elif diff == 1:
