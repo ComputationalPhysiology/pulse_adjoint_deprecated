@@ -169,11 +169,12 @@ class LVSolver(object):
             
             # Solver did not converge
             logger.warning("Solver did not converge")
-            # Retrun the old state, and a flag crash = True
+            # Reinitialze forms with old state
             self.reinit(w_old)
-
+            # Raise my own exception, so that other
+            # in order to separate this exepction from
+            # other RuntimeErrors
             raise SolverDidNotConverge(ex)
-            # return w_old, True
 
         else:
             # The solver converged
@@ -242,8 +243,9 @@ class LVSolver(object):
         if self.is_incompressible():
             F_iso = self._F
         else:
+
             F_iso = pow(J, -float(1)/dim)*self._F
-            
+
                 
         # Internal energy
         self._strain_energy = material.strain_energy(F_iso)
@@ -251,21 +253,28 @@ class LVSolver(object):
 
 
         # Testfunction for displacement
-        v = self._compressibility.u_test
+        du = self._compressibility.u_test
+        dp = self._compressibility.p_test
+        p = self._compressibility.p
                 
         ## Internal virtual work
         self._G = derivative(self._pi_int*dx, self._w, self._w_test) 
 
+        # This is the equivalent formulation
+        # T = material.CauchyStress(F_iso, p)
+        # P = J*T*inv(F_iso).T
+        # self._G = inner(P, grad(du))*dx
+        # self._G += dp*(J-1)*dx
+        ## self._G += inner(p*J*inv(F_iso).T, grad(du))*dx
+        
         ## External work
         
         # Neumann BC
         if self.parameters["bc"].has_key("neumann"):
             for neumann_bc in self.parameters["bc"]["neumann"]:
                 p, marker = neumann_bc
+                self._G += inner(J*p*dot(inv(self._F).T, N), du)*ds(marker)
 
-                self._G += derivative(inner(p*J*inv(self._F).T*N, u)*ds(marker), self._w, self._w_test)
-                # self._G += inner(J*p*dot(inv(F).T, N), v)*ds(marker)
-                # self._G += p*inner(v, cofac(F)*N)*ds(marker)
 
         # Other body forces
         if self.parameters["bc"].has_key("body_force"):
@@ -278,7 +287,7 @@ class LVSolver(object):
             for robin_bc in self.parameters["bc"]["robin"]:
                 if robin_bc is not None:
                     val, marker = robin_bc
-                    self._G += -inner(val*u, v)*ds(marker)
+                    self._G += inner(val*u, du)*ds(marker)
         
        
         # Penalty term

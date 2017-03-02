@@ -11,3 +11,4 @@ import lvsolver
 import optimal_control
 
 from adjoint_contraction_args import logger
+from setup_optimization import RegionalParameter

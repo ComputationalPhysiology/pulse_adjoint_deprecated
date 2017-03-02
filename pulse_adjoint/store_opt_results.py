@@ -22,6 +22,110 @@ from adjoint_contraction_args import *
 from numpy_mpi import *
 
 
+def dict2h5_hpc(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
+                overwrite_file = True, overwrite_group=True):
+    """Create a HDF5 file and put the
+    data in the dictionary in the 
+    same hiearcy in the HDF5 file
+    
+    Assume leaf of dictionary is either
+    float, numpy.ndrray, list or 
+    dolfin.GenericVector.
+
+    :param d: Dictionary to be saved
+    :param h5fname: Name of the file where you want to save
+    
+
+    .. note:: 
+
+        Works only in serial
+    
+    """
+    if overwrite_file:
+        if os.path.isfile(h5name):
+            os.remove(h5name)
+
+    file_mode = "a" if os.path.isfile(h5name) and not overwrite_file else "w"
+
+    # IF we should append the file but overwrite the group we need to
+    # check that the group does not exist. If so we need to open it in
+    # h5py and delete it.
+    if file_mode == "a" and overwrite_group and h5group!="":
+        with h5py.File(h5name) as h5file:
+            if h5group in h5file:
+                if mpi_comm_world().rank == 0:
+                    logger.debug("Deleting existing group: '{}'".format(h5group))
+                    del h5file[h5group]
+                    
+
+    with h5py.File(h5name, file_mode) as h5file:
+
+        def dict2h5(a, group):
+            
+            for key, val in a.iteritems():
+                                
+                subgroup = "/".join([group, str(key)])
+                    
+                if isinstance(val, dict):
+                    dict2h5(val, subgroup)
+                    
+                elif isinstance(val, (list,  np.ndarray, tuple)):
+                                        
+                    if len(val) == 0:
+                        # If the list is empty we do nothing
+                        pass
+                    
+                    elif isinstance(val[0], (dolfin.Vector, dolfin.GenericVector)):
+                        for i, f in enumerate(val):
+                            v = gather_broadcast(f.array())
+                            if comm.rank == 0:
+                                h5file.create_dataset(subgroup + "/{}".format(i),data = v)
+                                         
+                            
+                    elif isinstance(val[0], (dolfin.Function, dolfin_adjoint.Function)):
+                        for i, f in enumerate(val):
+                            v = gather_broadcast(f.vector().array())
+                            if comm.rank == 0:
+                                h5file.create_dataset(subgroup + "/{}".format(i),data=v)
+                                                      
+                                         
+                            
+                    elif isinstance(val[0], (float, int)):
+                       
+                        v = np.array(val, dtype=float)
+                        if comm.rank == 0:
+                            h5file.create_dataset(subgroup, data=v)
+                        
+                    elif isinstance(val[0], list) or isinstance(val[0], np.ndarray) \
+                         or  isinstance(val[0], dict):
+                        # Make this list of lists into a dictionary
+                        f = {str(i):v for i,v in enumerate(val)}
+                        dict2h5(f, subgroup)                
+                    
+                    else:
+                        raise ValueError("Unknown type {}".format(type(val[0])))
+                    
+                elif isinstance(val, (float, int)):
+                    v = np.array([float(val)], dtype=float)
+                    if comm.rank == 0:
+                        h5file.create_dataset(subgroup, data = v)
+    
+                elif isinstance(val, (dolfin.Vector, dolfin.GenericVector)):
+                    v = gather_broadcast(val.array())
+                    if comm.rank == 0:
+                        h5file.create_dataset(subgroup, data = v)
+
+                elif isinstance(val, (dolfin.Function, dolfin_adjoint.Function)):
+                    v= gather_broadcast(val.vector().array())
+                    if comm.rank == 0:
+                        h5file.create_dataset(subgroup,data= v)
+                    
+                else:
+                    raise ValueError("Unknown type {}".format(type(val)))
+
+        dict2h5(d, h5group)
+    
+    
 
 def write_opt_results_to_h5(h5group,
                             params,
@@ -29,15 +133,18 @@ def write_opt_results_to_h5(h5group,
                             solver,
                             opt_result):
 
-    filename = params["sim_file"]
+    
+    h5name = params["sim_file"]
+    logger.info("Save results to {}:{}".format(h5name, h5group))
+    
     filedir = os.path.abspath(os.path.dirname(params["sim_file"]))
     if not os.path.exists(filedir) and mpi_comm_world().rank == 0:
         os.makedirs(filedir)
         write_append = "w"
 
-    if os.path.isfile(filename):
+    if os.path.isfile(h5name):
         # Open the file in h5py
-        h5file_h5py = h5py.File(filename, 'a')
+        h5file_h5py = h5py.File(h5name, 'a')
         # Check if the group allready exists
         if h5group in h5file_h5py:
             # If it does, delete it
@@ -51,43 +158,17 @@ def write_opt_results_to_h5(h5group,
     else:
         open_file_format = "w"
         
-    
-    
-    with HDF5File(mpi_comm_world(), filename, open_file_format) as h5file:
 
-        def save_data(data, name):
-            # Need to do this in order to not get duplicates in parallell
-            if hasattr(data, "__len__"):
-                # Size of mesh needs to be big enough so that it can be distrbuted
-                f = Function(VectorFunctionSpace(UnitSquareMesh(100,100), "R", 0, dim = len(data)))
-                
-            else:
-                f = Function(FunctionSpace(UnitSquareMesh(100,100), "R", 0))
-                
 
-            f.assign(Constant(data))
-            h5file.write(f.vector(), name)
+    # Make sure to save the state as a function, and
+    # make sure that we don't destroy the dof-structure
+    # by first assigning the state to te correction function
+    # and then save it.
+    with HDF5File(mpi_comm_world(), h5name, open_file_format) as h5file:
 
+        h5file.write(for_result_opt["optimal_control"],
+                     "/".join([h5group, "optimal_control"]))
         
-        # Dump parameters to yaml file as well
-        with open(filedir+"/parameters.yml", 'w') as parfile:
-            yaml.dump(params.to_dict(), parfile, default_flow_style=False)
-
-        # Optimization results
-        if opt_result is not None:
-            for k, v in opt_result.iteritems():
-
-                # This is a list of vectors
-                if k == "controls":
-                    for it, c in enumerate(v):
-                        h5file.write(c, h5group + \
-                                     "/controls/{}".format(it))
-                else:
-                    # Do not save empty lists
-                    if (hasattr(v, "__len__") and not len(v) == 0) or np.isscalar(v):
-                        save_data(v, "/".join([h5group, k]))
-                
-
         # States
         for i, w in enumerate(for_result_opt["states"]):
             assign_to_vector(solver.get_state().vector(), gather_broadcast(w.array()))
@@ -97,49 +178,99 @@ def write_opt_results_to_h5(h5group,
             h5file.write(u, "/".join([h5group, "displacement/{}".format(i)]))
             h5file.write(p, "/".join([h5group, "lagrange_multiplier/{}".format(i)]))
 
-        # Control
-        # h5file.write(for_result_opt["initial_control"],
-        #               "/".join([h5group, "initial_control"]))
-        h5file.write(for_result_opt["optimal_control"],
-                      "/".join([h5group, "optimal_control"]))
+
+
+    data = {"initial_control":for_result_opt["initial_control"],
+            "bcs":for_result_opt["bcs"],
+            "optimization_results": opt_result}
+    
+    if  for_result_opt.has_key("regularization"):
+        data["regularization"] = for_result_opt["regularization"].results
+
+    for k,v in for_result_opt["optimization_targets"].iteritems():
+
+        data[k] = v.results
         
-
-        # Store the optimization targets:
-        for k, v in for_result_opt["optimization_targets"].iteritems():
-            group = "/".join([h5group, "optimization_targets", k])
-
-            # Save the results
-            save_data(np.array(v.results["func_value"]), "/".join([group, "func_value"]))
-
-            # Save the optimal value
-            save_data(np.array(v.results["func_value"]), "/".join([group, "func_value"]))
+        if hasattr(v, 'weights_arr'):
+            data[k]["weights"] = v.weights_arr
             
-            # Save weights if applicable
-            if hasattr(v, 'weights'):
-                for l,w in enumerate(v.weights):
-                    h5file.write(w.vector(), "/".join([group, "weigths", str(l)]))
-                
-                
-
-            for k1 in ["simulated", "target"]:
-                n = len(v.results[k1])
-                for i in range(n):
-                    if k == "regional_strain":
-                        for j,s in enumerate(v.results[k1][i]):
-                            h5file.write(s, "/".join([group, k1, str(i), "region_{}".format(j)]))
-                        
-                    else:
-                        h5file.write(v.results[k1][i], "/".join([group, k1, str(i)]))
-                    
             
-        # Store the regularization
-        if for_result_opt.has_key("regularization"):
-            save_data(for_result_opt["regularization"].results["func_value"],
-                      "/".join([h5group, "regularization", "func_value"]))
-                                                      
+    dict2h5_hpc(data, h5name, h5group, dolfin.mpi_comm_world(), 
+                overwrite_file = False, overwrite_group = False)
+    
+
+def test_store():
+
+
+    from mesh_generation.mesh_utils import load_geometry_from_h5
+    from setup_optimization import make_solver_params, setup_adjoint_contraction_parameters, setup_general_parameters
+    from forward_runner import PassiveForwardRunner
+    from run_optimization import load_targets
+    
+
+    setup_general_parameters()
+    params = setup_adjoint_contraction_parameters()
+    
+    geo = load_geometry_from_h5("../demo/data/mesh.h5", "22")
+    
+    measurements = yaml.load(open("../demo/data/measurements.yml"))
+    measurements.pop("original_strain")
+    strain = measurements.pop("strain")
+    measurements["regional_strain"] = strain
+    measurements["pressure"] =  np.subtract(measurements["pressure"],
+                                            measurements["pressure"][0])
+    
+    
+    solver_parameters, pressure, control = make_solver_params(params, geo)
+    
+    optimization_targets, bcs = load_targets(params, solver_parameters, measurements)
+    
+    for_run = PassiveForwardRunner(solver_parameters, 
+                                   pressure, 
+                                   bcs,
+                                   optimization_targets,
+                                   params, 
+                                   control)
+
+
+    # from IPython import embed; embed()
+    # exit()
+    for_run.assign_material_parameters(control)
+    
+    phm, w= for_run.get_phm(False, True)
+    
+    functional = for_run.make_functional()
+    for_run.update_targets(0, split(w)[0], control)
+    for_run.states = [Vector(w.vector())]
+    for_res = for_run._make_forward_result([0.0], [functional*dt[0.0]])
+
+    for_res["initial_control"] = Vector(control.vector())
+    for_res["optimal_control"] = control
+
+    opt_result = {}
+    opt_result["nfev"] = 3
+    opt_result["nit"] = 3
+    opt_result["njev"] = 3
+    opt_result["ncrash"] = 1
+    opt_result["run_time"] = 321.32
+    opt_result["controls"] = [control]
+    opt_result["func_vals"] = [0.4]
+    opt_result["forward_times"] = [123.2]
+    opt_result["backward_times"] = [214.2]
+    opt_result["grad_norm"] = [0.024]
+    
+
+
+    params["sim_file"] = "test.h5"
+    h5group = "active"
+
+    write_opt_results_to_h5(h5group,
+                            params,
+                            for_res,
+                            phm.solver,
+                            opt_result)
+    
         
-
-        # Save boundary conditions
-        for k,v in for_result_opt["bcs"].iteritems():
-            save_data(np.array(v), "/".join([h5group, "bcs", k]))
-
+if __name__ == "__main__":
+    test_store()
+    

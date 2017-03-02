@@ -31,6 +31,7 @@ class BasicHeartProblem(collections.Iterator):
     def __init__(self, bcs, solver_parameters, pressure):
 
         self._init_pressures(bcs["pressure"], pressure["p_lv"], "lv")
+
         self.p_lv.t = self.lv_pressure[0]
         
         if pressure.has_key("p_rv"):
@@ -134,7 +135,7 @@ class BasicHeartProblem(collections.Iterator):
 
         converged = False
 
-        nsteps = 2
+        nsteps = max(np.rint(p_diff/0.4), 2)
         n_max = 100
         
         lv_pressures = np.linspace(p_lv_prev, p_lv_next, nsteps)
@@ -217,9 +218,11 @@ class BasicHeartProblem(collections.Iterator):
     def _init_pressures(self, pressure, p, chamber = "lv"):
 
         setattr(self, "{}_pressure".format(chamber), pressure)
-        setattr(self, "{}_pressure_gen".format(chamber),  (p for p in pressure[1:]))
+        setattr(self, "{}_pressure_gen".format(chamber),
+                (p for p in pressure[1:]))
         setattr(self, "p_{}".format(chamber), p)
-       
+
+        
         
 
     def next(self):
@@ -341,11 +344,17 @@ class ActiveHeartProblem(BasicHeartProblem):
         
             # Get previous state
             if params["active_contraction_iteration_number"] == 0:
-                h5file.read(w_temp, PASSIVE_INFLATION_GROUP + \
-                            "/states/{}".format(passive_filling_duration - 1))
+                group = "/".join([params["h5group"],
+                                  PASSIVE_INFLATION_GROUP,
+                                  "states",
+                                  str(passive_filling_duration - 1)])
+                
             else:
-                h5file.read(w_temp, ACTIVE_CONTRACTION_GROUP.
-                            format(params["active_contraction_iteration_number"] - 1) + "/states/0")
+                group = "/".join([params["h5group"],
+                                  ACTIVE_CONTRACTION_GROUP.format(params["active_contraction_iteration_number"] - 1),
+                                  "states", "0"])
+                
+            h5file.read(w_temp, group)
 
 
         self.solver.get_state().assign(w_temp, annotate = annotate)

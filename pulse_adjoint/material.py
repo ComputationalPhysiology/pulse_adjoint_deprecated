@@ -66,6 +66,7 @@ class Material(object):
   
 
         if params:
+            self.parameters = params
             for k,v in params.iteritems():
                 if isinstance(v, (float, int)):
                     setattr(self, k, Constant(v))
@@ -74,7 +75,6 @@ class Material(object):
                     setattr(self, k, Function(v.get_ind_space(), name = k))
                     mat = getattr(self, k)
                     mat.assign(project(v.get_function(), v.get_ind_space()))
-                    # setattr(self, k, v.get_function())
                 else:
                     setattr(self, k, v)
 
@@ -191,8 +191,7 @@ class Material(object):
 
         # Fibers on the current configuration
         f = F*self.f0
-        # Normalize fibers
-        f = f / sqrt(dot(f,f))
+        
         # The outer product of the fibers
         ff = outer(f,f)
 
@@ -210,8 +209,11 @@ class Material(object):
         w1 = self.W_1(I1, diff = 1, dim = dim)
         w4f = self.W_4(I4f, diff = 1)
         wactive = self.Wactive(gamma, diff = 1)
-        
-        return 2*w1*B + 2*w4f*ff + 2*wactive*ff - p*I
+
+        if p is None:
+            return 2*w1*B + 2*w4f*ff + 2*wactive*ff 
+        else:
+            return 2*w1*B + 2*w4f*ff + 2*wactive*ff - p*I
 
     def Wactive(self, gamma, I4f = 0, diff = 0):
         """
@@ -565,6 +567,7 @@ class HolzapfelOgden(Material):
         #     elif diff == 2:
         #         return 0
         # else:
+     
         if diff == 0:
             return a/(2.0*b) * (exp(b*(I_1 - 3)) - 1)
         elif diff == 1:

@@ -18,6 +18,7 @@
 import os, logging
 import dolfin
 
+
 log_level = logging.INFO
 
 # Setup logger
@@ -64,20 +65,6 @@ def make_logger(name, level = logging.INFO):
 
 logger = make_logger("Adjoint_Contraction", log_level)
 
-
-############# DATA ####################
-# The main patient that we are using
-DEFAULT_PATIENT = "Impact_p16_i43"
-
-# Resulution of the mesh
-RESOLUTION = "low_res"
-
-
-#Centipascals for our centimeter mesh.
-KPA_TO_CPA = 1.0
-
-PATIENT_TYPES = ["impact", "healthy"]
-DEFAULT_PATIENT_TYPE = "impact"
 
 ############### OPTIMIZATION PARAMETERS ######################
 # Strain weights for optimization
@@ -152,7 +139,7 @@ ACTIVE_CONTRACTION_GROUP = "/".join([ACTIVE_CONTRACTION, CONTRACTION_POINT])
 
 # Folders and path for which the data is stored in .h5 format
 curdir = os.path.abspath(os.path.dirname(__file__))
-DEFAULT_SIMULATION_FILE = os.path.join(curdir,'local_results/{}/results.h5'.format(DEFAULT_PATIENT))  
+DEFAULT_SIMULATION_FILE = os.path.join(curdir,'local_results/results.h5')
 
 ########## DOLFIN PARAMETERS ############################
 

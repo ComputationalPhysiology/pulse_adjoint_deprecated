@@ -163,14 +163,7 @@ class BasicForwardRunner(object):
         # Print the head of table 
         logger.info(self._print_head())
        
-        # Get the functional value of each term in the functional
-        func_lst = []
-        for key,val in self.target_params.iteritems():
-            if val:
-                func_lst.append(self.opt_weights[key]*self.optimization_targets[key].get_functional())
-
-        # Collect the terms in the functional
-        functional = list_sum(func_lst)
+        functional = self.make_functional()
               
        
         if phase == "active":
@@ -179,40 +172,28 @@ class BasicForwardRunner(object):
             
         else:
 
-            # FIXE : assume for now that only a is optimized
-            m = self.paramvec#phm.solver.parameters['material'].a
+            # FIXME : assume for now that only a is optimized
+            m = self.paramvec
         
             # Add the initial state to the recording
             functionals_time.append(functional*dt[0.0])
             
-        # self.regularization.assign(m, annotate = annotate)
-        functional += self.regularization.get_functional()
-
-        
+               
         for it, p in enumerate(self.bcs["pressure"][1:], start=1):
         
             sol = phm.next()
 
         
             if self.params["passive_weights"] == "all" \
-               or it == len(self.bcs["pressure"])-1:
-            
-                for key,val in self.target_params.iteritems():
-                    
-                    if val:
-                       
-                        self.optimization_targets[key].next_target(it, annotate=annotate)
-                        self.optimization_targets[key].assign_simulated(split(sol)[0])
-                        self.optimization_targets[key].assign_functional()
-                        self.optimization_targets[key].save()
+               or (self.params["passive_weights"] == "-1" \
+                   and it == len(self.bcs["pressure"])-1) \
+                   or int(self.params["passive_weights"]) == it:
 
-                        
-                self.regularization.assign(m, annotate = annotate)
+
+                self.update_targets(it, split(sol)[0], m, annotate = annotate)
                 
-                self.regularization.save()
             
                 # Print the values
-        
                 logger.info(self._print_line(it))
             
 
@@ -235,6 +216,37 @@ class BasicForwardRunner(object):
 
         # self._print_finished_report(forward_result)
         return forward_result
+
+    def make_functional(self):
+
+        # Get the functional value of each term in the functional
+        func_lst = []
+        for key,val in self.target_params.iteritems():
+            if val:
+                func_lst.append(self.opt_weights[key]*self.optimization_targets[key].get_functional())
+
+        # Collect the terms in the functional
+        functional = list_sum(func_lst)
+        # Add the regularization term
+        functional += self.regularization.get_functional()
+
+        return functional
+    
+    def update_targets(self, it, u, m, annotate=False):
+
+        for key,val in self.target_params.iteritems():
+            
+            if val:
+                       
+                self.optimization_targets[key].next_target(it, annotate=annotate)
+                self.optimization_targets[key].assign_simulated(u)
+                self.optimization_targets[key].assign_functional()
+                self.optimization_targets[key].save()
+
+                        
+        self.regularization.assign(m, annotate = annotate)
+        self.regularization.save()
+        
     
     def _print_finished_report(self, forward_result):
 
@@ -277,6 +289,23 @@ class ActiveForwardRunner(BasicForwardRunner):
     """
     The active forward runner 
 
+    Parameters
+    ----------
+        
+    solver_parameters : dict
+        solver parameters coming from setup_optimization.make_solver_paramerters()
+    pressure : list 
+        list of pressure that should be solved for, starting with the current pressure
+    bcs : dict
+        Dictionary with boundary conditions coming from run_optimization.load_target_data()
+    optimization_targets : dict
+        Dictionary with optimization targets, coming from run_optimization.load_target_data()
+    params : dict
+        adjoint contraction paramters
+    gamma_previous: :py:class`dolfin.function`
+        The active contraction parameter
+
+
     **Example of usage**::
 
           # Setup compiler parameters
@@ -312,22 +341,7 @@ class ActiveForwardRunner(BasicForwardRunner):
                  optimization_targets,
                  params,
                  gamma_previous):
-        """
-        Initialize class for active forward solver
-
-        :param dict solver_parameters: solver parameters coming from 
-                                       setup_optimization.make_solver_paramerters()
-        :param list pressure: list of pressure that should be solved for, 
-                              starting with the current pressure
-        :param dict bcs: Dictionary with boundary conditions coming from
-                         run_optimization.load_target_data()
-        :param dict optimization_targets: Dictionary with optimization targets,  
-                                          coming from run_optimization.load_target_data()
-        :param dict params: adjoint contraction paramters
-        :param gamma_previous: The active contraction parameter
-        :type gamma_previous: :py:class`dolfin.function`
-
-        """
+        
 
 
 
@@ -510,29 +524,23 @@ class PassiveForwardRunner(BasicForwardRunner):
                 self.opt_weights[k] = v
                 
         self.paramvec = paramvec
+        self.cphm  =  self.get_phm(annotate, return_state =False)
 
     def __call__(self, m, annotate = False):
 
-        paramvec_old = self.paramvec.copy()
-        self.paramvec.assign(m)
-
-        self.assign_material_parameters()
-        phm, w_old  =  self.get_phm(annotate=False,
-                                    return_state = True)
-        parameters["adjoint"]["stop_annotating"] = True
-        forward_result = BasicForwardRunner.solve_the_forward_problem(self, phm, False, "passive")
-
+        self.assign_material_parameters(m)
+        self.cphm  =  self.get_phm(annotate, return_state =False)
         parameters["adjoint"]["stop_annotating"] = not annotate
-        self.cphm   =  self.get_phm(annotate, return_state =False)
         forward_result = BasicForwardRunner.solve_the_forward_problem(self, self.cphm, annotate, "passive")
       
-
+        
         return forward_result, False
 
 
 
-    def assign_material_parameters(self):
+    def assign_material_parameters(self, m):
 
+        self.paramvec.assign(m)
         npassive = sum([ not self.params["Optimization_parmeteres"][k] \
                      for k in ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]])
     

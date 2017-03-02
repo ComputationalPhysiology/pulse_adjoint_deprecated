@@ -20,498 +20,44 @@ import numpy as np
 from utils import Object, Text, print_line, print_head
 from adjoint_contraction_args import *
 from numpy_mpi import *
+from setup_parameters import *
 
+def update_unloaded_patient(params, patient):
 
-def check_parameters(params):
-    """Check that parameters are consistent.
-    If not change the parameters and print out
-    a warning
-
-    :param params: Application parameters
-
-    """
-
-    mesh_type = params["Patient_parameters"]["mesh_type"]
-    
-    if mesh_type == "lv":
-    
-        if params["Optimization_targets"]["rv_volume"]:
-            logger.warning("Cannot optimize RV volume using an LV geometry")
-            params["Optimization_targets"]["rv_volume"] = False
+    # Make sure to load the new referece geometry
+    from mesh_generation import load_geometry_from_h5
+    h5group = "/".join(filter(None, [params["h5group"], "unloaded"]))
+    geo = load_geometry_from_h5(params["sim_file"], h5group)
+    for k, v in geo.__dict__.iteritems():
+        if hasattr(patient, k):
+            delattr(patient, k)
             
-
-def setup_adjoint_contraction_parameters():
-
-    params = setup_application_parameters()
-
-    # Patient parameters
-    patient_parameters = setup_patient_parameters()
-    params.add(patient_parameters)
-
-    # Optimization parameters
-    opt_parameters = setup_optimization_parameters()
-    params.add(opt_parameters)
-
-    # Optimization targets
-    opttarget_parameters = setup_optimizationtarget_parameters()
-    params.add(opttarget_parameters)
-
-    # Weigths for each optimization target
-    optweigths_active_parameters = setup_active_optimization_weigths()
-    params.add(optweigths_active_parameters)
-    optweigths_passive_parameters = setup_passive_optimization_weigths()
-    params.add(optweigths_passive_parameters)
-
-    check_parameters(params)
-    
-    return params
-    
-    
-def setup_solver_parameters():
-    """
-    Have a look at `dolfin.NonlinearVariationalSolver.default_parameters`
-    for options
-
-    """
-    
-    solver_parameters = {"snes_solver":{}}
-
-    solver_parameters["nonlinear_solver"] = "snes"
-    solver_parameters["snes_solver"]["method"] = "newtontr"
-    solver_parameters["snes_solver"]["maximum_iterations"] = 15
-    solver_parameters["snes_solver"]["absolute_tolerance"] = 1.0e-5
-    solver_parameters["snes_solver"]["linear_solver"] = "lu"
-    
-    
-
-    return solver_parameters
-    
-   
-
-def setup_general_parameters():
-    """
-    Parameters to speed up the compiler
-    """
-
-    # Parameter for the compiler
-    flags = ["-O3", "-ffast-math", "-march=native"]
-    dolfin.parameters["form_compiler"]["quadrature_degree"] = 4
-    dolfin.parameters["form_compiler"]["representation"] = "uflacs"
-    dolfin.parameters["form_compiler"]["cpp_optimize"] = True
-    dolfin.parameters["form_compiler"]["cpp_optimize_flags"] = " ".join(flags)
-    # dolfin.parameters["adjoint"]["test_derivative"] = True
-    # dolfin.parameters["std_out_all_processes"] = False
-    # dolfin.parameters["num_threads"] = 8
-    
-    dolfin.set_log_active(False)
-    dolfin.set_log_level(INFO)
-
-
-def setup_patient_parameters():
-    """
-    Have a look at :py:class:`patient_data.FullPatient`
-    for options
-
-    Defaults are
-
-    +------------------+-----------------+---------------+
-    | key              | Default Value   | Description   |
-    +==================+=================+===============+
-    | weight_rule      | equal           |               |
-    +------------------+-----------------+---------------+
-    | patient          | Joakim          |               |
-    +------------------+-----------------+---------------+
-    | weight_direction | all             |               |
-    +------------------+-----------------+---------------+
-    | include_sheets   | False           |               |
-    +------------------+-----------------+---------------+
-    | patient_type     | full            |               |
-    +------------------+-----------------+---------------+
-    | mesh_path        |                 |               |
-    +------------------+-----------------+---------------+
-    | fiber_angle_epi  | -60             |               |
-    +------------------+-----------------+---------------+
-    | subsample        | False           |               |
-    +------------------+-----------------+---------------+
-    | mesh_type        | lv              |               |
-    +------------------+-----------------+---------------+
-    | pressure_path    |                 |               |
-    +------------------+-----------------+---------------+
-    | echo_path        |                 |               |
-    +------------------+-----------------+---------------+
-    | resolution       | low_res         |               |
-    +------------------+-----------------+---------------+
-    | fiber_angle_endo | 60              |               |
-    +------------------+-----------------+---------------+
-
-    """
-    
-    params = Parameters("Patient_parameters")
-    params.add("patient", "Joakim")
-    params.add("patient_type", "full")
-    params.add("weight_rule", DEFAULT_WEIGHT_RULE, WEIGHT_RULES)
-    params.add("weight_direction", DEFAULT_WEIGHT_DIRECTION, WEIGHT_DIRECTIONS) 
-    params.add("resolution", "low_res")
-    params.add("pressure_path", "")
-    params.add("mesh_path", "")
-    params.add("echo_path", "")
-    
-    params.add("subsample", False)
-    params.add("fiber_angle_epi", -60)
-    params.add("fiber_angle_endo", 60)
-    params.add("mesh_type", "lv", ["lv", "biv"])
-    params.add("include_sheets", False)
-
-    return params
-
-def setup_optimizationtarget_parameters():
-    """
-    Set which targets to use
-    Default solver parameters are:
-
-    +----------------------+-----------------------+
-    |Key                   | Default value         |
-    +======================+=======================+
-    | volume               | True                  |
-    +----------------------+-----------------------+
-    | rv_volume            | False                 |
-    +----------------------+-----------------------+
-    | regional_strain      | True                  |
-    +----------------------+-----------------------+
-    | full_strain          | False                 |
-    +----------------------+-----------------------+
-    | GL_strain            | False                 |
-    +----------------------+-----------------------+
-    | GC_strain            | False                 |
-    +----------------------+-----------------------+
-    | displacement         | False                 |
-    +----------------------+-----------------------+
-    
-    """
-
-    params = Parameters("Optimization_targets")
-    params.add("volume", True)
-    params.add("rv_volume", False)
-    params.add("regional_strain", True)
-    params.add("full_strain", False)
-    params.add("GL_strain", False)
-    params.add("GC_strain", False)
-    params.add("displacement", False)
-    return params
-
-def setup_active_optimization_weigths():
-    """
-    Set the weight on each target (if used) for the active phase.
-    Default solver parameters are:
-
-    +----------------------+-----------------------+
-    |Key                   | Default value         |
-    +======================+=======================+
-    | volume               | 0.95                  |
-    +----------------------+-----------------------+
-    | rv_volume            | 0.95                  |
-    +----------------------+-----------------------+
-    | regional_strain      | 0.05                  |
-    +----------------------+-----------------------+
-    | full_strain          | 1.0                   |
-    +----------------------+-----------------------+
-    | GL_strain            | 0.05                  |
-    +----------------------+-----------------------+
-    | GC_strain            | 0.05                  |
-    +----------------------+-----------------------+
-    | displacement         | 1.0                   |
-    +----------------------+-----------------------+
-    | regularization       | 0.01                  |
-    +----------------------+-----------------------+
-    
-    """
-    params = Parameters("Active_optimization_weigths")
-    
-    
-    params.add("volume", 0.95)
-    params.add("rv_volume", 0.95)
-    params.add("regional_strain", 0.05)
-    params.add("full_strain", 1.0)
-    params.add("GL_strain", 0.05)
-    params.add("GC_strain", 0.05)
-    params.add("displacement", 1.0)
-    params.add("regularization", 0.01)
+        setattr(patient, k, v)
         
-    return params
+    return patient
 
-def setup_passive_optimization_weigths():
-    """
-    Set the weight on each target (if used) for the passive phase.
-    Default solver parameters are:
-
-    +----------------------+-----------------------+
-    |Key                   | Default value         |
-    +======================+=======================+
-    | volume               | 1.0                   |
-    +----------------------+-----------------------+
-    | rv_volume            | 1.0                   |
-    +----------------------+-----------------------+
-    | regional_strain      | 0.0                   |
-    +----------------------+-----------------------+
-    | full_strain          | 1.0                   |
-    +----------------------+-----------------------+
-    | GL_strain            | 0.05                  |
-    +----------------------+-----------------------+
-    | GC_strain            | 0.05                  |
-    +----------------------+-----------------------+
-    | displacement         | 1.0                   |
-    +----------------------+-----------------------+
-    | regularization       | 0.0                   |
-    +----------------------+-----------------------+
     
-    """
-    
-    params = Parameters("Passive_optimization_weigths")
-    
-    params.add("volume", 1.0)
-    params.add("rv_volume", 1.0)
-    params.add("regional_strain", 0.0)
-    params.add("full_strain", 1.0)
-    params.add("GL_strain", 0.05)
-    params.add("displacement", 1.0)
-    params.add("regularization", 0.0)
-    
-    return params
-    
-def setup_application_parameters():
-    """
-    Setup the main parameters for the pipeline
-
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | key                                 | Default Value                                        | Description                        |
-    +=====================================+======================================================+====================================+
-    | base_bc                             | 'fix_x'                                              | Boudary condition at the base.     |
-    |                                     |                                                      | ['fix_x', 'fixed', 'from_seg_base] |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | matparams_space                     | 'R_0'                                                | Space for material parameters.     |
-    |                                     |                                                      | 'R_0', 'regional' or 'CG_1'        |         
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | noise                               | False                                                | If synthetic data, add noise       |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | use_deintegrated_strains            | False                                                | Use full strain field              |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | nonzero_initial_guess               | True                                                 | If true, use gamma = 0 as initial  |
-    |                                     |                                                      | guess for all iterations           |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | active_model                        | 'active_strain'                                      | 'active_strain', 'active stress'   |
-    |                                     |                                                      | or 'active_strain_rossi'           |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | base_spring_k                       | 1.0                                                  | Basal spring constant              |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | synth_data                          | False                                                | Synthetic data                     |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | sim_file                            | 'result.h5'                                          | Path to result file                |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | Material_parameters                 | {'a': 2.28, 'a_f': 1.685, 'b': 9.726, 'b_f': 15.779} | Material parameters                |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | phase                               | passive_inflation                                    | 'passive_inflation'                |
-    |                                     |                                                      | 'active_contraction' or 'all'      |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | optimize_matparams                  | True                                                 | Optimiza materal parameter or use  |
-    |                                     |                                                      | default values                     |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | state_space                         | 'P_2:P_1'                                            | Taylor-hood finite elemet          |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | gamma_space                         | 'CG_1'                                               | Space for gammma.                  |
-    |                                     |                                                      | 'R_0', 'regional' or 'CG_1'        |         
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | incomp_penalty                      | 0.0                                                  | Penalty for compresssible model    |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | compressibility                     | 'incompressible'                                     | Model for compressibility          |
-    |                                     |                                                      | see compressibility.py             |         
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | active_contraction_iteration_number | 0                                                    | Iteration in the active phase      |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | outdir                              |                                                      | Direction for the result           |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-
-    """
-    params = Parameters("Application_parmeteres")
-
-    ## Output ##
-    
-    # Location of output
-    params.add("sim_file", "result.h5")
-    params.add("outdir", os.path.dirname(params["sim_file"]))
-
-    ## Parameters ##
-    
-    # Spring constant at base (Note: works one for base_bc = fix_x)
-    params.add("base_spring_k", 1.0)
-
-    # Material parameters
-    material_parameters = Parameters("Material_parameters")
-    material_parameters.add("a", 2.28)
-    material_parameters.add("a_f", 1.685)
-    material_parameters.add("b", 9.726)
-    material_parameters.add("b_f", 15.779)
-    params.add(material_parameters)
-    
-    # Space for material parameter(s)
-    # If optimization of multiple material parameters are selected,
-    # then R_0 is currently the only applicable space
-    params.add("matparams_space", "R_0", ["CG_1", "R_0", "regional"])
-    
-
-    ## Models ##
-
-    # Active model
-    params.add("active_model", "active_stress", ["active_strain",
-                                                 "active_strain_rossi",
-                                                 "active_stress"])
-
-
-    # State space
-    params.add("state_space", "P_2:P_1")
-
-    # Model for compressibiliy
-    params.add("compressibility", "incompressible", ["incompressible", 
-                                                     "stabalized_incompressible", 
-                                                     "penalty", "hu_washizu"])
-    # Incompressibility penalty (applicable if model is not incompressible)
-    params.add("incompressibility_penalty", 0.0)
-
-    # Boundary condition at base
-    params.add("base_bc", "fix_x", ["from_seg_base",
-                                    "fix_x",
-                                    "fixed"])
-
-
-    ## Iterators ##
-
-    # Active of passive phase
-    params.add("phase", PHASES[0], PHASES)
-
-    # Iteration for active phase
-    params.add("active_contraction_iteration_number", 0)
-    
-
-    ## Additional setup ##
-
-    # For passive optimization, include all passive points ('all')
-    # or only the final point ('final')
-    params.add("passive_weights", "all", ["final", "all"])
-    
-    # Update weights so that the initial value of the functional is 0.1
-    params.add("adaptive_weights", True)
-    
-    # Space for active parameter
-    params.add("gamma_space", "CG_1")#, ["CG_1", "R_0", "regional"])
-    
-    # If you want to use pointswise strains as input (only synthetic)
-    params.add("use_deintegrated_strains", False)
-
-    # If you want to optimize passive parameters
-    params.add("optimize_matparams", True)
-
-    # If you want to use a zero initial guess for gamma (False),
-    # or use gamma from previous iteration as initial guess (True)
-    params.add("nonzero_initial_guess", True)
-
-    # Use synthetic data
-    params.add("synth_data", False)
-    # Noise is added to synthetic data
-    params.add("noise", False)
-    # Log level
-    params.add("log_level", logging.INFO)
-
-    # Relaxation parameters. If smaller than one, the step size
-    # in the direction will be smaller, and perhaps avoid the solver
-    # to crash.
-    params.add("passive_relax", 0.1)
-    params.add("active_relax", 0.001)
-
-    return params
-
-def setup_optimization_parameters():
-    """
-    Parameters for the optimization.
-    Default parameters are
-
-    +-----------------+-----------------+---------------+
-    | key             | Default Value   | Description   |
-    +=================+=================+===============+
-    | disp            | False           |               |
-    +-----------------+-----------------+---------------+
-    | active_maxiter  | 100             |               |
-    +-----------------+-----------------+---------------+
-    | scale           | 1.0             |               |
-    +-----------------+-----------------+---------------+
-    | passive_maxiter | 30              |               |
-    +-----------------+-----------------+---------------+
-    | matparams_max   | 50.0            |               |
-    +-----------------+-----------------+---------------+
-    | fix_a           | False           |               |
-    +-----------------+-----------------+---------------+
-    | fix_a_f         | True            |               |
-    +-----------------+-----------------+---------------+
-    | fix_b           | True            |               |
-    +-----------------+-----------------+---------------+
-    | fix_b_f         | True            |               |
-    +-----------------+-----------------+---------------+
-    | gamma_max       | 0.9             |               |
-    +-----------------+-----------------+---------------+
-    | matparams_min   | 0.1             |               |
-    +-----------------+-----------------+---------------+
-    | passive_opt_tol | 1e-06           |               |
-    +-----------------+-----------------+---------------+
-    | active_opt_tol  | 1e-06           |               |
-    +-----------------+-----------------+---------------+
-    | method_1d       | brent           |               |
-    +-----------------+-----------------+---------------+
-    | method          | slsqp           |               |
-    +-----------------+-----------------+---------------+
-    
-
-    """
-    # Parameters for the Optimization
-    params = Parameters("Optimization_parmeteres")
-    params.add("opt_type", "scipy_slsqp")
-    params.add("method_1d", "brent")
-    params.add("active_opt_tol", 1e-6)
-    params.add("active_maxiter", 100)
-    params.add("passive_opt_tol", 1e-6)
-    params.add("passive_maxiter", 30)
-    params.add("scale", 1.0)
-    
-    params.add("gamma_min", 0.0)
-    params.add("gamma_max", 0.4)
-    
-    params.add("matparams_min", 0.1)
-    params.add("matparams_max", 50.0)
-    params.add("fix_a", False)
-    params.add("fix_a_f", True)
-    params.add("fix_b", True)
-    params.add("fix_b_f", True)
-
-    params.add("soft_tol", 1e-6)
-    params.add("soft_tol_rel", 0.1)
-
-    params.add("adapt_scale", True)
-    params.add("disp", False)
-
-    return params
-
-
 def initialize_patient_data(patient_parameters, synth_data=False):
     """
     Make an instance of patient from :py:module`patient_data`
     baed on th given parameters
 
+    Parameters
+    ----------
+    patient_parameters: dict
+        the parameters 
+    synth_data: bool
+        If synthetic data or not
+
+    Returns
+    -------
+    patient: :py:class`patient_data.Patient`
+        A patient instance
+
     **Example of usage**::
     
       params = setup_patient_parameters()
       patient = initialize_patient_data(params, False)
-
-    :param dict patient_parameters: the parameters 
-    :param bool synth_data: If synthetic data or not
-    :returns: A patient instance
-    :rtype: :py:class`patient_data.Patient`
 
     """
     
@@ -527,18 +73,136 @@ def initialize_patient_data(patient_parameters, synth_data=False):
 
     return patient
 
+
+def check_patient_attributes(patient):
+    """
+    Check that the object contains the minimum 
+    required attributes. 
+    """
+
+    msg = "Patient is missing attribute {}"
+
+    # Mesh
+    if not hasattr(patient, 'mesh'):
+        raise AttributeError(msg.format("mesh"))
+    else:
+        dim = patient.mesh.topology().dim()
+
+
+
+    ## Microstructure 
+
+    # Fibers
+    if not hasattr(patient, 'fiber'):
+
+        no_fiber = True
+        if hasattr(patient, 'e_f'):
+            rename_attribute(patient, 'e_f', 'fiber')
+            no_fiber = False
+            
+        if no_fiber:
+
+            idx_arr = np.where([item.startswith("fiber") \
+                                for item in dir(patient)])[0]
+            if len(idx) == 0:
+                raise AttributeError(msg.format("fiber"))
+            else:
+                att = dir(patient)[idx_arr[0]]
+                rename_attribute(patient, att, 'fiber')
+
+    # Sheets
+    if not hasattr(patient, 'sheet') and hasattr(patient, 'e_s'):
+        rename_attribute(patient, 'e_s', 'sheet')
+    else:
+        setattr(patient, 'sheet', None)
+
+    # Cross-sheet
+    if not hasattr(patient, 'sheet_normal') and hasattr(patient, 'e_sn'):
+        rename_attribute(patient, 'e_sn', 'sheet_normal')
+    else:
+        setattr(patient, 'sheet_normal', None)
+
+
+    ## Local basis
+
+    # Circumferential
+    if not hasattr(patient, 'circumferential') \
+       and hasattr(patient, 'e_circ'):
+        rename_attribute(patient, 'e_circ', 'circumferential')
+
+    # Radial
+    if not hasattr(patient, 'radial') \
+       and hasattr(patient, 'e_rad'):
+        rename_attribute(patient, 'e_rad', 'radial')
+
+    # Longitudinal
+    if not hasattr(patient, 'longitudinal') \
+       and hasattr(patient, 'e_long'):
+        rename_attribute(patient, 'e_long', 'longitudinal')
+        
+
+        
+    ## Markings
+        
+    # Markers 
+    if not hasattr(patient, 'markers'):
+        raise AttributeError(msg.format("markers"))
+        
+    # Facet fuction
+    if not hasattr(patient, 'ffun'):
+
+        no_ffun = True 
+        if hasattr(patient, 'facets_markers'):
+            rename_attribute(patient, 'facets_markers', 'ffun')
+            no_ffun = False
+
+        if no_ffun:
+            setattr(patient, 'strain_weights',
+                    MeshFunction("size_t", mesh, 2, mesh.domains()))
+
+    # Cell markers 
+    if dim == 3 and not hasattr(patient, 'sfun'):
+        
+        no_sfun = True 
+        if no_sfun and hasattr(patient, 'strain_markers'):
+            rename_attribute(patient, 'strain_markers', 'sfun')
+            no_sfun = False
+
+        if no_sfun:
+            setattr(patient, 'strain_weights',
+                    MeshFunction("size_t", mesh, 3, mesh.domains()))
+
+
+    ## Other
+
+    # Weigts on strain semgements
+    if not hasattr(patient, 'strain_weights'):
+        setattr(patient, 'strain_weights', None)
+
+    # Mesh type
+    if not hasattr(patient, 'mesh_type'):
+        # If markers are according to fiberrules, 
+        # rv should be marked with 20
+        if 20 in set(patient.ffun.array()):
+            setattr(patient, 'mesh_type', lambda : 'biv')
+        else:
+            setattr(patient, 'mesh_type', lambda : 'lv')
+
+    if not hasattr(patient, 'passive_filling_duration'):
+        setattr(patient, 'passive_filling_duration', 1)
+                    
+
 def save_patient_data_to_simfile(patient, sim_file):
 
-    file_format = "a" if os.path.isfile(sim_file) else "w"
     from mesh_generation.mesh_utils import save_geometry_to_h5
 
     fields = []
-    for att in ["e_f", "e_s", "e_sn"]:
+    for att in ["fiber", "sheet", "sheet_normal"]:
         if hasattr(patient, att):
             fields.append(getattr(patient, att))
 
     local_basis = []
-    for att in ["e_circ", "e_rad", "e_long"]:
+    for att in ["circumferential", "radial", "longitudinal"]:
         if hasattr(patient, att):
             local_basis.append(getattr(patient, att))
     
@@ -609,24 +273,24 @@ def get_simulated_strain_traces(phm):
 
 def make_solver_params(params, patient, measurements = None):
 
-    
     paramvec, gamma, matparams = make_control(params, patient)
+    return make_solver_parameters(params, patient, matparams,
+                                  gamma, paramvec, measurements)
+
+
+def make_solver_parameters(params, patient, matparams,
+                           gamma = Constant(0.0),
+                           paramvec = None, measurements = None):
+
      ##  Material model
     from material import HolzapfelOgden
     
-    if params["active_model"] == "active_strain_rossi":
-        material = HolzapfelOgden(patient.e_f, gamma, matparams, params["active_model"],
-                                      patient.strain_markers, s0 = patient.e_s, n0 = patient.e_sn)
-    else:
-        material = HolzapfelOgden(patient.e_f, gamma, matparams,
-                                  params["active_model"], patient.strain_markers)
-
-
-    strain_weights = None if not hasattr(patient, "strain_weights") else patient.strain_weights
-
-    
-    strain_weights_deintegrated = patient.strain_weights_deintegrated \
-      if params["use_deintegrated_strains"] else None
+    material = HolzapfelOgden(patient.fiber, gamma,
+                              matparams,
+                              params["active_model"],
+                              s0 = patient.sheet,
+                              n0 = patient.sheet_normal,
+                              T_ref = params["T_ref"])
     
         
     if measurements is None:
@@ -642,30 +306,33 @@ def make_solver_params(params, patient, measurements = None):
 
     V_real = FunctionSpace(patient.mesh, "R", 0)
     p_lv = Expression("t", t = p_lv_, name = "LV_endo_pressure", element = V_real.ufl_element())
-    N = FacetNormal(patient.mesh)
+    
 
     if patient.mesh_type() == "biv":
         p_rv = Expression("t", t = p_rv_, name = "RV_endo_pressure", element = V_real.ufl_element())
         
-        neumann_bc = [[p_lv, patient.ENDO_LV],
-                     [p_rv, patient.ENDO_RV]]
+        neumann_bc = [[p_lv, patient.markers["ENDO_LV"][0]],
+                     [p_rv, patient.markers["ENDO_RV"][0]]]
 
         pressure = {"p_lv":p_lv, "p_rv":p_rv}
     else:
-        neumann_bc = [[p_lv, patient.ENDO]]
+        neumann_bc = [[p_lv, patient.markers["ENDO"][0]]]
         pressure = {"p_lv":p_lv}
     
 
-    # Direchlet BC at the Base
-    try:
-        mesh_verts = patient.mesh_verts
-        seg_verts = measurements.seg_verts
-    except:
-        logger.debug("No mesh vertices found. Fix base is the only applicable Direchlet BC")
-        mesh_verts = None
+    
 
 
-    if params["base_bc"] == "from_seg_base" and (mesh_verts is not None):
+    if params["base_bc"] == "from_seg_base":
+
+        # Direchlet BC at the Base
+        try:
+            mesh_verts = patient.mesh_verts
+            seg_verts = measurements.seg_verts
+        except:
+            raise ValueError(("No mesh vertices found. Fix base "+
+                              "is the only applicable Direchlet BC"))
+
 
         endoring = VertexDomain(mesh_verts)
         base_it = Expression("t", t = 0.0, name = "base_iterator")
@@ -700,16 +367,14 @@ def make_solver_params(params, patient, measurements = None):
             '''Fix the basal plane.
             '''
             V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-            bc = [DirichletBC(V, Constant((0, 0, 0)), patient.BASE)]
+            bc = [DirichletBC(V, Constant((0, 0, 0)), patient.markers["BASE"][0])]
             return bc
         
         
     else:
-        if not params["base_bc"] == "fix_x":
-            if mesh_verts is None:
-                logger.warning("No mesh vertices found. This must be set in the patient class")
-            else:
-                logger.warning("Unknown Base BC")
+       
+        if not (params["base_bc"] == "fix_x"):
+            logger.warning("Unknown Base BC {}".format(params["base_bc"]))
             logger.warning("Fix base in x direction")
     
         def base_bc(W):
@@ -717,40 +382,33 @@ def make_solver_params(params, patient, measurements = None):
             in the x = 0 plane.
             '''
             V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-            bc = [DirichletBC(V.sub(0), 0, patient.BASE)]
+            bc = [DirichletBC(V.sub(0), 0, patient.markers["BASE"][0])]
             return bc
     
         
-        base_bc_y = None
-        base_bc_z = None
-        base_it = None
-        
         # Apply a linear sprint robin type BC to limit motion
-        robin_bc = [[-Constant(params["base_spring_k"], 
-                                   name ="base_spring_constant"), patient.BASE]]
+        robin_bc = [[Constant(params["base_spring_k"], 
+                                   name ="base_spring_constant"),
+                     patient.markers["BASE"][0]]]
 
 
 
     # Circumferential, Radial and Longitudinal basis vector
     crl_basis = {}
-    for att in ["e_circ", "e_rad", "e_long"]:
+    for att in ["circumferential", "radial", "longitudinal"]:
         if hasattr(patient, att):
             crl_basis[att] = getattr(patient, att)
 
     
     
     solver_parameters = {"mesh": patient.mesh,
-                         "facet_function": patient.facets_markers,
-                         "facet_normal": N,
-                         "crl_basis":crl_basis,
-                         "passive_filling_duration": patient.passive_filling_duration, 
-                         "mesh_function": patient.strain_markers,
-                         "base_bc_y":base_bc_y,
-                         "base_bc_z":base_bc_z,
-                         "base_it":base_it,
+                         "facet_function": patient.ffun,
+                         "facet_normal": FacetNormal(patient.mesh),
+                         "crl_basis": crl_basis,
+                         "mesh_function": patient.sfun,
                          "markers":patient.markers,
-                         "strain_weights": strain_weights, 
-                         "strain_weights_deintegrated": strain_weights_deintegrated,
+                         "passive_filling_duration": patient.passive_filling_duration,
+                         "strain_weights": patient.strain_weights,
                          "state_space": "P_2:P_1",
                          "compressibility":{"type": params["compressibility"],
                                             "lambda": params["incompressibility_penalty"]},
@@ -773,7 +431,7 @@ def make_control(params, patient):
 
     ##  Contraction parameter
     if params["gamma_space"] == "regional":
-        gamma = RegionalParameter(patient.strain_markers)
+        gamma = RegionalParameter(patient.sfun)
     else:
         gamma_family, gamma_degree = params["gamma_space"].split("_")
         gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
@@ -786,7 +444,7 @@ def make_control(params, patient):
     
     # Create an object for each single material parameter
     if params["matparams_space"] == "regional":
-        paramvec_ = RegionalParameter(patient.strain_markers)
+        paramvec_ = RegionalParameter(patient.sfun)
         
     else:
         
@@ -899,6 +557,11 @@ def get_measurements(params, patient):
     :rtype: dict
 
     """
+
+    # Parameters for the targets
+    p = params["Optimization_targets"]
+    measurements = {}
+
     
     # Find the start and end of the measurements
     if params["phase"] == PHASES[0]: #Passive inflation
@@ -906,21 +569,29 @@ def get_measurements(params, patient):
         start = 0
         end = patient.passive_filling_duration
 
+        pvals = params["Passive_optimization_weigths"]
+        
+        
+
     elif params["phase"] == PHASES[1]: #Scalar contraction
         # We need just the points from the active phase
         start = patient.passive_filling_duration -1
         end = patient.num_points
+
+        pvals = params["Active_optimization_weigths"]
       
     else:
         # We need all the points 
         start = 0
         end = patient.num_points
+
+        pvals = params["Passive_optimization_weigths"]
+        
     
-    # Parameters for the targets
-    p = params["Optimization_targets"]
-    measurements = {}
-
-
+    p["volume"] = pvals["volume"] > 0
+    p["rv_volume"] = pvals["rv_volume"] > 0 and patient.mesh_type()=="biv"
+    p["regional_strain"] = pvals["regional_strain"] > 0
+        
     # !! FIX THIS LATER !!
     if params["synth_data"]:
 
@@ -939,7 +610,10 @@ def get_measurements(params, patient):
    
         # Compute offsets
         # Choose the pressure at the beginning as reference pressure
-        reference_pressure = pressure[0] 
+        if params["unload"]:
+            reference_pressure = 0.0
+        else:
+            reference_pressure = pressure[0] 
         logger.info("LV Pressure offset = {} kPa".format(reference_pressure))
 
         #Here the issue is that we do not have a stress free reference mesh. 
@@ -951,7 +625,10 @@ def get_measurements(params, patient):
 
         if patient.mesh_type() == "biv":
             rv_pressure = np.array(patient.RVP)
-            reference_pressure = rv_pressure[0]
+            if params["unload"]:
+                reference_pressure = 0.0
+            else:
+                reference_pressure = rv_pressure[0]
             logger.info("RV Pressure offset = {} kPa".format(reference_pressure))
             
             rv_pressure = np.subtract(rv_pressure, reference_pressure)
@@ -962,7 +639,7 @@ def get_measurements(params, patient):
         ## Volume
         if p["volume"]:
             # Calculate difference bwtween calculated volume, and volume given from echo
-            volume_offset = get_volume_offset(patient)
+            volume_offset = get_volume_offset(patient, params)
             logger.info("LV Volume offset = {} cm3".format(volume_offset))
 
             logger.info("Measured LV volume = {}".format(patient.volume[0]))
@@ -978,7 +655,7 @@ def get_measurements(params, patient):
 
         if p["rv_volume"]:
             # Calculate difference bwtween calculated volume, and volume given from echo
-            volume_offset = get_volume_offset(patient, "rv")
+            volume_offset = get_volume_offset(patient, params, "rv")
             logger.info("RV Volume offset = {} cm3".format(volume_offset))
 
             logger.info("Measured RV volume = {}".format(patient.RVV[0]))
@@ -994,43 +671,71 @@ def get_measurements(params, patient):
         if p["regional_strain"]:
 
             strain = {}
-            for region in patient.strain.keys():
-                strain[region] = patient.strain[region][start:end]
-                
+            if hasattr(patient, "strain"):
+                for region in patient.strain.keys():
+                    strain[region] = patient.strain[region][start:end]
+            else:
+                msg = ("\nPatient do not have strain as attribute."+
+                       "\nStrain will not be used")
+                p["regional_strain"] = False
+                logger.warning(msg)
             measurements["regional_strain"] = strain
     
 
     return measurements
 
-def get_volume_offset(patient, chamber = "lv"):
+def get_volume_offset(patient, params, chamber = "lv"):
     N = FacetNormal(patient.mesh)
 
     if chamber == "lv":
     
         if patient.mesh_type() == "biv":
-            endo_marker = patient.ENDO_LV
+            endo_marker = patient.markers["ENDO_LV"][0]
         else:
-            endo_marker = patient.ENDO
+            endo_marker = patient.markers["ENDO"][0]
 
         volume = patient.volume[0]
         
     else:
-        endo_marker = patient.ENDO_RV
+        endo_marker = patient.markers["ENDO_RV"][0]
         volume = patient.RVV[0]
-        
+
+    if volume == -1:
+        return 0
+
+    logger.info("Measured = {}".format(volume))
     ds = Measure("exterior_facet",
-                 subdomain_data = patient.facets_markers,
+                 subdomain_data = patient.ffun,
                  domain = patient.mesh)(endo_marker)
     
     X = SpatialCoordinate(patient.mesh)
-    
-    # Divide by 1000 to get the volume in ml
-    vol = assemble((-1.0/3.0)*dot(X,N)*ds)
+
+    if params["unload"] and params["phase"] == PHASES[1]:
+        # The cavicty volume is the volume of the uloaded geometry
+        # The first measured volume is the unloaded geometry,
+        # loaded with the first pressure. Use this to estimate the offset
+        family, degree = params["state_space"].split(":")[0].split("_")
+        u = Function(VectorFunctionSpace(patient.mesh, family, int(degree)))
+        with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
+            # Get previous state
+            group = "/".join([params["h5group"],
+                              PASSIVE_INFLATION_GROUP,
+                              "displacement","1"])
+            h5file.read(u, group)
+
+        # We would like to use interpolate here, but project works with dolfin-adjoint
+        u_int = project(u, VectorFunctionSpace(patient.mesh, "CG", 1))
+        vol = assemble((-1.0/3.0)*dot(X+u_int,N)*ds)
+        logger.info("Computed = {}".format(vol))
+    else:
+        
+        vol = assemble((-1.0/3.0)*dot(X,N)*ds)
     
     return volume - vol
 
 def setup_simulation(params, patient):
 
+    check_patient_attributes(patient)
     # Load measurements
     measurements = get_measurements(params, patient)
     solver_parameters, pressure, controls = make_solver_params(params, patient, measurements)
@@ -1039,7 +744,25 @@ def setup_simulation(params, patient):
 
 
 class MyReducedFunctional(ReducedFunctional):
-    def __init__(self, for_run, paramvec, scale = 1.0, relax = 1.0):
+    """
+    A modified reduced functional of the `dolfin_adjoint.ReducedFuctionl`
+
+    Parameters
+    ----------
+    for_run: callable
+        The forward model, which can be called with the control parameter
+        as first argument, and a boolean as second, indicating that annotation is on/off.
+    paramvec: :py:class`dolfin_adjoint.function`
+        The control parameter
+    scale: float
+        Scale factor for the functional
+    relax: float
+        Scale factor for the derivative. Note the total scale factor for the 
+        derivative will be scale*relax
+
+
+    """
+    def __init__(self, for_run, paramvec, scale = 1.0, relax = 1.0, verbose = False):
 
         self.log_level = logger.level
         self.reset()
@@ -1050,11 +773,14 @@ class MyReducedFunctional(ReducedFunctional):
         self.scale = scale
         self.derivative_scale = relax
 
+        self.verbose = verbose
         from optimal_control import has_scipy016
         self.my_print_line = logger.debug if has_scipy016 else logger.info
         
     def __call__(self, value, return_fail = False):
 
+
+        logger.debug("\nEvaluate functional...")
         adj_reset()
         self.iter += 1
             
@@ -1077,16 +803,20 @@ class MyReducedFunctional(ReducedFunctional):
 
        
         # Change loglevel to avoid to much printing (do not change if in dbug mode)
-        change_log_level = self.log_level == logging.INFO
+        change_log_level = (self.log_level == logging.INFO) and not self.verbose
+        
         if change_log_level:
             logger.setLevel(WARNING)
             
             
         t = Timer("Forward run")
         t.start()
-      
+
+        logger.debug("\nEvaluate forward model")
         self.for_res, crash= self.for_run(paramvec_new, True)
         for_time = t.stop()
+        logger.debug(("Evaluating forward model done. "+\
+                      "Time to evaluate = {} seconds".format(for_time)))
         self.forward_times.append(for_time)
 
         if change_log_level:
@@ -1153,14 +883,16 @@ class MyReducedFunctional(ReducedFunctional):
             self.grad_norm = []
             self.grad_norm_scaled = []
         else:
-            self.func_values_lst.pop()
-            self.controls_lst.pop()
-            self.grad_norm.pop()
-            self.grad_norm_scaled.pop()
+            if len(self.func_values_lst): self.func_values_lst.pop()
+            if len(self.controls_lst): self.controls_lst.pop()
+            if len(self.grad_norm): self.grad_norm.pop()
+            if len(self.grad_norm_scaled): self.grad_norm_scaled.pop()
 
 
         
     def derivative(self, *args, **kwargs):
+
+        logger.debug("\nEvaluate gradient...")
         self.nr_der_calls += 1
         import math
 
@@ -1168,8 +900,9 @@ class MyReducedFunctional(ReducedFunctional):
         t.start()
         
         out = ReducedFunctional.derivative(self, forget = False)
-        
         back_time = t.stop()
+        logger.debug(("Evaluating gradient done. "+\
+                      "Time to evaluate = {} seconds".format(back_time)))
         self.backward_times.append(back_time)
         
         for num in out[0].vector().array():

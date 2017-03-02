@@ -141,24 +141,35 @@ class RegionalStrainTarget(OptimizationTarget):
     """Class for regional strain optimization
     target
     """                                  
-    def __init__(self, mesh, crl_basis, dmu, weights=np.ones((17,3)), nregions = None, tensor="gradu"):
+    def __init__(self, mesh, crl_basis, dmu, weights=None, nregions = None,
+                 tensor="gradu", F_ref = Identity(3)):
         """
         Initialize regional strain target
 
-        :param mesh: The mesh
-        :type mesh: :py:class:`dolfin.Mesh`
-        :param dict crl_basis: Basis function for the cicumferential, radial
-                               and longituginal components
-        :type mesh: :py:class:`dolfin.Mesh`
-        :param dmu: Measure with subdomain information
-        :type dmu: :py:class:`dolfin.Measure`
-        :param weights: Weights on the different segements
-        :type wieghts: :py:function:`numpy.array`
-        :param str tensor: Which strain tensor to use, e.g gradu, E, C, F
+        Parameters
+        ----------
+        mesh: :py:class:`dolfin.Mesh`
+            The mesh
+        crl_basis: dict
+            Basis function for the cicumferential, radial
+            and longituginal components
+        dmu: :py:class:`dolfin.Measure`
+            Measure with subdomain information
+        weights: :py:function:`numpy.array`
+            Weights on the different segements
+        nregions: int
+            Number of strain regions
+        tensor: str
+            Which strain tensor to use, e.g gradu, E, C, F
+        F_ref: :py:class:`dolfin.Function`
+            Tensor to map strains to reference
         
         """
         self._name = "Regional Strain"
         self._tensor = tensor
+        self._F_ref = F_ref
+
+        if weights is None: weights = np.ones((17,3))
         self.nregions = np.shape(weights)[0] if nregions is None else nregions
         dim = mesh.geometry().dim()
         self.dim = dim
@@ -181,7 +192,7 @@ class RegionalStrainTarget(OptimizationTarget):
             self.weights_arr =np.ones((self.nregions,dim))
 
         self.crl_basis = []
-        for l in ["e_circ", "e_rad", "e_long"]:
+        for l in ["circumferential", "radial", "longitudinal"]:
             if crl_basis.has_key(l):
                 self.crl_basis.append(crl_basis[l])
         
@@ -224,8 +235,9 @@ class RegionalStrainTarget(OptimizationTarget):
         strains = []
         for i in range(self.nregions):
             f = Function(self.target_space)
-            assign_to_vector(f.vector(), np.array(target_data[i+1][n]))
-            strains.append(f)
+            if target_data.has_key(i+1):
+                assign_to_vector(f.vector(), np.array(target_data[i+1][n]))
+                strains.append(f)
             
         self.data.append(strains)
 
@@ -295,10 +307,11 @@ class RegionalStrainTarget(OptimizationTarget):
         
         # Compute the strains
         if self._tensor == "gradu":
-            tensor = grad(u)
+            F = grad(u) + Identity(3)
+            tensor = F*inv(self._F_ref) - Identity(3)
         elif self._tensor == "E":
             I = Identity(self.dim)
-            F = grad(u) + I
+            F = (grad(u) + I)*inv(self._F_ref)
             C = F.T * F
             tensor = 0.5*(C-I)
 
@@ -385,6 +398,10 @@ class VolumeTarget(OptimizationTarget):
         self._name = "{} Volume".format(chamber)
         self._X = SpatialCoordinate(mesh)
         self._N = FacetNormal(mesh)
+        
+        self._interpolation_space = VectorFunctionSpace(mesh,"CG", 1)
+        self._disp_space = VectorFunctionSpace(mesh,"CG", 2)
+
         self.dmu = dmu
         self.chamber = chamber
         
@@ -420,10 +437,14 @@ class VolumeTarget(OptimizationTarget):
 
         :param u: New displacement
         """
+        # u_int = interpolate(project(u, self._disp_space),
+                            # self._interpolation_space)
+        u_int =project(u, self._interpolation_space)
+        
         # Compute volume
-        F = grad(u) + Identity(3)
+        F = grad(u_int) + Identity(3)
         J = det(F)
-        vol = (-1.0/3.0)*dot(self._X + u, J*inv(F).T*self._N)
+        vol = (-1.0/3.0)*dot(self._X + u_int, J*inv(F).T*self._N)
 
         # Make a project for dolfin-adjoint recording
         solve(inner(self._trial, self._test)/self.endoarea*self.dmu == \
