@@ -22,7 +22,21 @@ from adjoint_contraction_args import *
 from numpy_mpi import *
 from setup_parameters import *
 
+def update_unloaded_patient(params, patient):
 
+    # Make sure to load the new referece geometry
+    from mesh_generation import load_geometry_from_h5
+    h5group = "/".join(filter(None, [params["h5group"], "unloaded"]))
+    geo = load_geometry_from_h5(params["sim_file"], h5group)
+    for k, v in geo.__dict__.iteritems():
+        if hasattr(patient, k):
+            delattr(patient, k)
+            
+        setattr(patient, k, v)
+        
+    return patient
+
+    
 def initialize_patient_data(patient_parameters, synth_data=False):
     """
     Make an instance of patient from :py:module`patient_data`
@@ -180,7 +194,6 @@ def check_patient_attributes(patient):
 
 def save_patient_data_to_simfile(patient, sim_file):
 
-    file_format = "a" if os.path.isfile(sim_file) else "w"
     from mesh_generation.mesh_utils import save_geometry_to_h5
 
     fields = []
@@ -544,6 +557,11 @@ def get_measurements(params, patient):
     :rtype: dict
 
     """
+
+    # Parameters for the targets
+    p = params["Optimization_targets"]
+    measurements = {}
+
     
     # Find the start and end of the measurements
     if params["phase"] == PHASES[0]: #Passive inflation
@@ -551,21 +569,29 @@ def get_measurements(params, patient):
         start = 0
         end = patient.passive_filling_duration
 
+        pvals = params["Passive_optimization_weigths"]
+        
+        
+
     elif params["phase"] == PHASES[1]: #Scalar contraction
         # We need just the points from the active phase
         start = patient.passive_filling_duration -1
         end = patient.num_points
+
+        pvals = params["Active_optimization_weigths"]
       
     else:
         # We need all the points 
         start = 0
         end = patient.num_points
+
+        pvals = params["Passive_optimization_weigths"]
+        
     
-    # Parameters for the targets
-    p = params["Optimization_targets"]
-    measurements = {}
-
-
+    p["volume"] = pvals["volume"] > 0
+    p["rv_volume"] = pvals["rv_volume"] > 0 and patient.mesh_type()=="biv"
+    p["regional_strain"] = pvals["regional_strain"] > 0
+        
     # !! FIX THIS LATER !!
     if params["synth_data"]:
 
@@ -584,7 +610,10 @@ def get_measurements(params, patient):
    
         # Compute offsets
         # Choose the pressure at the beginning as reference pressure
-        reference_pressure = pressure[0] 
+        if params["unload"]:
+            reference_pressure = 0.0
+        else:
+            reference_pressure = pressure[0] 
         logger.info("LV Pressure offset = {} kPa".format(reference_pressure))
 
         #Here the issue is that we do not have a stress free reference mesh. 
@@ -596,7 +625,10 @@ def get_measurements(params, patient):
 
         if patient.mesh_type() == "biv":
             rv_pressure = np.array(patient.RVP)
-            reference_pressure = rv_pressure[0]
+            if params["unload"]:
+                reference_pressure = 0.0
+            else:
+                reference_pressure = rv_pressure[0]
             logger.info("RV Pressure offset = {} kPa".format(reference_pressure))
             
             rv_pressure = np.subtract(rv_pressure, reference_pressure)
@@ -607,7 +639,7 @@ def get_measurements(params, patient):
         ## Volume
         if p["volume"]:
             # Calculate difference bwtween calculated volume, and volume given from echo
-            volume_offset = get_volume_offset(patient)
+            volume_offset = get_volume_offset(patient, params)
             logger.info("LV Volume offset = {} cm3".format(volume_offset))
 
             logger.info("Measured LV volume = {}".format(patient.volume[0]))
@@ -623,7 +655,7 @@ def get_measurements(params, patient):
 
         if p["rv_volume"]:
             # Calculate difference bwtween calculated volume, and volume given from echo
-            volume_offset = get_volume_offset(patient, "rv")
+            volume_offset = get_volume_offset(patient, params, "rv")
             logger.info("RV Volume offset = {} cm3".format(volume_offset))
 
             logger.info("Measured RV volume = {}".format(patient.RVV[0]))
@@ -639,15 +671,20 @@ def get_measurements(params, patient):
         if p["regional_strain"]:
 
             strain = {}
-            for region in patient.strain.keys():
-                strain[region] = patient.strain[region][start:end]
-                
+            if hasattr(patient, "strain"):
+                for region in patient.strain.keys():
+                    strain[region] = patient.strain[region][start:end]
+            else:
+                msg = ("\nPatient do not have strain as attribute."+
+                       "\nStrain will not be used")
+                p["regional_strain"] = False
+                logger.warning(msg)
             measurements["regional_strain"] = strain
     
 
     return measurements
 
-def get_volume_offset(patient, chamber = "lv"):
+def get_volume_offset(patient, params, chamber = "lv"):
     N = FacetNormal(patient.mesh)
 
     if chamber == "lv":
@@ -665,15 +702,34 @@ def get_volume_offset(patient, chamber = "lv"):
 
     if volume == -1:
         return 0
-    
+
+    logger.info("Measured = {}".format(volume))
     ds = Measure("exterior_facet",
                  subdomain_data = patient.ffun,
                  domain = patient.mesh)(endo_marker)
     
     X = SpatialCoordinate(patient.mesh)
-    
-    # Divide by 1000 to get the volume in ml
-    vol = assemble((-1.0/3.0)*dot(X,N)*ds)
+
+    if params["unload"] and params["phase"] == PHASES[1]:
+        # The cavicty volume is the volume of the uloaded geometry
+        # The first measured volume is the unloaded geometry,
+        # loaded with the first pressure. Use this to estimate the offset
+        family, degree = params["state_space"].split(":")[0].split("_")
+        u = Function(VectorFunctionSpace(patient.mesh, family, int(degree)))
+        with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
+            # Get previous state
+            group = "/".join([params["h5group"],
+                              PASSIVE_INFLATION_GROUP,
+                              "displacement","1"])
+            h5file.read(u, group)
+
+        # We would like to use interpolate here, but project works with dolfin-adjoint
+        u_int = project(u, VectorFunctionSpace(patient.mesh, "CG", 1))
+        vol = assemble((-1.0/3.0)*dot(X+u_int,N)*ds)
+        logger.info("Computed = {}".format(vol))
+    else:
+        
+        vol = assemble((-1.0/3.0)*dot(X,N)*ds)
     
     return volume - vol
 
