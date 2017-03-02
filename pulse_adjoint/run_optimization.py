@@ -47,12 +47,6 @@ def run_unloaded_optimization(params, patient):
         
 
     h5group = params["h5group"]
-    adaptive_weights = params["adaptive_weights"]
-    params["adaptive_weights"] = False
-
-    adapt_scale = params["Optimization_parmeteres"]["adapt_scale"]
-    params["Optimization_parmeteres"]["adapt_scale"] = False
-    
     params["Material_parameters"]["a"] = 30.0
     
     estimator =  UnloadedMaterial(p_geometry, pressures, volumes,
@@ -61,18 +55,8 @@ def run_unloaded_optimization(params, patient):
 
     
     estimator.unload_material(patient)
-
-
-    
-    params["Optimization_parmeteres"]["adapt_scale"] = adapt_scale
-    params["adaptive_weights"] = adaptive_weights
     params["h5group"] = h5group
-    # new_patient = estimator.get_unloaded_geometry()
-
-    # for k, v new_patient.__dict__.iteritems():
-    #     if hasattr(patient, k): delattr(patient, k)
-
-    #     setattr(patient, k, v)
+    
         
     
     
@@ -360,7 +344,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
         paramvec_start = paramvec.copy()
         state_start = rd.for_run.cphm.get_state()
         niter = 0
-    
+       
         while not done and niter < 5:
             # Evaluate the reduced functional in case the solver chrashes at the first point.
             # If this is not done, and the solver crashes in the first point
