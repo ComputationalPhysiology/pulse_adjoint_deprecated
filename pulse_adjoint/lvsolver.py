@@ -239,12 +239,12 @@ class LVSolver(object):
         J = det(self._F)
 
 
-        # If model is compressible remove volumetric strains
-        if self.is_incompressible():
-            F_iso = self._F
-        else:
-
-            F_iso = pow(J, -float(1)/dim)*self._F
+        # # If model is compressible remove volumetric strains
+        # if self.is_incompressible():
+        #     F_iso = self._F
+        # else:
+        #     pass
+        F_iso = pow(J, -float(1)/dim)*self._F
 
                 
         # Internal energy
