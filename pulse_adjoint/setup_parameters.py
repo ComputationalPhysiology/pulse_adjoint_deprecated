@@ -58,6 +58,9 @@ def setup_adjoint_contraction_parameters():
     optweigths_passive_parameters = setup_passive_optimization_weigths()
     params.add(optweigths_passive_parameters)
 
+    unload_params = setup_unloading_parameters()
+    params.add(unload_params)
+        
     check_parameters(params)
     
     return params
@@ -151,6 +154,7 @@ def setup_patient_parameters():
     params.add("pressure_path", "")
     params.add("mesh_path", "")
     params.add("echo_path", "")
+    params.add("mesh_group", "")
     
     params.add("subsample", False)
     params.add("fiber_angle_epi", -60)
@@ -395,7 +399,7 @@ def setup_application_parameters():
     params.add("unload", True)
     
     # For passive optimization, include all passive points ('all')
-    # or only the final point ('final')
+    # or only the final point ('-1'), or specific point ('point')
     params.add("passive_weights", "all")
     
     # Update weights so that the initial value of the functional is 0.1
@@ -500,5 +504,27 @@ def setup_optimization_parameters():
 
     params.add("adapt_scale", True)
     params.add("disp", False)
+
+    return params
+
+def setup_unloading_parameters():
+    """
+    Parameters for coupled unloading/material parameter
+    estimation. 
+
+    For info about the different parameters, 
+    see the unloading module. 
+    """
+
+    params = Parameters("Unloading_parameters")
+
+    params.add("method", "hybrid", ["hybrid", "fixed_points", "raghavan"])
+    params.add("tol", 0.05)
+    params.add("maxiter", 5)
+
+    unload_options = Parameters("unload_options")
+    unload_options.add("maxiter", 10)
+    unload_options.add("tol", 0.01)
+    params.add(unload_options)
 
     return params

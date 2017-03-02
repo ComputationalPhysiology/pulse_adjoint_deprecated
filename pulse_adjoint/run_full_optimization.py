@@ -15,7 +15,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-from setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, initialize_patient_data, save_patient_data_to_simfile
+from setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, initialize_patient_data, save_patient_data_to_simfile, update_unloaded_patient
 from run_optimization import run_passive_optimization, run_active_optimization, run_unloaded_optimization
 
 from utils import passive_inflation_exists, contract_point_exists,  Text, pformat
@@ -42,7 +42,7 @@ def save_logger(params):
     ffc_logger.setLevel(logging.WARNING)
     ufl_logger = logging.getLogger('UFL')
     ufl_logger.setLevel(logging.WARNING)
-
+ 
     import datetime
     time = datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d %H:%M:%S')
     logger.info("Time: {}".format(time))
@@ -76,15 +76,20 @@ def main(params):
 
         if has_unload and params["unload"]:
             
-            patient = run_unloaded_optimization(params, patient)
+            run_unloaded_optimization(params, patient)
            
         else:
             run_passive_optimization(params, patient)
             
         adj_reset()
 
-
     
+    if params["unload"]:
+
+        patient = update_unloaded_patient(params, patient)
+        
+
+
     ################## RUN GAMMA OPTIMIZATION ###################
 
     # Make sure that we choose active contraction phase

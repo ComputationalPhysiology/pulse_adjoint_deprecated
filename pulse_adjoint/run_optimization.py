@@ -28,19 +28,54 @@ from store_opt_results import write_opt_results_to_h5
 from optimal_control import OptimalControl
 from lvsolver import SolverDidNotConverge
 
-try:
-    import pyipopt
-    has_pyipopt = True
-except:
-    has_pyipopt = False
 
-try:
-    import moola
-    has_moola = True
-except:
-    has_moola = False
+def run_unloaded_optimization(params, patient):
+    from unloading import UnloadedMaterial
+  
+    pfd = patient.passive_filling_duration
+    if patient.mesh_type() == "biv":
+        
+        pressures = zip(patient.pressure[:pfd], patient.RVP[:pfd])
+        volumes = zip(patient.volume[:pfd], patient.RVV[:pfd])
+        p_geometry = pressures[0]
+        
+        
+    else:
+        pressures = patient.pressure[:pfd]
+        volumes = patient.volume[:pfd]
+        p_geometry = pressures[0]
+        
+
+    h5group = params["h5group"]
+    adaptive_weights = params["adaptive_weights"]
+    params["adaptive_weights"] = False
+
+    adapt_scale = params["Optimization_parmeteres"]["adapt_scale"]
+    params["Optimization_parmeteres"]["adapt_scale"] = False
+    
+    params["Material_parameters"]["a"] = 30.0
+    
+    estimator =  UnloadedMaterial(p_geometry, pressures, volumes,
+                                  params, **params["Unloading_parameters"])
+    
+
+    
+    estimator.unload_material(patient)
 
 
+    
+    params["Optimization_parmeteres"]["adapt_scale"] = adapt_scale
+    params["adaptive_weights"] = adaptive_weights
+    params["h5group"] = h5group
+    # new_patient = estimator.get_unloaded_geometry()
+
+    # for k, v new_patient.__dict__.iteritems():
+    #     if hasattr(patient, k): delattr(patient, k)
+
+    #     setattr(patient, k, v)
+        
+    
+    
 def run_passive_optimization(params, patient):
     """
     Main function for the passive phase
@@ -104,14 +139,13 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
                                    params, 
                                    paramvec)
 
-   
-    #Solve the forward problem with guess results (just for printing)
-    logger.info(Text.blue("\nForward solution at guess parameters"))
-    forward_result, _ = for_run(paramvec, False)
-    
 
     # Update the weights for the functional
     if params["adaptive_weights"]:
+        #Solve the forward problem with guess results (just for printing)
+        logger.info(Text.blue("\nForward solution at guess parameters"))
+        forward_result, _ = for_run(paramvec, False)
+        
         weights = {}
         for k, v in for_run.opt_weights.iteritems():
             weights[k] = v/(10*forward_result["func_value"])
@@ -124,7 +158,9 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     parameters["adjoint"]["stop_annotating"] = True
 
     # Initialize MyReducedFuctional
-    rd = MyReducedFunctional(for_run, paramvec, relax = params["passive_relax"])
+    rd = MyReducedFunctional(for_run, paramvec,
+                             relax = params["passive_relax"],
+                             verbose = params["verbose"])
     
     return rd, paramvec
 
@@ -240,13 +276,13 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
                                   params,
                                   gamma)
 
-    #Solve the forward problem with guess results (just for printing)
-    logger.info(Text.blue("\nForward solution at guess parameters"))
-    forward_result, _ = for_run(gamma, False)
-
     # Update weights so that the initial value of the
     # functional is 0.1
     if params["adaptive_weights"]:
+        #Solve the forward problem with guess results (just for printing)
+        logger.info(Text.blue("\nForward solution at guess parameters"))
+        forward_result, _ = for_run(gamma, False)
+        
         weights = {}
         for k, v in for_run.opt_weights.iteritems():
             weights[k] = v/(10*forward_result["func_value"])
@@ -258,7 +294,9 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
 
-    rd = MyReducedFunctional(for_run, gamma, relax = params["active_relax"])
+    rd = MyReducedFunctional(for_run, gamma,
+                             relax = params["active_relax"],
+                             verbose = params["verbose"])
     
     return rd, gamma
 
@@ -273,10 +311,11 @@ def store(params, rd, opt_result):
 
     if params["phase"] == PHASES[0]:
 
-        h5group =  PASSIVE_INFLATION_GROUP
+        h5group =  "/".join([params["h5group"],PASSIVE_INFLATION_GROUP])
     else:
         
-        h5group =  ACTIVE_CONTRACTION_GROUP.format(params["active_contraction_iteration_number"])
+        h5group =  "/".join([params["h5group"],
+                            ACTIVE_CONTRACTION_GROUP.format(params["active_contraction_iteration_number"])])
         
     write_opt_results_to_h5(h5group,
                             params,
@@ -286,7 +325,7 @@ def store(params, rd, opt_result):
     
     
         
-def solve_oc_problem(params, rd, paramvec):
+def solve_oc_problem(params, rd, paramvec, return_solution = False):
     """Solve the optimal control problem
 
     :param params: Application parameters
@@ -295,10 +334,11 @@ def solve_oc_problem(params, rd, paramvec):
 
     """
 
+    
+    
     opt_params = params["Optimization_parmeteres"]
     x = gather_broadcast(paramvec.vector().array())
     nvar = len(x)
-
     
     if params["phase"] == PHASES[0] and not params["optimize_matparams"]:
         
@@ -310,6 +350,11 @@ def solve_oc_problem(params, rd, paramvec):
 
     
     else:
+
+        logger.info("\n"+"".center(72,"-"))
+        logger.info("Solve optimal contol problem".center(72, "-"))
+        logger.info("".center(72,"-"))
+        
         solved = False
         done = False
         paramvec_start = paramvec.copy()
@@ -363,13 +408,6 @@ def solve_oc_problem(params, rd, paramvec):
                 dfunc_value_rel = rd.for_res["func_value"] \
                                   /rd.ini_for_res["func_value"]
 
-              
-                # # Take the mean of the last iterat
-                # if len(rd.opt_funcvalues) == 1:
-                #     dfunc_value = rd.opt_funcvalues[0]
-                # else:
-                #     dfunc_value = np.abs(np.mean(np.diff(rd.opt_funcvalues[-2:])))
-
                
                 
                 if not params["Optimization_parmeteres"]["adapt_scale"] or \
@@ -420,6 +458,8 @@ def solve_oc_problem(params, rd, paramvec):
                                   rd.ini_for_res, rd.for_res, opt_result)
         
         store(params, rd, opt_result)
+        if return_solution:
+            return params, rd, opt_result
 
 def print_optimization_report(params, opt_controls, init_controls, 
                               ini_for_res, opt_for_res, opt_result = None):
@@ -563,6 +603,26 @@ def get_optimization_targets(params, solver_parameters):
         dX = Measure("dx",
                      subdomain_data = solver_parameters["mesh_function"],
                      domain = mesh)
+
+        if params["unload"] and params["phase"] == PHASES[1]:
+            # We need to recompute strains wrt reference as diastasis
+         
+            family, degree = solver_parameters["state_space"].split(":")[0].split("_")
+            u = Function(VectorFunctionSpace(solver_parameters["mesh"], family, int(degree)))
+            with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
+        
+                # Get previous state
+                group = "/".join([params["h5group"],
+                                  PASSIVE_INFLATION_GROUP,
+                                  "displacement","1"])
+                h5file.read(u, group)
+
+            F_ref = grad(u) + Identity(3)
+                
+
+        else:
+            F_ref = Identity(3)
+            
         
         targets["regional_strain"] = \
             RegionalStrainTarget(mesh,

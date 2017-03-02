@@ -185,7 +185,7 @@ class BasicForwardRunner(object):
 
         
             if self.params["passive_weights"] == "all" \
-               or (self.params["passive_weights"] == "all" \
+               or (self.params["passive_weights"] == "-1" \
                    and it == len(self.bcs["pressure"])-1) \
                    or int(self.params["passive_weights"]) == it:
 
