@@ -77,7 +77,7 @@ def setup_solver_parameters():
 
     solver_parameters["nonlinear_solver"] = "snes"
     solver_parameters["snes_solver"]["method"] = "newtontr"
-    solver_parameters["snes_solver"]["maximum_iterations"] = 15
+    solver_parameters["snes_solver"]["maximum_iterations"] = 50
     solver_parameters["snes_solver"]["absolute_tolerance"] = 1.0e-5
     solver_parameters["snes_solver"]["linear_solver"] = "lu"
     
