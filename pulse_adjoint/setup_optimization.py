@@ -28,6 +28,7 @@ def update_unloaded_patient(params, patient):
     from mesh_generation import load_geometry_from_h5
     h5group = "/".join(filter(None, [params["h5group"], "unloaded"]))
     geo = load_geometry_from_h5(params["sim_file"], h5group)
+    setattr(patient, "original_geometr", getattr(patient, "mesh"))
     for k, v in geo.__dict__.iteritems():
         if hasattr(patient, k):
             delattr(patient, k)

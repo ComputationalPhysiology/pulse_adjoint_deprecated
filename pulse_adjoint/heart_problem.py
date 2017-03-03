@@ -135,16 +135,17 @@ class BasicHeartProblem(collections.Iterator):
 
         converged = False
 
-        nsteps = max(np.rint(p_diff/0.4), 2)
+        nsteps = max(np.ceil(p_diff/0.4), 2)
         n_max = 100
-        
+
+               
         lv_pressures = np.linspace(p_lv_prev, p_lv_next, nsteps)
         p_lv = p_lv_prev
         
+        
         if self.has_rv:
             rv_pressures = np.linspace(p_rv_prev, p_rv_next, nsteps)
-            p_rv = p_rv_prev
-            
+     
     
         while not converged and nsteps < n_max:
 
@@ -157,7 +158,7 @@ class BasicHeartProblem(collections.Iterator):
                     p_rv = rv_pressures[it]
                     self.p_rv.t = p_rv
                 
-                logger.debug("\nSolve for lv pressure = {}".format(p_lv))
+                logger.info("\nSolve for lv pressure = {}".format(p_lv))
                 try:
                     out = self.solver.solve()
                 except SolverDidNotConverge:

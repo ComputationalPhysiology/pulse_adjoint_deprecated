@@ -563,7 +563,7 @@ def get_optimization_targets(params, solver_parameters):
 
     if p["volume"]:
         
-        if params["Patient_parameters"]["mesh_type"] == "biv":
+        if solver_parameters["markers"].has_key("ENDO_LV"):
             marker = "ENDO_LV"
         else:
             marker = "ENDO"
