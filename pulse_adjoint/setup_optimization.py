@@ -309,7 +309,7 @@ def make_solver_parameters(params, patient, matparams,
     p_lv = Expression("t", t = p_lv_, name = "LV_endo_pressure", element = V_real.ufl_element())
     
 
-    if patient.mesh_type() == "biv":
+    if patient.markers.has_key("ENDO_LV"):
         p_rv = Expression("t", t = p_rv_, name = "RV_endo_pressure", element = V_real.ufl_element())
         
         neumann_bc = [[p_lv, patient.markers["ENDO_LV"][0]],
