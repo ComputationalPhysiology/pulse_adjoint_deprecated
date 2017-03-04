@@ -726,7 +726,9 @@ def get_volume_offset(patient, params, chamber = "lv"):
 
         # We would like to use interpolate here, but project works with dolfin-adjoint
         u_int = project(u, VectorFunctionSpace(patient.mesh, "CG", 1))
-        vol = assemble((-1.0/3.0)*dot(X+u_int,N)*ds)
+        F = grad(u_int) + Identity(3)
+        J = det(F)
+        vol = assemble((-1.0/3.0)*dot(X+u_int,J*inv(F).T*N)*ds)
         logger.info("Computed = {}".format(vol))
     else:
         
