@@ -590,7 +590,7 @@ def get_measurements(params, patient):
         
     
     p["volume"] = pvals["volume"] > 0
-    p["rv_volume"] = pvals["rv_volume"] > 0 and patient.mesh_type()=="biv"
+    p["rv_volume"] = pvals["rv_volume"] > 0 and hasattr(patient, "RVV")
     p["regional_strain"] = pvals["regional_strain"] > 0
         
     # !! FIX THIS LATER !!
@@ -624,7 +624,7 @@ def get_measurements(params, patient):
         
         measurements["pressure"] = pressure[start:end]
 
-        if patient.mesh_type() == "biv":
+        if hasattr(patient, "RVP"):
             rv_pressure = np.array(patient.RVP)
             if params["unload"]:
                 reference_pressure = 0.0
