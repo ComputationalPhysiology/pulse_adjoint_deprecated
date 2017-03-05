@@ -28,7 +28,7 @@ def update_unloaded_patient(params, patient):
     from mesh_generation import load_geometry_from_h5
     h5group = "/".join(filter(None, [params["h5group"], "unloaded"]))
     geo = load_geometry_from_h5(params["sim_file"], h5group)
-    setattr(patient, "original_geometr", getattr(patient, "mesh"))
+    setattr(patient, "original_geometry", getattr(patient, "mesh"))
     for k, v in geo.__dict__.iteritems():
         if hasattr(patient, k):
             delattr(patient, k)
@@ -690,7 +690,7 @@ def get_volume_offset(patient, params, chamber = "lv"):
 
     if chamber == "lv":
     
-        if patient.mesh_type() == "biv":
+        if patient.markers.has_key("ENDO_LV"):
             endo_marker = patient.markers["ENDO_LV"][0]
         else:
             endo_marker = patient.markers["ENDO"][0]
