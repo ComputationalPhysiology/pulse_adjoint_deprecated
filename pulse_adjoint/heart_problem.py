@@ -359,7 +359,7 @@ class ActiveHeartProblem(BasicHeartProblem):
 
 
         self.solver.get_state().assign(w_temp, annotate = annotate)
-        self.solver.solve()
+        # self.solver.solve()
        
     
     def next_active(self, gamma_current, gamma, assign_prev_state=True, steps = None):
