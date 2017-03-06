@@ -1,28 +1,45 @@
-#!/usr/bin/env python
-# Copyright (C) 2016 Henrik Finsberg
-#
-# This file is part of PULSE-ADJOINT.
-#
-# PULSE-ADJOINT is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# PULSE-ADJOINT is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-from dolfinimport import *
+import h5py, os, mpi4py, petsc4py
 import numpy as np
-import h5py, yaml, os
-from adjoint_contraction_args import *
+from dolfin import mpi_comm_world, HDF5File
+
+from adjoint_contraction_args import logger
 from numpy_mpi import *
 
+parallel_h5py = h5py.h5.get_config().mpi
 
-def dict2h5_hpc(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
+
+def open_h5py(h5name, file_mode="a", comm= mpi_comm_world()):
+
+    assert isinstance(comm, (petsc4py.PETSc.Comm, mpi4py.MPI.Intracomm))
+    if parallel_h5py:
+        if isinstance(comm, petsc4py.PETSc.Comm):
+            comm = comm.tompi4py()
+        
+        return  h5py.File(h5name, file_mode, driver='mpio', comm=comm)
+    else:
+        return  h5py.File(h5name, file_mode)
+
+def check_and_delete(h5name, h5group, comm= mpi_comm_world()):
+
+    with open_h5py(h5name, "a", comm):
+        if h5group in h5file:
+
+            if parallel_h5py:
+                
+                logger.debug("Deleting existing group: '{}'".format(h5group))
+                del h5file[h5group]
+
+            else:
+                if comm.rank == 0:
+
+                    logger.debug("Deleting existing group: '{}'".format(h5group))
+                    del h5file[h5group]
+        
+            
+
+
+
+def dict2h5_hpc(d, h5name, h5group = "", comm = mpi_comm_world(),
                 overwrite_file = True, overwrite_group=True):
     """Create a HDF5 file and put the
     data in the dictionary in the 
@@ -35,10 +52,6 @@ def dict2h5_hpc(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
     :param d: Dictionary to be saved
     :param h5fname: Name of the file where you want to save
     
-
-    .. note:: 
-
-        Works only in serial
     
     """
     if overwrite_file:
@@ -51,14 +64,10 @@ def dict2h5_hpc(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
     # check that the group does not exist. If so we need to open it in
     # h5py and delete it.
     if file_mode == "a" and overwrite_group and h5group!="":
-        with h5py.File(h5name) as h5file:
-            if h5group in h5file:
-                if mpi_comm_world().rank == 0:
-                    logger.debug("Deleting existing group: '{}'".format(h5group))
-                    del h5file[h5group]
+        check_and_delete(h5name, h5group, comm)
                     
 
-    with h5py.File(h5name, file_mode) as h5file:
+    with open_h5py(h5name, file_mode, comm) as h5file:
 
         def dict2h5(a, group):
             
@@ -124,34 +133,28 @@ def dict2h5_hpc(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
                     raise ValueError("Unknown type {}".format(type(val)))
 
         dict2h5(d, h5group)
-    
-    
+
+
 
 def write_opt_results_to_h5(h5group,
                             params,
                             for_result_opt,
                             solver,
-                            opt_result):
+                            opt_result,
+                            comm = mpi_comm_world()):
 
     
     h5name = params["sim_file"]
     logger.info("Save results to {}:{}".format(h5name, h5group))
     
     filedir = os.path.abspath(os.path.dirname(params["sim_file"]))
-    if not os.path.exists(filedir) and mpi_comm_world().rank == 0:
+    if not os.path.exists(filedir) and comm.rank == 0:
         os.makedirs(filedir)
         write_append = "w"
 
     if os.path.isfile(h5name):
         # Open the file in h5py
-        h5file_h5py = h5py.File(h5name, 'a')
-        # Check if the group allready exists
-        if h5group in h5file_h5py:
-            # If it does, delete it
-            if mpi_comm_world().rank == 0:
-                del h5file_h5py[h5group]
-        # Close the file
-        h5file_h5py.close()
+        check_and_delete(h5name, h5group, comm)
         # Open the file in HDF5File format
         open_file_format = "a"
         
@@ -164,7 +167,7 @@ def write_opt_results_to_h5(h5group,
     # make sure that we don't destroy the dof-structure
     # by first assigning the state to te correction function
     # and then save it.
-    with HDF5File(mpi_comm_world(), h5name, open_file_format) as h5file:
+    with HDF5File(comm, h5name, open_file_format) as h5file:
 
         h5file.write(for_result_opt["optimal_control"],
                      "/".join([h5group, "optimal_control"]))
@@ -195,7 +198,7 @@ def write_opt_results_to_h5(h5group,
             data[k]["weights"] = v.weights_arr
             
             
-    dict2h5_hpc(data, h5name, h5group, dolfin.mpi_comm_world(), 
+    dict2h5_hpc(data, h5name, h5group, comm, 
                 overwrite_file = False, overwrite_group = False)
     
 
@@ -270,7 +273,67 @@ def test_store():
                             phm.solver,
                             opt_result)
     
-        
-if __name__ == "__main__":
-    test_store()
     
+
+def passive_inflation_exists(params):
+    
+    from adjoint_contraction_args import PASSIVE_INFLATION_GROUP
+
+    if not os.path.exists(params["sim_file"]):
+        return False
+    
+    h5file = open_h5py(param["sim_file"], "r")
+    key = PASSIVE_INFLATION_GROUP
+
+    # Check if pv point is already computed
+    if key in h5file.keys():
+        logger.info(Text.green("Passive inflation, {}".format("fetched from database")))
+        h5file.close()
+        return True
+    logger.info(Text.blue("Passive inflation, {}".format("Run Optimization")))
+    h5file.close()
+    return False
+
+def contract_point_exists(params):
+    
+    from adjoint_contraction_args import ACTIVE_CONTRACTION, CONTRACTION_POINT, PASSIVE_INFLATION_GROUP, PHASES
+    
+    if not os.path.exists(params["sim_file"]):
+        logger.info(Text.red("Run passive inflation before systole"))
+        raise IOError("Need state from passive inflation")
+        return False
+
+    h5file = open_h5py(param["sim_file"], "r")
+    key1 = ACTIVE_CONTRACTION
+    key2  = CONTRACTION_POINT.format(params["active_contraction_iteration_number"])
+    key3 = PASSIVE_INFLATION_GROUP
+    
+	
+    if not key3 in h5file.keys():
+        logger.info(Text.red("Run passive inflation before systole"))
+        raise IOError("Need state from passive inflation")
+
+    
+    if params["phase"] == PHASES[0]:
+        h5file.close()
+        return False
+    
+    if not key1 in h5file.keys():
+        h5file.close()
+        return False
+
+   
+    try:
+        
+        # Check if pv point is already computed
+        if key1 in h5file.keys() and key2 in h5file[key1].keys():
+            pressure = np.array(h5file[key1][key2]["bcs"]["pressure"])[-1]
+            logger.info(Text.green("Contract point {}, pressure = {:.3f} {}".format(params["active_contraction_iteration_number"],
+                                                                                    pressure, "fetched from database")))
+            h5file.close()
+            return True
+        logger.info(Text.blue("Contract point {}, {}".format(params["active_contraction_iteration_number"],"Run Optimization")))
+        h5file.close()
+        return False
+    except KeyError:
+        return False
