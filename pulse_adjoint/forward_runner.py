@@ -399,23 +399,6 @@ class ActiveForwardRunner(BasicForwardRunner):
         except SolverDidNotConverge as ex:
             logger.debug("Stepping up gamma failed")
 
-            # Save the gamma
-            file_format = "a" if os.path.isfile(self.outdir+"/gamma_crash.h5") else "w"
-
-            p = 0
-            acin = self.active_contraction_iteration_number
-            if file_format == "a":
-                import h5py
-                h5pyfile = h5py.File(self.outdir+"/gamma_crash.h5", "r")
-                if "point_{}".format(acin) in h5pyfile.keys():
-                    while "crash_point_{}".format(p) in h5pyfile["point_{}".format(acin)].keys():
-                        p += 1
-
-                with HDF5File(mpi_comm_world(), self.outdir+"/gamma_crash.h5", file_format) as h5file:
-                    h5file.write(m, "point_{}/crash_point_{}".format(acin, p))
-                
-
-
             logger.debug("Assign the old state and old gamma")
             # Assign the old state
             self.cphm.solver.get_state().assign(w_old)

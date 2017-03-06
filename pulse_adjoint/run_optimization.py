@@ -17,14 +17,14 @@
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfinimport import *
 from setup_optimization import setup_simulation, logger, MyReducedFunctional, get_measurements
-from utils import Text, Object, pformat, print_line, print_head, contract_point_exists, get_spaces,  UnableToChangePressureExeption, get_simulated_pressure
+from utils import Text, Object, pformat, print_line, print_head, get_spaces,  UnableToChangePressureExeption, get_simulated_pressure
 from forward_runner import ActiveForwardRunner, PassiveForwardRunner
 from optimization_targets import *
 from numpy_mpi import *
 from adjoint_contraction_args import *
 from scipy.optimize import minimize as scipy_minimize
 from scipy.optimize import minimize_scalar as scipy_minimize_1d
-from store_opt_results import write_opt_results_to_h5
+from pa_io import write_opt_results_to_h5, contract_point_exists
 from optimal_control import OptimalControl
 from lvsolver import SolverDidNotConverge
 
@@ -330,7 +330,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
         rd(x)
         rd.for_res["initial_control"] = rd.initial_paramvec,
         rd.for_res["optimal_control"] = rd.paramvec
-        store(params, rd, {})
+        (params, rd, {})
 
     
     else:

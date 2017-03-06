@@ -18,7 +18,8 @@
 from setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, initialize_patient_data, save_patient_data_to_simfile, update_unloaded_patient
 from run_optimization import run_passive_optimization, run_active_optimization, run_unloaded_optimization
 
-from utils import passive_inflation_exists, contract_point_exists,  Text, pformat
+from utils import  Text, pformat
+from pa_io import passive_inflation_exists, contract_point_exists
 from dolfin_adjoint import adj_reset
 from adjoint_contraction_args import *
 
