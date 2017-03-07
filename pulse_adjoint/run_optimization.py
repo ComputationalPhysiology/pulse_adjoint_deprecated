@@ -606,13 +606,14 @@ def get_optimization_targets(params, solver_parameters):
 
         else:
             F_ref = Identity(3)
-            
-        
+
+
         targets["regional_strain"] = \
             RegionalStrainTarget(mesh,
                                  solver_parameters["crl_basis"],
                                  dX,
-                                 solver_parameters["strain_weights"])
+                                 solver_parameters["strain_weights"],
+                                 F_ref = F_ref)
     
         
 

@@ -27,8 +27,10 @@ def update_unloaded_patient(params, patient):
     # Make sure to load the new referece geometry
     from mesh_generation import load_geometry_from_h5
     h5group = "/".join(filter(None, [params["h5group"], "unloaded"]))
-    geo = load_geometry_from_h5(params["sim_file"], h5group)
+    geo = load_geometry_from_h5(params["sim_file"], h5group,
+                                comm = patient.mesh.mpi_comm())
     setattr(patient, "original_geometry", getattr(patient, "mesh"))
+
     for k, v in geo.__dict__.iteritems():
         if hasattr(patient, k):
             delattr(patient, k)
@@ -804,7 +806,18 @@ class MyReducedFunctional(ReducedFunctional):
         logger.debug(Text.yellow("Start annotating"))
         parameters["adjoint"]["stop_annotating"] = False
 
-       
+
+        if self.verbose:
+            arr = gather_broadcast(paramvec_new.vector().array())
+            msg = ("\nCurrent value of control:"+
+                   "\n\t{:>8}\t{:>8}\t{:>8}\t{:>8}\t{:>8}".format("Min", "Mean","Max",
+                                                                  "argmin", "argmax")+
+                   "\n\t{:>8.2f}\t{:>8.2f}\t{:>8.2f}\t{:>8d}\t{:>8d}".format(np.min(arr),
+                                                                             np.mean(arr),
+                                                                             np.max(arr),
+                                                                             np.argmin(arr), 
+                                                                             np.argmax(arr)))
+            logger.info(msg)
         # Change loglevel to avoid to much printing (do not change if in dbug mode)
         change_log_level = (self.log_level == logging.INFO) and not self.verbose
         

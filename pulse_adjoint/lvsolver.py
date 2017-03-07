@@ -132,7 +132,7 @@ class LVSolver(object):
     def get_state_space(self):
         return self._W
     
-    def reinit(self, w):
+    def reinit(self, w, annotate=False):
         """
         *Arguments*
           w (:py:class:`dolfin.GenericFunction`)
@@ -140,7 +140,7 @@ class LVSolver(object):
 
         Assign given state, and reinitialize variaional form.
         """
-        self.get_state().assign(w, annotate=False)
+        self.get_state().assign(w, annotate=annotate)
         self._init_forms()
     
 
@@ -237,6 +237,7 @@ class LVSolver(object):
         
         self._F = variable(F)
         J = det(self._F)
+        
 
 
         # # If model is compressible remove volumetric strains
@@ -264,8 +265,8 @@ class LVSolver(object):
         # T = material.CauchyStress(F_iso, p)
         # P = J*T*inv(F_iso).T
         # self._G = inner(P, grad(du))*dx
-        # self._G += dp*(J-1)*dx
-        ## self._G += inner(p*J*inv(F_iso).T, grad(du))*dx
+        # self._G -= dp*(J-1)*dx
+        
         
         ## External work
         

@@ -305,17 +305,16 @@ class RegionalStrainTarget(OptimizationTarget):
         :type u: :py:class:`dolfin.Function`
         """
         
+        I = Identity(self.dim)
+        F = (grad(u) + I)*inv(self._F_ref)
         # Compute the strains
         if self._tensor == "gradu":
-            F = grad(u) + Identity(3)
-            tensor = F*inv(self._F_ref) - Identity(3)
+            tensor = F - Identity(3)
         elif self._tensor == "E":
-            I = Identity(self.dim)
-            F = (grad(u) + I)*inv(self._F_ref)
             C = F.T * F
             tensor = 0.5*(C-I)
 
-            
+
         tensor_diag = as_vector([inner(e,tensor*e) for e in self.crl_basis])
 
         # Make a project for dolfin-adjoint recording
@@ -323,7 +322,7 @@ class RegionalStrainTarget(OptimizationTarget):
             solve(inner(self._trial, self._test)*self.dmu(i+1) == \
                   inner(tensor_diag, self._test)*self.dmu(i+1), \
                   self.simulated_fun[i], solver_parameters={"linear_solver": "gmres"})
-
+            
     def assign_functional(self):
         
         for i in range(self.nregions):
@@ -618,6 +617,10 @@ class Regularization(object):
 #                   "Dim = {}, number of regions = {}, {} and {} was given".format(dim,
 #                                                                                  self.nregions,
 #                                                                                  weights.shape[1],
+#
+
+
+
 #                                                                                  weights.shape[0])
 #             logger.warning(msg)
 #             self.weights_arr =np.ones((self.nregions,1))
