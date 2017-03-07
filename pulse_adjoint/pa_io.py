@@ -22,7 +22,7 @@ def open_h5py(h5name, file_mode="a", comm= mpi_comm_world()):
 
 def check_and_delete(h5name, h5group, comm= mpi_comm_world()):
 
-    with open_h5py(h5name, "a", comm):
+    with open_h5py(h5name, "a", comm) as h5file:
         if h5group in h5file:
 
             if parallel_h5py:
