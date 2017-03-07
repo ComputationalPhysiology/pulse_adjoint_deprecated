@@ -1,6 +1,6 @@
 import h5py, os, mpi4py, petsc4py
 import numpy as np
-from dolfin import mpi_comm_world, HDF5File
+import dolfin
 
 from .utils import Text
 from .adjoint_contraction_args import logger
@@ -9,7 +9,7 @@ from .numpy_mpi import *
 parallel_h5py = h5py.h5.get_config().mpi
 
 
-def open_h5py(h5name, file_mode="a", comm= mpi_comm_world()):
+def open_h5py(h5name, file_mode="a", comm= dolfin.mpi_comm_world()):
 
     assert isinstance(comm, (petsc4py.PETSc.Comm, mpi4py.MPI.Intracomm))
     if parallel_h5py:
@@ -20,7 +20,7 @@ def open_h5py(h5name, file_mode="a", comm= mpi_comm_world()):
     else:
         return  h5py.File(h5name, file_mode)
 
-def check_and_delete(h5name, h5group, comm= mpi_comm_world()):
+def check_and_delete(h5name, h5group, comm= dolfin.mpi_comm_world()):
 
     with open_h5py(h5name, "a", comm) as h5file:
         if h5group in h5file:
@@ -40,7 +40,7 @@ def check_and_delete(h5name, h5group, comm= mpi_comm_world()):
 
 
 
-def dict2h5_hpc(d, h5name, h5group = "", comm = mpi_comm_world(),
+def dict2h5_hpc(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
                 overwrite_file = True, overwrite_group=True):
     """Create a HDF5 file and put the
     data in the dictionary in the 
@@ -142,7 +142,7 @@ def write_opt_results_to_h5(h5group,
                             for_result_opt,
                             solver,
                             opt_result,
-                            comm = mpi_comm_world()):
+                            comm = dolfin.mpi_comm_world()):
 
     
     h5name = params["sim_file"]
@@ -168,7 +168,7 @@ def write_opt_results_to_h5(h5group,
     # make sure that we don't destroy the dof-structure
     # by first assigning the state to te correction function
     # and then save it.
-    with HDF5File(comm, h5name, open_file_format) as h5file:
+    with dolfin.HDF5File(comm, h5name, open_file_format) as h5file:
 
         h5file.write(for_result_opt["optimal_control"],
                      "/".join([h5group, "optimal_control"]))
