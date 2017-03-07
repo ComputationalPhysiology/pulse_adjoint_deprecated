@@ -2,8 +2,9 @@ import h5py, os, mpi4py, petsc4py
 import numpy as np
 from dolfin import mpi_comm_world, HDF5File
 
-from adjoint_contraction_args import logger
-from numpy_mpi import *
+from .utils import Text
+from .adjoint_contraction_args import logger
+from .numpy_mpi import *
 
 parallel_h5py = h5py.h5.get_config().mpi
 
@@ -282,7 +283,7 @@ def passive_inflation_exists(params):
     if not os.path.exists(params["sim_file"]):
         return False
     
-    h5file = open_h5py(param["sim_file"], "r")
+    h5file = open_h5py(params["sim_file"], "r")
     key = PASSIVE_INFLATION_GROUP
 
     # Check if pv point is already computed
@@ -303,7 +304,7 @@ def contract_point_exists(params):
         raise IOError("Need state from passive inflation")
         return False
 
-    h5file = open_h5py(param["sim_file"], "r")
+    h5file = open_h5py(params["sim_file"], "r")
     key1 = ACTIVE_CONTRACTION
     key2  = CONTRACTION_POINT.format(params["active_contraction_iteration_number"])
     key3 = PASSIVE_INFLATION_GROUP
