@@ -1,6 +1,6 @@
 import h5py, os, mpi4py, petsc4py
 import numpy as np
-import dolfin
+import dolfin, dolfin_adjoint
 
 from .utils import Text
 from .adjoint_contraction_args import logger
@@ -19,7 +19,7 @@ def open_h5py(h5name, file_mode="a", comm= dolfin.mpi_comm_world()):
         return  h5py.File(h5name, file_mode, driver='mpio', comm=comm)
     else:
         return  h5py.File(h5name, file_mode)
-
+    
 def check_and_delete(h5name, h5group, comm= dolfin.mpi_comm_world()):
 
     with open_h5py(h5name, "a", comm) as h5file:
