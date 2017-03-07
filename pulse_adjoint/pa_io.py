@@ -59,6 +59,7 @@ def dict2h5_hpc(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
         if os.path.isfile(h5name):
             os.remove(h5name)
 
+    
     file_mode = "a" if os.path.isfile(h5name) and not overwrite_file else "w"
 
     # IF we should append the file but overwrite the group we need to
@@ -67,13 +68,13 @@ def dict2h5_hpc(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
     if file_mode == "a" and overwrite_group and h5group!="":
         check_and_delete(h5name, h5group, comm)
                     
-
+    
     with open_h5py(h5name, file_mode, comm) as h5file:
 
         def dict2h5(a, group):
             
             for key, val in a.iteritems():
-                                
+               
                 subgroup = "/".join([group, str(key)])
                     
                 if isinstance(val, dict):
@@ -87,24 +88,40 @@ def dict2h5_hpc(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
                     
                     elif isinstance(val[0], (dolfin.Vector, dolfin.GenericVector)):
                         for i, f in enumerate(val):
-                            v = gather_broadcast(f.array())
-                            if comm.rank == 0:
+
+                            if parallel_h5py:
+                                v = f.array()
                                 h5file.create_dataset(subgroup + "/{}".format(i),data = v)
+                            else:
+                                v = gather_broadcast(f.array())
+                                
+                                if comm.rank == 0:
+                                    h5file.create_dataset(subgroup + "/{}".format(i),data = v)
                                          
                             
                     elif isinstance(val[0], (dolfin.Function, dolfin_adjoint.Function)):
                         for i, f in enumerate(val):
-                            v = gather_broadcast(f.vector().array())
-                            if comm.rank == 0:
+                            
+                            if parallel_h5py:
+                                v = f.vector().array()
                                 h5file.create_dataset(subgroup + "/{}".format(i),data=v)
+                            else:
+                                v = gather_broadcast(f.vector().array())
+                                if comm.rank == 0:
+                                    h5file.create_dataset(subgroup + "/{}".format(i),data=v)
+                            
                                                       
                                          
                             
                     elif isinstance(val[0], (float, int)):
                        
                         v = np.array(val, dtype=float)
-                        if comm.rank == 0:
+                        if parallel_h5py:
                             h5file.create_dataset(subgroup, data=v)
+                        else:
+                            if comm.rank == 0:
+                                h5file.create_dataset(subgroup, data=v)
+                            
                         
                     elif isinstance(val[0], list) or isinstance(val[0], np.ndarray) \
                          or  isinstance(val[0], dict):
@@ -117,24 +134,40 @@ def dict2h5_hpc(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
                     
                 elif isinstance(val, (float, int)):
                     v = np.array([float(val)], dtype=float)
-                    if comm.rank == 0:
+                    
+                    if parallel_h5py:
                         h5file.create_dataset(subgroup, data = v)
+                    else:
+                        if comm.rank == 0:
+                            h5file.create_dataset(subgroup, data = v)
     
                 elif isinstance(val, (dolfin.Vector, dolfin.GenericVector)):
-                    v = gather_broadcast(val.array())
-                    if comm.rank == 0:
+                    
+                    if parallel_h5py:
+                        v = val.array()
                         h5file.create_dataset(subgroup, data = v)
+                    else:
+                        v = gather_broadcast(val.array())
+                        if comm.rank == 0:
+                            h5file.create_dataset(subgroup, data = v)
+                    
 
                 elif isinstance(val, (dolfin.Function, dolfin_adjoint.Function)):
-                    v= gather_broadcast(val.vector().array())
-                    if comm.rank == 0:
+                    
+                    if parallel_h5py:
+                        v = val.vector().array()
                         h5file.create_dataset(subgroup,data= v)
+                    else:
+                        v= gather_broadcast(val.vector().array())
+                        if comm.rank == 0:
+                            h5file.create_dataset(subgroup,data= v)
                     
                 else:
                     raise ValueError("Unknown type {}".format(type(val)))
 
         dict2h5(d, h5group)
-
+        comm.Barrier()
+        
 
 
 def write_opt_results_to_h5(h5group,
@@ -147,11 +180,12 @@ def write_opt_results_to_h5(h5group,
     
     h5name = params["sim_file"]
     logger.info("Save results to {}:{}".format(h5name, h5group))
-    
+
     filedir = os.path.abspath(os.path.dirname(params["sim_file"]))
     if not os.path.exists(filedir) and comm.rank == 0:
         os.makedirs(filedir)
         write_append = "w"
+
 
     if os.path.isfile(h5name):
         # Open the file in h5py
@@ -163,27 +197,29 @@ def write_opt_results_to_h5(h5group,
         open_file_format = "w"
         
 
-
     # Make sure to save the state as a function, and
     # make sure that we don't destroy the dof-structure
     # by first assigning the state to te correction function
     # and then save it.
     with dolfin.HDF5File(comm, h5name, open_file_format) as h5file:
 
+       
         h5file.write(for_result_opt["optimal_control"],
                      "/".join([h5group, "optimal_control"]))
         
+       
         # States
         for i, w in enumerate(for_result_opt["states"]):
+       
             assign_to_vector(solver.get_state().vector(), gather_broadcast(w.array()))
             h5file.write(solver.get_state(), "/".join([h5group, "states/{}".format(i)]))
-
+       
             u,p = solver.get_state().split(deepcopy=True)
             h5file.write(u, "/".join([h5group, "displacement/{}".format(i)]))
             h5file.write(p, "/".join([h5group, "lagrange_multiplier/{}".format(i)]))
 
 
-
+   
     data = {"initial_control":for_result_opt["initial_control"],
             "bcs":for_result_opt["bcs"],
             "optimization_results": opt_result}
@@ -198,7 +234,7 @@ def write_opt_results_to_h5(h5group,
         if hasattr(v, 'weights_arr'):
             data[k]["weights"] = v.weights_arr
             
-            
+    
     dict2h5_hpc(data, h5name, h5group, comm, 
                 overwrite_file = False, overwrite_group = False)
     
@@ -323,7 +359,6 @@ def contract_point_exists(params):
         h5file.close()
         return False
 
-   
     try:
         
         # Check if pv point is already computed
@@ -337,4 +372,5 @@ def contract_point_exists(params):
         h5file.close()
         return False
     except KeyError:
+        h5file.close()
         return False

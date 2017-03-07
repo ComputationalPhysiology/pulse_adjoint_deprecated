@@ -336,7 +336,8 @@ class ActiveHeartProblem(BasicHeartProblem):
         
         
         passive_filling_duration = solver_parameters["passive_filling_duration"]
-    
+
+        
         BasicHeartProblem.__init__(self, bcs, solver_parameters, pressure)
 
         # Load the state from the previous iteration
@@ -345,10 +346,11 @@ class ActiveHeartProblem(BasicHeartProblem):
         
             # Get previous state
             if params["active_contraction_iteration_number"] == 0:
+                it = passive_filling_duration if params["unload"] else passive_filling_duration-1
                 group = "/".join([params["h5group"],
                                   PASSIVE_INFLATION_GROUP,
                                   "states",
-                                  str(passive_filling_duration - 1)])
+                                  str(it)])
                 
             else:
                 group = "/".join([params["h5group"],
@@ -358,8 +360,8 @@ class ActiveHeartProblem(BasicHeartProblem):
             h5file.read(w_temp, group)
 
 
-        self.solver.get_state().assign(w_temp, annotate = annotate)
-        # self.solver.solve()
+        self.solver.reinit(w_temp, annotate=annotate)
+        self.solver.solve()
        
     
     def next_active(self, gamma_current, gamma, assign_prev_state=True, steps = None):
