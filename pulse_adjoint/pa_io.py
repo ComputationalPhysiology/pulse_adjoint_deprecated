@@ -1,13 +1,73 @@
-import h5py, os, mpi4py, petsc4py
+import h5py, os, mpi4py, petsc4py, yaml
 import numpy as np
 import dolfin, dolfin_adjoint
 
-from .utils import Text
-from .adjoint_contraction_args import logger
-from .numpy_mpi import *
+from utils import Text
+from adjoint_contraction_args import logger
+from numpy_mpi import *
 
 parallel_h5py = h5py.h5.get_config().mpi
 
+
+def gather_dictionary(d):
+
+    def gather_dict(a):
+        v = {}
+        for key, val in a.iteritems():
+            
+            if isinstance(val, dict):
+                v[key] = gather_dict(val)
+
+            elif isinstance(val, (list,  np.ndarray, tuple)):
+                                        
+                    if len(val) == 0:
+                        # If the list is empty we do nothing
+                        pass
+                    
+                    elif isinstance(val[0], (dolfin.Vector, dolfin.GenericVector)):
+                        v[key] = {}
+                        for i, f in enumerate(val):
+                            v[key][i] = gather_broadcast(f.array())
+                            
+                                                      
+                    elif isinstance(val[0], (dolfin.Function, dolfin_adjoint.Function)):
+                        v[key] = {}
+                        for i, f in enumerate(val):
+                            v[key][i] = gather_broadcast(f.vector().array())
+                                                                         
+                            
+                    elif isinstance(val[0], (float, int)):
+                        v[key] = np.array(val, dtype=float)
+
+                        
+                    elif isinstance(val[0], list) or isinstance(val[0], np.ndarray) \
+                         or  isinstance(val[0], dict):
+                        # Make this list of lists into a dictionary
+                        f = {str(i):v for i,v in enumerate(val)}
+                        v[key] = gather_dict(f)                
+                    
+                    else:
+                        raise ValueError("Unknown type {}".format(type(val[0])))
+                    
+            elif isinstance(val, (float, int)):
+                v[key] = np.array([float(val)], dtype=float)
+
+    
+            elif isinstance(val, (dolfin.Vector, dolfin.GenericVector)):
+                v[key] = gather_broadcast(val.array())
+                
+                
+            elif isinstance(val, (dolfin.Function, dolfin_adjoint.Function)):
+                v[key] = gather_broadcast(val.vector().array())
+                
+            else:
+                raise ValueError("Unknown type {}".format(type(val)))
+
+        return v
+
+    return gather_dict(d)
+            
+            
 
 def open_h5py(h5name, file_mode="a", comm= dolfin.mpi_comm_world()):
 
@@ -68,7 +128,12 @@ def dict2h5_hpc(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
     if file_mode == "a" and overwrite_group and h5group!="":
         check_and_delete(h5name, h5group, comm)
                     
+
+    # First gather the whole dictionary as numpy arrays
+
+
     
+        
     with open_h5py(h5name, file_mode, comm) as h5file:
 
         def dict2h5(a, group):
@@ -165,8 +230,60 @@ def dict2h5_hpc(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
                 else:
                     raise ValueError("Unknown type {}".format(type(val)))
 
+        
         dict2h5(d, h5group)
         comm.Barrier()
+
+def numpy_dict_to_h5(d, h5name, h5group = "", comm = dolfin.mpi_comm_world(),
+                overwrite_file = True, overwrite_group=True):
+    """Create a HDF5 file and put the
+    data in the dictionary in the 
+    same hiearcy in the HDF5 file
+    
+    Assume leaf of dictionary is either
+    float, numpy.ndrray, list or 
+    dolfin.GenericVector.
+
+    :param d: Dictionary to be saved
+    :param h5fname: Name of the file where you want to save
+    
+    
+    """
+    if overwrite_file:
+        if os.path.isfile(h5name):
+            os.remove(h5name)
+
+    
+    file_mode = "a" if os.path.isfile(h5name) and not overwrite_file else "w"
+
+    # IF we should append the file but overwrite the group we need to
+    # check that the group does not exist. If so we need to open it in
+    # h5py and delete it.
+    if file_mode == "a" and overwrite_group and h5group!="":
+        check_and_delete(h5name, h5group, comm)
+                    
+    if comm.rank == 0:
+        with h5py.File(h5name, file_mode) as h5file:
+
+            def dict2h5(a, group):
+                
+                for key, val in a.iteritems():
+                
+                    subgroup = "/".join([group, str(key)])
+                    
+                    if isinstance(val, dict):
+                        dict2h5(val, subgroup)
+
+                    else:
+                        assert isinstance(val, np.ndarray)
+                        assert val.dtype == np.float
+                    
+                        h5file.create_dataset(subgroup,data= val)
+
+            dict2h5(d, h5group)
+
+    MPI.barrier(comm)
+    
         
 
 
@@ -233,10 +350,14 @@ def write_opt_results_to_h5(h5group,
         
         if hasattr(v, 'weights_arr'):
             data[k]["weights"] = v.weights_arr
-            
+
     
-    dict2h5_hpc(data, h5name, h5group, comm, 
-                overwrite_file = False, overwrite_group = False)
+    gathered_data = gather_dictionary(data)
+    numpy_dict_to_h5(gathered_data, h5name, h5group, comm, 
+                     overwrite_file = False, overwrite_group = False)
+   
+    # dict2h5_hpc(data, h5name, h5group, comm, 
+    #             overwrite_file = False, overwrite_group = False)
     
 
 def test_store():
@@ -252,6 +373,8 @@ def test_store():
     params = setup_adjoint_contraction_parameters()
     
     geo = load_geometry_from_h5("../demo/data/mesh.h5", "22")
+    geo.passive_filling_duration = 3
+    geo.strain_weights = np.ones((17,3))
     
     measurements = yaml.load(open("../demo/data/measurements.yml"))
     measurements.pop("original_strain")
@@ -280,11 +403,11 @@ def test_store():
     phm, w= for_run.get_phm(False, True)
     
     functional = for_run.make_functional()
-    for_run.update_targets(0, split(w)[0], control)
-    for_run.states = [Vector(w.vector())]
-    for_res = for_run._make_forward_result([0.0], [functional*dt[0.0]])
+    for_run.update_targets(0, dolfin.split(w)[0], control)
+    for_run.states = [dolfin.Vector(w.vector())]
+    for_res = for_run._make_forward_result([0.0], [functional*dolfin_adjoint.dt[0.0]])
 
-    for_res["initial_control"] = Vector(control.vector())
+    for_res["initial_control"] = dolfin.Vector(control.vector())
     for_res["optimal_control"] = control
 
     opt_result = {}
@@ -374,3 +497,8 @@ def contract_point_exists(params):
     except KeyError:
         h5file.close()
         return False
+
+
+if __name__ == "__main__":
+    test_store()
+    
