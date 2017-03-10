@@ -139,12 +139,12 @@ class BasicHeartProblem(collections.Iterator):
         n_max = 100
 
                
-        lv_pressures = np.linspace(p_lv_prev, p_lv_next, nsteps)
+        lv_pressures = np.linspace(p_lv_prev, p_lv_next, nsteps+1)
         p_lv = p_lv_prev
         
         
         if self.has_rv:
-            rv_pressures = np.linspace(p_rv_prev, p_rv_next, nsteps)
+            rv_pressures = np.linspace(p_rv_prev, p_rv_next, nsteps+1)
      
     
         while not converged and nsteps < n_max:
