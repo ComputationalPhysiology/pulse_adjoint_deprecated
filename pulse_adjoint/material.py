@@ -60,9 +60,10 @@ class Material(object):
           "The active model '{}' is not implemented.".format(self._active_model)
 
         if T_ref is None:
-            self._T_ref = 500.0 if self._active_model == "active_stress"  else 1.0
+            self._T_ref = 1000.0 if self._active_model == "active_stress"  else 1.0
         else:
             self._T_ref = T_ref
+        # self._T_ref = 1.0
   
 
         if params:
@@ -187,13 +188,9 @@ class Material(object):
             gamma = self.gamma
 
         # Left Cauchy green
-        B = F*F.T
-
-        # Fibers on the current configuration
-        f = F*self.f0
         
-        # The outer product of the fibers
-        ff = outer(f,f)
+
+        
 
         if DOLFIN_VERSION_MAJOR > 1.6:
             dim = find_geometric_dimension(F)
@@ -202,19 +199,45 @@ class Material(object):
 
         I = Identity(dim)
         
-        I1 = self.I1(F)
-        I4f = self.I4f(F)
-
+        # Active stress model
+        if self._active_model == 'active_stress':
+            B = F*F.T
+            # Fibers on the current configuration
+            f = F*self.f0
         
+        
+            # Invariants
+            I1  = self.I1(F)
+            I4f = self.I4f(F)
+
+        # Active strain model
+        else:
+            Fa = self.Fa(gamma)
+            Fe = F*inv(Fa)
+
+            B = Fe*Fe.T
+
+            # Fibers on the current configuration
+            f = Fe*self.f0
+            
+            # Invariants
+            I1  = self.I1e(F, gamma)
+            I4f = self.I4fe(F, gamma)
+            
+        J = det(F)
+
+        # The outer product of the fibers
+        ff = outer(f,f)
         w1 = self.W_1(I1, diff = 1, dim = dim)
         w4f = self.W_4(I4f, diff = 1)
         wactive = self.Wactive(gamma, diff = 1)
 
         if p is None:
-            return 2*w1*B + 2*w4f*ff + 2*wactive*ff 
+            return 2*w1*B + 2*w4f*ff  + 2*wactive*ff 
         else:
-            return 2*w1*B + 2*w4f*ff + 2*wactive*ff - p*I
-
+            return 2*w1*B + 2*w4f*ff  + 2*wactive*ff - p*I
+        
+        
     def Wactive(self, gamma, I4f = 0, diff = 0):
         """
         Acitve term in strain energy function
@@ -234,11 +257,25 @@ class Material(object):
             if diff == 0:
                 return self._T_ref*gamma*I4f
             elif diff == 1:
-                return gamma 
+                return self._T_ref*gamma 
             
         else:
             # No active stress
             return 0
+
+    def Fa(self, gamma):
+
+        dim = self.f0.function_space().mesh().geometry().dim()
+        if self._active_model == 'active_stress':
+            return Identity(dim)
+        
+        else:
+            f0f0 = outer(self.f0, self.f0)
+        
+            I = Identity(dim)
+            Fa = (1-gamma)*f0f0 + pow((1-gamma), -1/float(dim-1))*(I-f0f0)
+            return Fa
+        
     
     def I1(self, F):
         r"""
@@ -251,7 +288,7 @@ class Material(object):
         """
 
         C =  F.T * F
-        return tr(C)
+        return  tr(C)
         
         
 
@@ -498,9 +535,6 @@ class HolzapfelOgden(Material):
         :param float T_ref: Scale factor for active parameter
 
         """
-        
-        
-
 
         # Fiber system
         self.f0 = f0

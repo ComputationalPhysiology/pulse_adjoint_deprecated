@@ -160,7 +160,7 @@ class LVSolver(object):
             solve(self._G == 0,
                   self._w,
                   self._bcs,
-                  J = self._dG,
+                  # J = self._dG,
                   solver_parameters = self.parameters["solve"],
                   annotate = False)
 
@@ -188,7 +188,7 @@ class LVSolver(object):
                 solve(self._G == 0,
                       self._w,
                       self._bcs,
-                      J = self._dG,
+                      # J = self._dG,
                       solver_parameters = self.parameters["solve"], 
                       annotate = True)
 
@@ -242,10 +242,10 @@ class LVSolver(object):
 
         # # If model is compressible remove volumetric strains
         # if self.is_incompressible():
-        #     F_iso = self._F
+        F_iso = self._F
         # else:
         #     pass
-        F_iso = pow(J, -float(1)/dim)*self._F
+        # F_iso = variable(pow(J, -float(1)/dim)*self._F)
 
                 
         # Internal energy
@@ -259,13 +259,14 @@ class LVSolver(object):
         p = self._compressibility.p
                 
         ## Internal virtual work
-        self._G = derivative(self._pi_int*dx, self._w, self._w_test) 
+        # self._G = derivative(self._pi_int*dx, self._w, self._w_test) 
 
         # This is the equivalent formulation
-        # T = material.CauchyStress(F_iso, p)
-        # P = J*T*inv(F_iso).T
-        # self._G = inner(P, grad(du))*dx
-        # self._G -= dp*(J-1)*dx
+        P = diff(self._strain_energy, F_iso)
+        self._G = inner(P, grad(du))*dx
+        self._G -= dp*(J-1)*dx
+        # self._G -= p*J*inner(inv(F_iso).T, grad(du))*dx
+        self._G -= p*J*inner(inv(self._F).T, grad(du))*dx
         
         
         ## External work
@@ -273,8 +274,8 @@ class LVSolver(object):
         # Neumann BC
         if self.parameters["bc"].has_key("neumann"):
             for neumann_bc in self.parameters["bc"]["neumann"]:
-                p, marker = neumann_bc
-                self._G += inner(J*p*dot(inv(self._F).T, N), du)*ds(marker)
+                pressure, marker = neumann_bc
+                self._G += inner(J*pressure*dot(inv(self._F).T, N), du)*ds(marker)
 
 
         # Other body forces
@@ -352,7 +353,7 @@ class Postprocess(object):
         self._C = self.solver._C
         self._E = self.solver._E
         self._I = self.solver._I
-        self._p = self.solver.get_state().split()[1]
+        self._p = self.solver._compressibility.p
 
 
     def internal_energy(self):

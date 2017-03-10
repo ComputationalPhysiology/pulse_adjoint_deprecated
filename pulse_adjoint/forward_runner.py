@@ -514,10 +514,12 @@ class PassiveForwardRunner(BasicForwardRunner):
         self.assign_material_parameters(m)
         self.cphm  =  self.get_phm(annotate, return_state =False)
         parameters["adjoint"]["stop_annotating"] = not annotate
-        forward_result = BasicForwardRunner.solve_the_forward_problem(self, self.cphm, annotate, "passive")
-      
-        
-        return forward_result, False
+        try:
+            forward_result = BasicForwardRunner.solve_the_forward_problem(self, self.cphm, annotate, "passive")
+        except (SolverDidNotConverge, UnableToChangePressureExeption) as ex:
+            raise SolverDidNotConverge
+        else:
+            return forward_result, False
 
 
 
