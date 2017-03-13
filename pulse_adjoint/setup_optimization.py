@@ -576,12 +576,18 @@ def get_measurements(params, patient):
         
         
 
-    elif params["phase"] == PHASES[1]: #Scalar contraction
+    elif params["phase"] == PHASES[1]:
         # We need just the points from the active phase
         start = patient.passive_filling_duration -1
         end = patient.num_points
-
+        
         pvals = params["Active_optimization_weigths"]
+
+        if params["unload"]:
+            start += 1
+
+       
+     
       
     else:
         # We need all the points 
@@ -590,7 +596,9 @@ def get_measurements(params, patient):
 
         pvals = params["Passive_optimization_weigths"]
         
-    
+    if params["unload"]:
+        end += 1
+        
     p["volume"] = pvals["volume"] > 0
     p["rv_volume"] = pvals["rv_volume"] > 0 and hasattr(patient, "RVV")
     p["regional_strain"] = pvals["regional_strain"] > 0
@@ -615,6 +623,7 @@ def get_measurements(params, patient):
         # Choose the pressure at the beginning as reference pressure
         if params["unload"]:
             reference_pressure = 0.0
+            pressure = np.append(0.0, pressure)
         else:
             reference_pressure = pressure[0] 
         logger.info("LV Pressure offset = {} kPa".format(reference_pressure))
@@ -623,13 +632,14 @@ def get_measurements(params, patient):
         #The reference mesh we use is already loaded with a certain
         #amount of pressure, which we remove.
         pressure = np.subtract(pressure,reference_pressure)
-        
         measurements["pressure"] = pressure[start:end]
 
+        
         if hasattr(patient, "RVP"):
             rv_pressure = np.array(patient.RVP)
             if params["unload"]:
                 reference_pressure = 0.0
+                rv_pressure = np.append(0.0, rv_pressure)
             else:
                 reference_pressure = rv_pressure[0]
             logger.info("RV Pressure offset = {} kPa".format(reference_pressure))
@@ -650,6 +660,9 @@ def get_measurements(params, patient):
             
             # Subtract this offset from the volume data
             volume = np.subtract(patient.volume,volume_offset)
+            if params["unload"]:
+                volume = np.append(-1, volume)
+                
 
             logger.info("Computed LV volume = {}".format(volume[0]))
 
@@ -665,6 +678,8 @@ def get_measurements(params, patient):
             
             # Subtract this offset from the volume data
             volume = np.subtract(patient.RVV ,volume_offset)
+            if params["unload"]:
+                volume = np.append(-1, volume)
 
             logger.info("Computed RV volume = {}".format(volume[0]))
             
@@ -688,7 +703,15 @@ def get_measurements(params, patient):
     return measurements
 
 def get_volume_offset(patient, params, chamber = "lv"):
-    N = FacetNormal(patient.mesh)
+
+    if params["unload"]:
+        idx = 1
+        mesh = patient.original_geometry
+        ffun = MeshFunction("size_t", mesh, 2, mesh.domains())
+    else:
+        idx=0
+        mesh = patient.mesh
+        ffun = patient.ffun
 
     if chamber == "lv":
     
@@ -697,44 +720,43 @@ def get_volume_offset(patient, params, chamber = "lv"):
         else:
             endo_marker = patient.markers["ENDO"][0]
 
-        volume = patient.volume[0]
+        volume = patient.volume[idx]
         
     else:
         endo_marker = patient.markers["ENDO_RV"][0]
-        volume = patient.RVV[0]
-
-    if volume == -1:
-        return 0
-
+        volume = patient.RVV[idx]
+        
+    
     logger.info("Measured = {}".format(volume))
     ds = Measure("exterior_facet",
-                 subdomain_data = patient.ffun,
-                 domain = patient.mesh)(endo_marker)
+                 subdomain_data = ffun,
+                 domain = mesh)(endo_marker)
     
-    X = SpatialCoordinate(patient.mesh)
+    X = SpatialCoordinate(mesh)
+    N = FacetNormal(mesh)
 
-    if params["unload"] and params["phase"] == PHASES[1]:
-        # The cavicty volume is the volume of the uloaded geometry
-        # The first measured volume is the unloaded geometry,
-        # loaded with the first pressure. Use this to estimate the offset
-        family, degree = params["state_space"].split(":")[0].split("_")
-        u = Function(VectorFunctionSpace(patient.mesh, family, int(degree)))
-        with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
-            # Get previous state
-            group = "/".join([params["h5group"],
-                              PASSIVE_INFLATION_GROUP,
-                              "displacement","1"])
-            h5file.read(u, group)
+    # if params["unload"] and params["phase"] == PHASES[1]:
+    #     # The cavicty volume is the volume of the uloaded geometry
+    #     # The first measured volume is the unloaded geometry,
+    #     # loaded with the first pressure. Use this to estimate the offset
+    #     family, degree = params["state_space"].split(":")[0].split("_")
+    #     u = Function(VectorFunctionSpace(mesh, family, int(degree)))
+    #     with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
+    #         # Get previous state
+    #         group = "/".join([params["h5group"],
+    #                           PASSIVE_INFLATION_GROUP,
+    #                           "displacement","1"])
+    #         h5file.read(u, group)
 
-        # We would like to use interpolate here, but project works with dolfin-adjoint
-        u_int = project(u, VectorFunctionSpace(patient.mesh, "CG", 1))
-        F = grad(u_int) + Identity(3)
-        J = det(F)
-        vol = assemble((-1.0/3.0)*dot(X+u_int,J*inv(F).T*N)*ds)
-        logger.info("Computed = {}".format(vol))
-    else:
+    #     # We would like to use interpolate here, but project works with dolfin-adjoint
+    #     u_int = project(u, VectorFunctionSpace(patient.mesh, "CG", 1))
+    #     F = grad(u_int) + Identity(3)
+    #     J = det(F)
+    #     vol = assemble((-1.0/3.0)*dot(X+u_int,J*inv(F).T*N)*ds)
+    #     logger.info("Computed = {}".format(vol))
+    # else:
         
-        vol = assemble((-1.0/3.0)*dot(X,N)*ds)
+    vol = assemble((-1.0/3.0)*dot(X,N)*ds)
     
     return volume - vol
 
