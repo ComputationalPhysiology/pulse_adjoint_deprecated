@@ -259,14 +259,14 @@ class LVSolver(object):
         p = self._compressibility.p
                 
         ## Internal virtual work
-        # self._G = derivative(self._pi_int*dx, self._w, self._w_test) 
+        self._G = derivative(self._pi_int*dx, self._w, self._w_test) 
 
         # This is the equivalent formulation
-        P = diff(self._strain_energy, F_iso)
-        self._G = inner(P, grad(du))*dx
-        self._G -= dp*(J-1)*dx
+        # P = diff(self._strain_energy, F_iso)
+        # self._G = inner(P, grad(du))*dx
+        # self._G -= dp*(J-1)*dx
         # self._G -= p*J*inner(inv(F_iso).T, grad(du))*dx
-        self._G -= p*J*inner(inv(self._F).T, grad(du))*dx
+        # self._G -= p*J*inner(inv(self._F).T, grad(du))*dx
         
         
         ## External work
