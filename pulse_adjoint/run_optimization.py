@@ -290,9 +290,8 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
 
 def store(params, rd, opt_result):
 
-    from lvsolver import LVSolver
-    solver =  LVSolver(rd.for_run.solver_parameters)
-
+    solver = rd.for_run.cphm.solver
+   
     if params["phase"] == PHASES[0]:
 
         h5group =  "/".join([params["h5group"],PASSIVE_INFLATION_GROUP])
@@ -330,7 +329,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
         rd(x)
         rd.for_res["initial_control"] = rd.initial_paramvec,
         rd.for_res["optimal_control"] = rd.paramvec
-        (params, rd, {})
+        store(params, rd, {})
 
     
     else:
@@ -423,7 +422,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
             msg = ("Optimization provided a worse result than the initial guess. "
                    "\nMake the initial guess the solution")
             logger.warning(msg)
-            rd.for_run.cphm.get_state(False).assign(state_start)
+            rd.for_run.cphm.solver.reinit(state_start)
             paramvec.assign(paramvec_start)
             
         

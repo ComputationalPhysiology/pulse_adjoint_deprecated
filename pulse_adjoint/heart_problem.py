@@ -23,6 +23,7 @@ from numpy_mpi import *
 from utils import Text, UnableToChangePressureExeption
 import collections
 from lvsolver import LVSolver, SolverDidNotConverge
+from iterate import iterate
 
 class BasicHeartProblem(collections.Iterator):
     """
@@ -43,163 +44,22 @@ class BasicHeartProblem(collections.Iterator):
 
         # Mechanical solver Active strain Holzapfel and Ogden
         self.solver = LVSolver(solver_parameters)
-        
-
-        if solver_parameters.has_key("base_bc_y"):
-            self.base_bc_from_seg = solver_parameters["base_bc_y"] is not None
-        else:
-            self.base_bc_from_seg = False
-        if self.base_bc_from_seg:
-            self.solver.parameters["base_bc_y"].reset()
-            self.solver.parameters["base_bc_z"].reset()
-         
-            
-
-    def set_direchlet_bc(self):
-        """
-        Set Direclet BC at the endoring by an iterative process
-        """
-        # for i in range(self.solver.parameters["base_bc_y"].npoints):
-        self.solver.parameters["base_bc_y"].next()
-        self.solver.parameters["base_bc_z"].next()
-        it = self.solver.parameters["base_it"]
-        
-        nsteps = 2
-        ts = np.linspace(0,1, nsteps)
-        _i = 0.0
-        done = False
-
-        # In case the solver chrashes when solving for the
-        # Dirichlet BC we can set this BC in an iterative way. 
-        while not done and nsteps < 20:
-            for i in ts[1:]:
-
-                logger.debug("Iterator for BC = {}".format(i))
-                it.t = i
-                try:
-                    out = self.solver.solve()
-                    
-                except SolverDidNotConverge:
-                    crash = True
-                else:
-                    crash = False
-                    
-                if crash:
-                    logger.debug("Crashed when setting BC")
-                    nsteps += 2
-                    ts = np.linspace(_i, 1, nsteps)
-                    break
-                
-                else:
-                    _i = i
-                    
-                    if i == 1:
-                        done = True
-        
+       
 
     def increase_pressure(self):
-        """
-        Step up the pressure to the next given
-        pressure and solve the force-balance equations
-        """
-
 
         p_lv_next = self.lv_pressure_gen.next()
-        p_lv_prev = self.p_lv.t
-        p_diff = abs(p_lv_next - p_lv_prev)
-
         if self.has_rv:
             p_rv_next = self.rv_pressure_gen.next()
-            p_rv_prev = self.p_rv.t
-            
-            p_diff += abs(p_rv_next - p_rv_prev)
-            
-  
-        if p_diff < DOLFIN_EPS:
-            # return solver.solve()[0]
-            return self.solver.get_state()
+            target_pressure = (p_lv_next, p_rv_next)
+            pressure = {"p_lv":self.p_lv, "p_rv":self.p_rv}
+        else:
+            target_pressure = p_lv_next
+            pressure = {"p_lv":self.p_lv}
 
-        head = "{:<20}\t{:<15}\t{:<15}".format("Increase pressure:",
-                                               "previous (lv)",
-                                               "next (lv)")
-        line = " "*20+"\t{:<15}\t{:<15}".format(p_lv_prev,
-                                                p_lv_next)
-        if self.has_rv:
-            head += "\t{:<15}\t{:<15}".format("previous (rv)",
-                                               "next (rv)")
-            line += "\t{:<15}\t{:<15}".format(p_rv_prev,
-                                              p_rv_next)
-            
-        logger.debug(head)
-        logger.debug(line)
-
-        converged = False
-
-        nsteps = max(np.ceil(p_diff/0.4), 2)
-        n_max = 100
-
-               
-        lv_pressures = np.linspace(p_lv_prev, p_lv_next, nsteps+1)
-        p_lv = p_lv_prev
+        iterate(self.solver, target_pressure, "pressure",
+                pressure)
         
-        
-        if self.has_rv:
-            rv_pressures = np.linspace(p_rv_prev, p_rv_next, nsteps+1)
-     
-    
-        while not converged and nsteps < n_max:
-
-            crash = False
-            for it, p_lv in enumerate(lv_pressures[1:], start = 1):
-                
-                self.p_lv.t = p_lv
-                
-                if self.has_rv:
-                    p_rv = rv_pressures[it]
-                    self.p_rv.t = p_rv
-                
-                logger.info("\nSolve for lv pressure = {}".format(p_lv))
-                try:
-                    out = self.solver.solve()
-                except SolverDidNotConverge:
-                    crash = True
-                else:
-                    crash = False
-                
-                
-                if crash:
-                    logger.warning("\nSolver chrashed when increasing pressure from {} to {}".format(p_lv_prev, p_lv))
-                    logger.warning("Take smaller steps")
-                    nsteps *= 2
-                    lv_pressures = np.linspace(p_lv_prev, p_lv_next, nsteps)
-                    if self.has_rv:
-                        rv_pressures = np.linspace(p_rv_prev, p_rv_next, nsteps)
-                    break
-                else:
-                    p_lv_prev = p_lv
-                    
-                    # Adapt
-                    nsteps = np.ceil(nsteps/1.5)
-                    lv_pressures = np.linspace(p_lv_prev, p_lv_next, nsteps)
-                    if self.has_rv:
-                        p_rv_prev = p_rv
-                        rv_pressures = np.linspace(p_rv_prev, p_rv_next, nsteps)
-                        
-                    converged = True if p_lv == p_lv_next else False
-                    break
-                    
-
-
-        if nsteps >= n_max:
-            
-            raise UnableToChangePressureExeption("Unable to increase pressure")
-
-        
-        if self.base_bc_from_seg:
-            self.set_direchlet_bc()
-
-        
-        return out
     
     def get_state(self, copy = True):
         """
@@ -209,7 +69,14 @@ class BasicHeartProblem(collections.Iterator):
             return self.solver.get_state().copy(True)
         else:
             return self.solver.get_state()
+        
+    def get_gamma(self, copy =True):
+        if copy:
+            return self.solver.parameters["material"].gamma.copy(True)
+        else:
+            return self.solver.parameters["material"].gamma
 
+            
     def get_inner_cavity_volume(self):
         """
         Return the volume of left ventricular chamber
@@ -229,11 +96,10 @@ class BasicHeartProblem(collections.Iterator):
     def next(self):
         """Solve the system as it is
         """
-
         
-        out = self.solver.solve()
+        self.solver.solve()
 	
-        return out
+        return self.get_state(False)
 
 
 
@@ -249,76 +115,6 @@ def get_max_diff(f1,f2):
     diff = f1.vector() - f2.vector()
     diff.abs()
     return diff.max()
-
-
-
-class SyntheticHeartProblem(BasicHeartProblem):
-    """
-    I already have gamma. Now run a simulation using the list of gamma.
-    """
-    def __init__(self, bcs,
-                 solver_parameters,
-                 p_lv,
-                 gamma_list):
-        
-        self.gamma_gen = (g for g in gamma_list)
-        self.gamma = gamma_list[0]
-        
-        BasicHeartProblem.__init__(self, bcs, solver_parameters, p_lv)
-
-    def next(self):
-
-        nr_steps = 2
-        g_prev = self.gamma
-        gamma_current = self.gamma_gen.next()
-        
-        
-        logger.debug("\tGamma:    Mean    Max")
-        logger.debug("\tPrevious  {:.3f}  {:.3f}".format(get_mean(g_prev), 
-                                                         get_max(g_prev)))
-                                                         
-        logger.debug("\tNext      {:.3f}  {:.3f} ".format(get_mean(gamma_current), 
-                                                         get_max(gamma_current)))
-
-        dg = Function(g_prev.function_space())
-        dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] - g_prev.vector()[:])
-        g = Function(g_prev.function_space())
-        g.assign(g_prev)
-
-        out = self.get_state()
-        done = False
- 
-        
-        while not done:
-                
-            for i in range(1, nr_steps+1):
-     
-                g.vector()[:] +=  dg.vector()[:]
-
-                self.solver.parameters['material'].gamma.assign(g)
-
-              
-                out, crash = self.solver.solve()
-                if crash:
-                    logger.warning("Solver crashed. Reduce gamma step")
-                    
-                    nr_steps += 4
-                    g.assign(g_prev)
-                    dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] - g_prev.vector()[:]) 
-                    logger.debug("DG vector max {}".format(dg.vector().max()))
-                    
-                    break
-
-                else:
-                    g_prev.assign(g)
-                    
-                        
-                if i == nr_steps:
-                    done = True
-
-        self.gamma = gamma_current
-
-        return BasicHeartProblem.next(self)
 
 
 
@@ -359,140 +155,21 @@ class ActiveHeartProblem(BasicHeartProblem):
                 
             h5file.read(w_temp, group)
 
-
         self.solver.reinit(w_temp, annotate=annotate)
+        # self.solver.get_state().assign(w_temp, annotate = annotate)
         self.solver.solve()
        
-    
     def next_active(self, gamma_current, gamma, assign_prev_state=True, steps = None):
-        """
-        Step up gamma iteratively.
-        """
 
-        max_diff = get_max_diff(gamma_current, gamma)
-        nr_steps = max(2, int(math.ceil(max_diff/GAMMA_INC_LIMIT))) if steps is None else steps
+        gammas, states = iterate(self.solver, gamma_current, "gamma")
 
-        logger.debug("\tGamma:    Mean    Max     max difference")
-        logger.debug("\tPrevious  {:.3f}  {:.3f}    {:.3e}".format(get_mean(gamma), 
-                                                                   get_max(gamma), 
-                                                                   max_diff))
-        logger.debug("\tNext      {:.3f}  {:.3f} ".format(get_mean(gamma_current), 
-                                                          get_max(gamma_current)))
-
-        # Step size for gamma
-        dg = Function(gamma.function_space(), name = "dg")
-        dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] - gamma.vector()[:])
-
-        # Gamma the will be used in the iteration
-        g = Function(gamma.function_space(), name = "g")
-        g.assign(gamma)
-
-        g_previous = gamma.copy()
-
-        # Keep the old gamma
-        g_old = gamma.copy()
+        if assign_prev_state:
+            # Assign the previous state
+            self.solver.reinit(states[-1])
+            self.solver.parameters['material'].gamma.assign(gammas[-1])
         
-        done = False
-        finished_stepping = False
+        return self.get_state(False)
 
-             
-        # If the solver crashes n times it is probably stuck
-        MAX_NR_CRASH = 5
-        nr_crashes = 0
-        
-        
-        logger.info("\n\tIncrement gamma...")
-        logger.info("\tMean \tMax")
-        while not done:
-            while not finished_stepping:
-                
-                
-
-                
-                # Loop over the steps
-                for i in range(1, nr_steps):
-                
-                    # Increment gamma
-                    g.vector()[:] +=  dg.vector()[:]
-                    # Assing the new gamma
-                    self.solver.parameters['material'].gamma.assign(g)
-                        
-
-                    # Try to solve
-                    logger.info("\t{:.3f} \t{:.3f}".format(get_mean(g), get_max(g)))
-
-                    try:
-                        
-                        out = self.solver.solve()
-                
-                    except SolverDidNotConverge as ex:
-                        if nr_crashes > MAX_NR_CRASH:
-                            # Throw exception further
-                            raise ex
-                        else:
-                            crash = True
-                    else:
-                        crash = False
- 
-                    if crash:
-                        # If that does not work increase the number of steps
-                        logger.warning("Solver crashed. Reduce gamma step")
-                        nr_steps *=2
-
-                        g.assign(g_previous)
-                            
-                        
-                        dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] 
-                                                        - g_previous.vector()[:]) 
-                        nr_crashes += 1
-
-                        break
-
-                    else:
-                        g_previous.assign(g.copy())
-
-                        # Adapt
-                        # nr_steps /= 1.5
-                        # dg.vector()[:] = 1./nr_steps * (gamma_current.vector()[:] 
-                        #                                 - g_prev.vector()[:])
-                        
-                        
-                        
-                if nr_steps == 1 or i == nr_steps-1:
-                    finished_stepping = True
-
-            # All points up to the last point converged. 
-            # Now check that the last point also converges.
-            
-            # Store the current solution
-            w = self.get_state()
-            
-
-            self.solver.parameters['material'].gamma.assign(gamma_current)
-            
-            
-            logger.debug("\t{:.3f} \t{:.3f}".format(get_mean(gamma_current), 
-                                                       get_max(gamma_current)))
-            out = self.solver.solve()
-      
-            
-            if crash:
-                nr_steps *= 2
-                logger.warning("\tFinal solve-step crashed. Reduce gamma step")
-                g.assign(g_previous)
-                dg.vector()[:] = 1./(nr_steps) * (gamma_current.vector()[:] - g_previous.vector()[:]) 
-
-                finished_stepping = False
-            else:
-                if assign_prev_state:
-                    # Assign the previous state
-                    self.solver.get_state().assign(w, annotate = False)
-                    self.solver.reinit(w)
-                    self.solver.parameters['material'].gamma.assign(g_previous)
-              
-                done = True
-
-        return out
 
 
 
@@ -507,9 +184,9 @@ class PassiveHeartProblem(BasicHeartProblem):
         Increase the pressure and solve the system
         """
         
-        out = self.increase_pressure()
+        self.increase_pressure()
         
-        return out
+        return self.get_state(False)
 
 
 

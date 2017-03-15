@@ -10,5 +10,6 @@ import heart_problem
 import lvsolver
 import optimal_control
 
+from iterate import iterate
 from adjoint_contraction_args import logger
 from setup_optimization import RegionalParameter
