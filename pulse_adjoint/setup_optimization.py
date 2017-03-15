@@ -660,12 +660,10 @@ def get_measurements(params, patient):
             
             # Subtract this offset from the volume data
             volume = np.subtract(patient.volume,volume_offset)
+            logger.info("Computed LV volume = {}".format(volume[0]))
             if params["unload"]:
                 volume = np.append(-1, volume)
                 
-
-            logger.info("Computed LV volume = {}".format(volume[0]))
-
             measurements["volume"] = volume[start:end]
 
 
@@ -678,10 +676,9 @@ def get_measurements(params, patient):
             
             # Subtract this offset from the volume data
             volume = np.subtract(patient.RVV ,volume_offset)
+            logger.info("Computed RV volume = {}".format(volume[0]))
             if params["unload"]:
                 volume = np.append(-1, volume)
-
-            logger.info("Computed RV volume = {}".format(volume[0]))
             
             measurements["rv_volume"] = volume[start:end]
                 
@@ -705,11 +702,9 @@ def get_measurements(params, patient):
 def get_volume_offset(patient, params, chamber = "lv"):
 
     if params["unload"]:
-        idx = 1
         mesh = patient.original_geometry
         ffun = MeshFunction("size_t", mesh, 2, mesh.domains())
     else:
-        idx=0
         mesh = patient.mesh
         ffun = patient.ffun
 
@@ -720,11 +715,11 @@ def get_volume_offset(patient, params, chamber = "lv"):
         else:
             endo_marker = patient.markers["ENDO"][0]
 
-        volume = patient.volume[idx]
+        volume = patient.volume[0]
         
     else:
         endo_marker = patient.markers["ENDO_RV"][0]
-        volume = patient.RVV[idx]
+        volume = patient.RVV[0]
         
     
     logger.info("Measured = {}".format(volume))

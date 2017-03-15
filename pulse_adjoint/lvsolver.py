@@ -155,14 +155,16 @@ class LVSolver(object):
         """
         # Get old state in case of non-convergence
         w_old = self.get_state().copy(True)
+        problem = NonlinearVariationalProblem(self._G, self._w,
+                                              self._bcs,
+                                              self._dG)
+        solver = NonlinearVariationalSolver(problem)
+        solver.parameters.update(self.parameters["solve"])
+        
         try:
-            # Try to solve the system
-            solve(self._G == 0,
-                  self._w,
-                  self._bcs,
-                  # J = self._dG,
-                  solver_parameters = self.parameters["solve"],
-                  annotate = False)
+
+            nliter, nlconv = solver.solve(annotate=False)
+
 
         except RuntimeError as ex:
             logger.debug(ex)
@@ -185,15 +187,10 @@ class LVSolver(object):
                 # Assign the old state
                 self.reinit(w_old)
                 # Solve the system with annotation
-                solve(self._G == 0,
-                      self._w,
-                      self._bcs,
-                      # J = self._dG,
-                      solver_parameters = self.parameters["solve"], 
-                      annotate = True)
+                nliter, nlconv = solver.solve(annotate=True)
 
-            # Return the new state, crash = False
-            return self._w
+                
+            return nliter, nlconv
 
     
         

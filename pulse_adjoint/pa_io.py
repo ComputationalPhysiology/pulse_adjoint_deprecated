@@ -327,8 +327,9 @@ def write_opt_results_to_h5(h5group,
        
         # States
         for i, w in enumerate(for_result_opt["states"]):
-       
-            assign_to_vector(solver.get_state().vector(), gather_broadcast(w.array()))
+
+            solver.get_state().vector().zero()
+            solver.get_state().vector().axpy(1.0, w.vector())
             h5file.write(solver.get_state(), "/".join([h5group, "states/{}".format(i)]))
        
             u,p = solver.get_state().split(deepcopy=True)
