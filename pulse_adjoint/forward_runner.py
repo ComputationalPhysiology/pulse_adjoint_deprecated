@@ -155,7 +155,7 @@ class BasicForwardRunner(object):
             
             # And we save it for later reference
             phm.solver.solve()
-            self.states.append(Vector(phm.solver.get_state().vector()))
+            self.states.append(Vector(phm.solver.get_state().copy(True)))
 
 
         # Print the functional
@@ -209,7 +209,7 @@ class BasicForwardRunner(object):
      
                 functional_values.append(assemble(functional))
                 
-            self.states.append(Vector(phm.solver.get_state().vector()))
+            self.states.append(Vector(phm.solver.get_state().copy(True))))
             
         forward_result = self._make_forward_result(functional_values,
                                                    functionals_time)

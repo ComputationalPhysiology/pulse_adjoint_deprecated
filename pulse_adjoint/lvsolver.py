@@ -164,7 +164,8 @@ class LVSolver(object):
         try:
 
             nliter, nlconv = solver.solve(annotate=False)
-
+            if not nlconv:
+                raise RuntimeError("Solver did not converge...")za
 
         except RuntimeError as ex:
             logger.debug(ex)
