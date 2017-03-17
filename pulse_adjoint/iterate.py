@@ -207,6 +207,7 @@ def get_delta(new_control, c0, c1):
 def iterate(solver, target, control = "gamma", p_expr=None,
             continuation = True, max_adapt_iter = 8, adapt_step=True):
     """
+    Using the given solver, iterate control to given target. 
     
 
     Parameters
@@ -313,6 +314,7 @@ def iterate(solver, target, control = "gamma", p_expr=None,
         except:
             logger.info("\nNOT CONVERGING")
             logger.info("Reduce control step")
+            ncrashes += 1
 
             if control == "gamma":
                 new_control.vector().axpy(-1.0, step.vector())
@@ -323,7 +325,7 @@ def iterate(solver, target, control = "gamma", p_expr=None,
             logger.debug("Assign old state")
             # solver.reinit(state_old)
             solver.get_state().vector().zero()
-            solver.get_state().vector().axpy(1.0, state_old.vector())
+            solver.reinit(state_old)
 
             # Assign old control value
             logger.debug("Assign old control")
