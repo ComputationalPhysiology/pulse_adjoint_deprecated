@@ -57,8 +57,7 @@ class BasicHeartProblem(collections.Iterator):
             target_pressure = p_lv_next
             pressure = {"p_lv":self.p_lv}
 
-        iterate(self.solver, target_pressure, "pressure",
-                pressure)
+        iterate("pressure", self.solver, target_pressure, pressure)
         
     
     def get_state(self, copy = True):
@@ -161,7 +160,7 @@ class ActiveHeartProblem(BasicHeartProblem):
        
     def next_active(self, gamma_current, gamma, assign_prev_state=True, steps = None):
 
-        gammas, states = iterate(self.solver, gamma_current, "gamma")
+        gammas, states = iterate("gamma", self.solver, gamma_current,  gamma, continuation = False)
 
         if assign_prev_state:
             # Assign the previous state
@@ -169,9 +168,6 @@ class ActiveHeartProblem(BasicHeartProblem):
             self.solver.parameters['material'].gamma.assign(gammas[-1])
         
         return self.get_state(False)
-
-
-
 
 
 class PassiveHeartProblem(BasicHeartProblem):
