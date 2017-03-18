@@ -6,7 +6,7 @@ from lvsolver import SolverDidNotConverge
 import operator as op
 
 MAX_GAMMA_STEP = 0.05
-MAX_PRESSURE_STEP = 0.4
+MAX_PRESSURE_STEP = 0.2
 MAX_CRASH = 10
 
     
@@ -14,8 +14,7 @@ MAX_CRASH = 10
 def get_diff(current, target, control):
 
     if control == "gamma":
-        diff = Vector(target.vector())
-        diff.axpy(-1.0, current.vector())
+        diff = target.vector() - current.vector()
         
     elif control == "pressure":
         diff = np.subtract(target, current)
@@ -27,8 +26,8 @@ def get_diff(current, target, control):
 
 def get_current_control_value(solver, p_expr, control):
 
-    if control == "gamma":
-        return solver.parameters["material"].gamma.copy(True)
+    if control == "gamma":        
+        return p_expr
     
     elif control == "pressure":
         if p_expr.has_key("p_rv"):
@@ -53,13 +52,14 @@ def assign_new_control(solver, p_expr, control, new_control):
 
 
 
-def check_target_reached(solver, p_expr, control, target):
+def check_target_reached(solver, expr, control, target):
 
-    current = get_current_control_value(solver, p_expr, control)
+    current = get_current_control_value(solver, expr,  control)
     diff = get_diff(current, target, control)
      
     if control == "gamma":
-        max_diff = norm(diff, 'linf') 
+        diff.abs()
+        max_diff = diff.max()
     
     elif control == "pressure":
         max_diff = np.max(abs(diff))
@@ -74,19 +74,20 @@ def check_target_reached(solver, p_expr, control, target):
         
     return reached
 
-def get_initial_step(solver, p_expr, control, target):
+def get_initial_step(solver, expr, control, target):
     
-    current = get_current_control_value(solver, p_expr, control)
+    current = get_current_control_value(solver, expr, control)
     diff = get_diff(current, target, control)
     
     if control == "gamma":
+        # diff.abs()
+        max_diff = norm(diff, 'linf')
         
-        cur_arr = gather_broadcast(current.vector().array())
-        max_diff = norm(diff, 'linf') + 0.1*abs(cur_arr.max() - cur_arr.min())
+        # cur_arr = gather_broadcast(current.vector().array())
+        # max_diff = norm(diff.vector(), 'linf') + 0.1*abs(cur_arr.max() - cur_arr.min())
 
-        nsteps = np.ceil(float(max_diff)/MAX_GAMMA_STEP) + 1
-        step = Function(current.function_space(), name = "gamma_step")
-        step.vector().zero()
+        nsteps = int(np.ceil(float(max_diff)/MAX_GAMMA_STEP) + 1)
+        step = Function(expr.function_space(), name = "gamma_step")
         step.vector().axpy(1.0/float(nsteps), diff)
         
     elif control == "pressure":
@@ -95,25 +96,30 @@ def get_initial_step(solver, p_expr, control, target):
         step = diff/float(nsteps)
 
     logger.debug("Intial number of steps: {}".format(nsteps))
+
+    if control == "gamma":
+        return step, nsteps
+    
     return step
 
     
 def step_too_large(current, target, step, control):
 
     if control == "gamma":
+        diff_before = current.vector()[:] - target.vector()[:]
+        diff_before_arr = gather_broadcast(diff_before.array())
         
+        diff_after = current.vector()[:] + step.vector()[:] - target.vector()[:]
+        diff_after_arr = gather_broadcast(diff_after.array())
 
-        diff_before = Vector(current.vector())
-        diff_before.axpy(-1.0, target.vector())
-        
-        
-        diff_after= Vector(current.vector())
-        diff_after.axpy(1.0, step.vector())
-        diff_after.axpy(-1.0, target.vector())
+        # diff_after.axpy(-1.0, target.vector())
+        if norm(diff_after, 'linf') < DOLFIN_EPS:
+            # We will reach the target in next iteration
+            return False
 
 
-        return not all(np.sign(diff_before.array()) == \
-                       np.sign(diff_after.array()))
+        return not all(np.sign(diff_before_arr) == \
+                       np.sign(diff_after_arr))
 
         
         
@@ -136,12 +142,14 @@ def step_too_large(current, target, step, control):
 def change_step_size(step, factor, control):
 
     if control == "gamma":
-        step.vector().axpy(factor-1.0, Vector(step.vector()))
+        new_step = Function(step.function_space(), name = "New step")
+        new_step.vector()[:] = factor*step.vector()[:]
+
         
     elif control == "pressure":
-        step = np.multiply(factor, step)
+        new_step = np.multiply(factor, step)
 
-    return step
+    return new_step
 
 
 def print_control(control):
@@ -204,7 +212,329 @@ def get_delta(new_control, c0, c1):
         return  (new_control_arr[0] - c0_arr[0])/float(c1_arr[0] - c0_arr[0])
         
         
-def iterate(solver, target, control = "gamma", p_expr=None,
+def iterate_pressure(solver, target, p_expr,
+                     continuation = True, max_adapt_iter = 8, adapt_step=True):
+    """
+    Using the given solver, iterate control to given target. 
+    
+
+    Parameters
+    ----------
+
+    solver (LVSolver)
+        The solver
+    target (dolfin.Function or tuple or float)
+        The target value. Typically a float if target is LVP, a tuple
+        if target is (LVP, RVP) and a function if target is gamma.
+    p_expr (dict)
+        A dictionary with expression for the pressure and keys
+        'p_lv' (and 'p_rv' if BiV)
+    continuation (bool)
+        Apply continuation for better guess for newton solver
+        Note: Replay test seems to fail when continuation is True, 
+        but taylor test passes
+    max_adapt_iter (int)
+        If number of iterations is less than this number and adapt_step=True,
+        then adapt control step
+    adapt_step (bool)
+        Adapt / increase step size when sucessful iterations are achevied. 
+
+    
+    """
+    assert p_expr is not None, "provide the pressure"
+    assert isinstance(p_expr, dict), "p_expr should be a dictionray"
+    assert p_expr.has_key("p_lv"), "p_expr do not have the key 'p_lv'"
+
+    target_reached = check_target_reached(solver, p_expr, "pressure", target)
+    logger.info("\nIterate Control: pressure")
+
+    
+    step = get_initial_step(solver, p_expr, "pressure", target)
+    new_control = get_current_control_value(solver, p_expr, "pressure")
+
+    logger.info("Current value")
+    print_control(new_control)
+    control_values  = [new_control]
+        
+    prev_states = [solver.get_state().copy(True)]
+
+    ncrashes = 0
+    
+    
+    while not target_reached:
+
+        if ncrashes > MAX_CRASH:
+            raise SolverDidNotConverge
+
+        control_value_old = control_values[-1]
+        state_old = prev_states[-1]
+
+        first_step = len(prev_states) < 2
+        
+
+        # Check if we are close
+        if step_too_large(control_value_old, target, step, "pressure"):
+            logger.info("Change step size for final iteration")
+            # Change step size so that target is reached in the next iteration
+            step = target-control_value_old
+
+        
+ 
+        new_control = get_current_control_value(solver, p_expr, "pressure")
+        new_control += step
+
+        assign_new_control(solver, p_expr, "pressure", new_control)
+        logger.info("\nTry new pressure")
+        print_control(new_control)
+
+
+        # Prediction step (Make a better guess for newtons method)
+        # Assuming state depends continuously on the control
+        if not first_step and continuation:
+            c0, c1 = control_values[-2:]
+            s0, s1 = prev_states
+
+            delta = get_delta(new_control, c0, c1)
+            
+
+            solver.get_state().vector().zero()
+            solver.get_state().vector().axpy(1.0-delta, s0.vector())
+            solver.get_state().vector().axpy(delta, s1.vector())
+
+        
+        
+        try:
+            nliter, nlconv = solver.solve()
+        except SolverDidNotConverge as ex:
+            logger.info("\nNOT CONVERGING")
+            logger.info("Reduce control step")
+            ncrashes += 1
+
+            new_control -= step
+     
+            # Assign old state
+            logger.debug("Assign old state")
+            # solver.reinit(state_old)
+            solver.get_state().vector().zero()
+            solver.reinit(state_old)
+
+            # Assign old control value
+            logger.debug("Assign old control")
+            assign_new_control(solver, p_expr, "pressure", new_control)
+            # Reduce step size
+            step = change_step_size(step, 0.5, "pressure")
+            
+            continue
+        
+        else:
+            logger.info("\nSUCCESFULL STEP:")
+
+            target_reached = check_target_reached(solver, p_expr, "pressure", target)
+
+            if not target_reached:
+
+                if nliter < max_adapt_iter and adapt_step:
+                    logger.info("Adapt step size. New step size:")
+                    step = change_step_size(step, 2.0, "pressure")
+                    print_control(step)
+
+                control_values.append(new_control)
+                    
+                if first_step:
+                    prev_states.append(solver.get_state().copy(True))
+                else:
+                
+                    # Switch place of the state vectors
+                    prev_states = [prev_states[-1], prev_states[0]]
+
+                    # Inplace update of last state values
+                    prev_states[-1].vector().zero()
+                    prev_states[-1].vector().axpy(1.0, solver.get_state().vector())
+
+    return control_values, prev_states
+
+
+def get_mean(f):
+    return gather_broadcast(f.vector().array()).mean()
+
+
+def get_max(f):
+    return gather_broadcast(f.vector().array()).max()
+
+def get_max_diff(f1,f2):
+    diff = f1.vector() - f2.vector()
+    diff.abs()
+    return diff.max()
+    
+def iterate_gamma(solver, target, gamma,
+                  continuation = True, max_adapt_iter = 8, adapt_step=True):
+    """
+    Using the given solver, iterate control to given target. 
+    
+
+    Parameters
+    ----------
+
+    solver (LVSolver)
+        The solver
+    target (dolfin.Function or tuple or float)
+        The target value. Typically a float if target is LVP, a tuple
+        if target is (LVP, RVP) and a function if target is gamma.
+    control (str)
+        Control mode, so far either 'pressure' or 'gamma'
+    p_expr (dict)
+        A dictionary with expression for the pressure and keys
+        'p_lv' (and 'p_rv' if BiV)
+    continuation (bool)
+        Apply continuation for better guess for newton solver
+        Note: Replay test seems to fail when continuation is True, 
+        but taylor test passes
+    max_adapt_iter (int)
+        If number of iterations is less than this number and adapt_step=True,
+        then adapt control step
+    adapt_step (bool)
+        Adapt / increase step size when sucessful iterations are achevied. 
+
+    
+    """
+
+
+    target_reached = check_target_reached(solver, gamma, "gamma", target)
+
+    control_values  = [gamma.copy(True)]
+    prev_states = [solver.get_state().copy(True)]
+
+
+    step, nr_steps = get_initial_step(solver, gamma, "gamma", target)
+    
+    # max_diff = get_max_diff(target, gamma)
+    # nr_steps = max(2, int(np.ceil(max_diff/0.1)))
+    logger.debug("\tGamma:    Mean    Max   ")
+    logger.debug("\tPrevious  {:.3f}  {:.3f}  ".format(get_mean(gamma), 
+                                                       get_max(gamma)))
+    logger.debug("\tNext      {:.3f}  {:.3f} ".format(get_mean(target), 
+                                                          get_max(target)))
+
+
+    g_previous = gamma.copy()
+
+
+    control_values  = [gamma.copy(True)]
+    prev_states = [solver.get_state().copy(True)]
+    
+    # Keep the old gamma
+    # g_old = gamma.copy()
+        
+    first_step =True
+
+    
+    ncrashes = 0
+        
+        
+    logger.info("\n\tIncrement gamma...")
+    logger.info("\tMean \tMax")
+    while not target_reached:
+        
+        if ncrashes > MAX_CRASH:
+            raise SolverDidNotConverge
+
+        control_value_old = control_values[-1]
+        state_old = prev_states[-1]
+
+        first_step = len(prev_states) < 2
+
+
+        # Check if we are close
+        if step_too_large(control_value_old, target, step, "gamma"):
+            logger.info("Change step size for final iteration")
+            # Change step size so that target is reached in the next iteration
+            
+            step = Function(target.function_space(), name = "gamma_step")
+            step.vector().axpy(1.0, target.vector())
+            step.vector().axpy(-1.0, control_value_old.vector())
+            
+        # Loop over the steps
+        # for i in range(1, nr_steps):
+                
+        # Increment gamma
+        gamma.vector()[:] +=  step.vector()[:]
+        # Assing the new gamma
+
+        assign_new_control(solver, gamma, "gamma", gamma)
+
+
+        # Prediction step
+        if not first_step and continuation:
+            c0, c1 = control_values[-2:]
+            s0, s1 = prev_states
+
+            delta = get_delta(gamma, c0, c1)
+            
+
+            solver.get_state().vector().zero()
+            solver.get_state().vector().axpy(1.0-delta, s0.vector())
+            solver.get_state().vector().axpy(delta, s1.vector())
+            
+        # Try to solve
+        logger.info("\nTry new gamma")
+        logger.info("\t{:.3f} \t{:.3f}".format(get_mean(gamma), get_max(gamma)))
+
+        try:
+            
+            nliter, nlconv = solver.solve()
+                
+        except SolverDidNotConverge as ex:
+            logger.info("\nNOT CONVERGING")
+            logger.info("Reduce control step")
+            ncrashes += 1
+
+            gamma.assign(g_previous)
+
+            # Assign old state
+            logger.debug("Assign old state")
+            # solver.reinit(state_old)
+            solver.get_state().vector().zero()
+            solver.reinit(state_old)
+
+            step = change_step_size(step, 0.5, "gamma")
+        else:
+            logger.info("\nSUCCESFULL STEP:")
+            g_previous.assign(gamma.copy())
+
+            target_reached = check_target_reached(solver, gamma, "gamma", target)
+            if not target_reached:
+
+                if nliter < max_adapt_iter and adapt_step:
+                    logger.info("Adapt step size. New step size:")
+                    step = change_step_size(step, 2.0, "gamma")
+                    print_control(step)
+
+                control_values.append(gamma.copy(True))
+                if first_step:
+                    prev_states.append(solver.get_state().copy(True))
+                else:
+                
+                    # Switch place of the state vectors
+                    prev_states = [prev_states[-1], prev_states[0]]
+                    
+                    # Inplace update of last state values
+                    prev_states[-1].vector().zero()
+                    prev_states[-1].vector().axpy(1.0, solver.get_state().vector())
+    
+    return control_values, prev_states
+        
+
+def iterate(control, *args, **kwargs):
+
+    if control == "pressure":
+        return iterate_pressure(*args, **kwargs)
+
+    if control == "gamma":
+        return iterate_gamma(*args, **kwargs)
+
+
+
+def iterate2(control, solver, target, expr=None,
             continuation = True, max_adapt_iter = 8, adapt_step=True):
     """
     Using the given solver, iterate control to given target. 
@@ -237,19 +567,19 @@ def iterate(solver, target, control = "gamma", p_expr=None,
     """
 
     if control == "pressure":
-        assert p_expr is not None, "provide the pressure"
-        assert isinstance(p_expr, dict), "p_expr should be a dictionray"
-        assert p_expr.has_key("p_lv"), "p_expr do not have the key 'p_lv'"
+        assert expr is not None, "provide the pressure"
+        assert isinstance(expr, dict), "p_expr should be a dictionray"
+        assert expr.has_key("p_lv"), "p_expr do not have the key 'p_lv'"
         
         
 
-    target_reached = check_target_reached(solver, p_expr, control, target)
+    target_reached = check_target_reached(solver, expr, control, target)
     logger.info("\nIterate Control: {}".format(control))
 
     
-    step = get_initial_step(solver, p_expr, control, target)
+    step = get_initial_step(solver, expr, control, target)
 
-    value = get_current_control_value(solver, p_expr, control)
+    value = get_current_control_value(solver, expr, control)
     logger.info("Current value")
     print_control(value)
     
@@ -283,13 +613,13 @@ def iterate(solver, target, control = "gamma", p_expr=None,
 
         
         
-        new_control = get_current_control_value(solver, p_expr, control)
+        new_control = get_current_control_value(solver, expr, control)
         if control == "gamma":
             new_control.vector().axpy(1.0, step.vector())
         elif control == "pressure":
             new_control += step
     
-        assign_new_control(solver, p_expr, control, new_control)        
+        assign_new_control(solver, expr, control, new_control)        
         logger.info("\nTry new {}".format(control))
         print_control(new_control)
 
@@ -329,7 +659,7 @@ def iterate(solver, target, control = "gamma", p_expr=None,
 
             # Assign old control value
             logger.debug("Assign old control")
-            assign_new_control(solver, p_expr, control, new_control)
+            assign_new_control(solver, expr, control, new_control)
             # Reduce step size
             step = change_step_size(step, 0.5, control)
             
@@ -338,7 +668,7 @@ def iterate(solver, target, control = "gamma", p_expr=None,
         else:
             logger.info("\nSUCCESFULL STEP:")
 
-            target_reached = check_target_reached(solver, p_expr, control, target)
+            target_reached = check_target_reached(solver, expr, control, target)
 
             if not target_reached:
 
@@ -360,10 +690,16 @@ def iterate(solver, target, control = "gamma", p_expr=None,
                     prev_states[-1].vector().zero()
                     prev_states[-1].vector().axpy(1.0, solver.get_state().vector())
 
+
+    if control == "gamma":
+        assign_new_control(solver, expr, control, target)
+        solver.solve()
+                
+
     return control_values, prev_states
         
-        
 
+    
 
 def _get_solver(biv = False):
 
