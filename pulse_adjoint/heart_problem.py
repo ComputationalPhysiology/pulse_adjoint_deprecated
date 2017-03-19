@@ -131,6 +131,13 @@ class ActiveHeartProblem(BasicHeartProblem):
         
         
         passive_filling_duration = solver_parameters["passive_filling_duration"]
+        self.acin = params["active_contraction_iteration_number"]
+        fname = "active_state_{}.h5".format(self.acin)
+        if os.path.isfile(fname):
+            if mpi_comm_world().rank == 0:
+                os.remove(fname)
+        
+            
 
         
         BasicHeartProblem.__init__(self, bcs, solver_parameters, pressure)
@@ -157,11 +164,97 @@ class ActiveHeartProblem(BasicHeartProblem):
         self.solver.reinit(w_temp, annotate=annotate)
         # self.solver.get_state().assign(w_temp, annotate = annotate)
         self.solver.solve()
+
+
+    def get_number_of_stored_states(self):
+        
+        fname = "active_state_{}.h5".format(self.acin)
+        if os.path.isfile(fname):
+            i = 0
+            with HDF5File(mpi_comm_world(), fname, "r") as h5file:
+                group_exist =  h5file.has_dataset("0")
+                while group_exist:
+                    i+=1
+                    group_exist = h5file.has_dataset(str(i))
+                        
+
+            return i 
+                        
+                    
+        else:
+            return 0    
+        
+    def store_states(self, states, gammas):
+
+        fname = "active_state_{}.h5".format(self.acin)
+        file_mode = "a" if os.path.isfile(fname) else "w"
+        key = self.get_number_of_stored_states()
+
+        gamma_group = "{}/gamma"
+        state_group = "{}/state"
+
+        assert len(states) == len(gammas), "Number of states does not math number of gammas"
+
+        with HDF5File(mpi_comm_world(), fname, file_mode) as h5file:
+
+            
+            for (w,g) in zip(states, gammas):
+                h5file.write(w, state_group.format(key))
+                h5file.write(g, gamma_group.format(key))
+                key += 1
+
+
+    def load_states(self):
+
+        fname = "active_state_{}.h5".format(self.acin)
+        if not os.path.isfile(fname):
+            return [], []
+
+        nstates = self.get_number_of_stored_states()
        
+
+        gamma_group = "{}/gamma"
+        state_group = "{}/state"
+
+
+        states = []
+        gammas = []
+
+        w = self.solver.get_state().copy(True)
+        g = self.solver.get_gamma().copy(True)
+
+        
+        with HDF5File(mpi_comm_world(), fname, "r") as h5file:
+
+            for i in range(nstates):
+
+                h5file.read(w, state_group.format(i))
+                h5file.read(g, gamma_group.format(i))
+
+                states.append(w.copy(True))
+                gammas.append(g.copy(True))
+
+        return states, gammas
+                
+            
+        
+
+        
     def next_active(self, gamma_current, gamma, assign_prev_state=True, steps = None):
 
-        gammas, states = iterate("gamma", self.solver, gamma_current,  gamma, continuation = False)
+        old_states, old_gammas = self.load_states()
+                
+        gammas, states = iterate("gamma", self.solver, gamma_current,  gamma,
+                                 continuation = True, old_states = old_states,
+                                 old_gammas = old_gammas)
 
+
+        # Store these gammas and states which can be used
+        # as initial guess for the newton solver in a later
+        # iteration
+        self.store_states(states, gammas)
+        
+        
         if assign_prev_state:
             # Assign the previous state
             self.solver.reinit(states[-1])

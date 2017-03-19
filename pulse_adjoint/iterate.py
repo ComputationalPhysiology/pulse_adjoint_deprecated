@@ -367,7 +367,8 @@ def get_max_diff(f1,f2):
     return diff.max()
     
 def iterate_gamma(solver, target, gamma,
-                  continuation = True, max_adapt_iter = 8, adapt_step=True):
+                  continuation = True, max_adapt_iter = 8,
+                  adapt_step=True, old_states = [], old_gammas = []):
     """
     Using the given solver, iterate control to given target. 
     
@@ -462,19 +463,24 @@ def iterate_gamma(solver, target, gamma,
 
         assign_new_control(solver, gamma, "gamma", gamma)
 
-
         # Prediction step
-        if not first_step and continuation:
-            c0, c1 = control_values[-2:]
-            s0, s1 = prev_states
+        # Hopefully a better guess for the newton solver
+        if continuation and old_states:
+           
+            old_diffs = [norm(gamma.vector() - g.vector(), "linf") for g in old_gammas]
+            cur_diff = norm(step.vector(), "linf")
 
-            delta = get_delta(gamma, c0, c1)
-            
+            if any([old_diff < cur_diff for old_diff in old_diffs]):
 
-            solver.get_state().vector().zero()
-            solver.get_state().vector().axpy(1.0-delta, s0.vector())
-            solver.get_state().vector().axpy(delta, s1.vector())
-            
+                logger.info("Assign an old state")
+                idx = np.argmin(old_diffs)
+                state_old = old_states[idx]
+                solver.get_state().vector().zero()
+                solver.get_state().vector().axpy(1.0, state_old.vector())
+
+                prev_states.append(state_old)
+                control_values.append(old_gammas[idx])
+                
         # Try to solve
         logger.info("\nTry new gamma")
         logger.info("\t{:.3f} \t{:.3f}".format(get_mean(gamma), get_max(gamma)))
@@ -510,16 +516,8 @@ def iterate_gamma(solver, target, gamma,
                     print_control(step)
 
                 control_values.append(gamma.copy(True))
-                if first_step:
-                    prev_states.append(solver.get_state().copy(True))
-                else:
-                
-                    # Switch place of the state vectors
-                    prev_states = [prev_states[-1], prev_states[0]]
-                    
-                    # Inplace update of last state values
-                    prev_states[-1].vector().zero()
-                    prev_states[-1].vector().axpy(1.0, solver.get_state().vector())
+                prev_states.append(solver.get_state().copy(True))
+
     
     return control_values, prev_states
         
