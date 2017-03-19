@@ -337,7 +337,8 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
         logger.info("\n"+"".center(72,"-"))
         logger.info("Solve optimal contol problem".center(72, "-"))
         logger.info("".center(72,"-"))
-        
+
+        # Some flags
         solved = False
         done = False
         paramvec_start = paramvec.copy()
