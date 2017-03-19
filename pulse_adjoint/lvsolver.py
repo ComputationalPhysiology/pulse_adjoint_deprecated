@@ -163,7 +163,7 @@ class LVSolver(object):
         
         try:
 
-            nliter, nlconv = solver.solve(annotate=False)
+            nliter, nlconv = solver.solve()#annotate=False)
             if not nlconv:
                 raise RuntimeError("Solver did not converge...")
 
@@ -183,12 +183,12 @@ class LVSolver(object):
             # The solver converged
             
             # If we are annotating we need to annotate the solve as well
-            if not parameters["adjoint"]["stop_annotating"]:
+            # if not parameters["adjoint"]["stop_annotating"]:
 
-                # Assign the old state
-                self.reinit(w_old)
-                # Solve the system with annotation
-                nliter, nlconv = solver.solve(annotate=True)
+            #     # Assign the old state
+            #     self.reinit(w_old)
+            #     # Solve the system with annotation
+            #     nliter, nlconv = solver.solve(annotate=True)
 
                 
             return nliter, nlconv
