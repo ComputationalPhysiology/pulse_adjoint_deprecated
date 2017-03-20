@@ -516,7 +516,7 @@ class PassiveForwardRunner(BasicForwardRunner):
         parameters["adjoint"]["stop_annotating"] = not annotate
         try:
             forward_result = BasicForwardRunner.solve_the_forward_problem(self, self.cphm, annotate, "passive")
-        except (SolverDidNotConverge, UnableToChangePressureExeption) as ex:
+        except (SolverDidNotConverge, UnableToChangePressureExeption, RuntimeError) as ex:
             raise SolverDidNotConverge
         else:
             return forward_result, False
