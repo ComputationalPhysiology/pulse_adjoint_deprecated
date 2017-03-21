@@ -65,7 +65,7 @@ def check_target_reached(solver, expr, control, target):
         max_diff = np.max(abs(diff))
 
     
-    reached = max_diff < DOLFIN_EPS
+    reached = max_diff < DOLFIN_EPS_LARGE
     if reached:
         logger.info("Check target reached: YES!")
     else:
