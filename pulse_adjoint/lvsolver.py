@@ -186,7 +186,7 @@ class LVSolver(object):
             if not parameters["adjoint"]["stop_annotating"]:
 
                 # Assign the old state
-                self.reinit(w_old)
+                # self.reinit(w_old)
                 # Solve the system with annotation
                 try:
                     nliter, nlconv = solver.solve(annotate=True)
