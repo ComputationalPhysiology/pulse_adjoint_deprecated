@@ -189,7 +189,7 @@ class LVSolver(object):
                 logger.warning("Solver did not converge")
                 # Reinitialze forms with old state
                 self.reinit(w_old)
-                raise SolverDidNotConverge(ex)
+                raise SolverDidNotConverge("Solver did not converge absolute")
             else:
             
                 # If we are annotating we need to annotate the solve as well
