@@ -327,6 +327,7 @@ def iterate_pressure(solver, target, p_expr,
             continue
         
         else:
+            ncrashes = 0
             logger.info("\nSUCCESFULL STEP:")
 
             target_reached = check_target_reached(solver, p_expr, "pressure", target)
@@ -505,6 +506,7 @@ def iterate_gamma(solver, target, gamma,
 
             step = change_step_size(step, 0.5, "gamma")
         else:
+            ncrashes = 0
             logger.info("\nSUCCESFULL STEP:")
             g_previous.assign(gamma.copy())
 
