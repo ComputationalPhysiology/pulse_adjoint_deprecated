@@ -181,21 +181,31 @@ class LVSolver(object):
 
         else:
             # The solver converged
+            # Try to solve again to check whether the convergence
+            # was absolute or relative
+            nliter, nlconv = solver.solve(annotate=False)
+            if nliter > 1:
+                # The convergece was relative
+                logger.warning("Solver did not converge")
+                # Reinitialze forms with old state
+                self.reinit(w_old)
+                raise SolverDidNotConverge(ex)
+            else:
             
-            # If we are annotating we need to annotate the solve as well
-            if not parameters["adjoint"]["stop_annotating"]:
+                # If we are annotating we need to annotate the solve as well
+                if not parameters["adjoint"]["stop_annotating"]:
 
-                # Assign the old state
-                # self.reinit(w_old)
-                # Solve the system with annotation
-                try:
-                    nliter, nlconv = solver.solve(annotate=True)
-                except RuntimeError:
-                    # Sometimes this throws a runtime error
-                    raise RuntimeError("Adjoint solve step didn't converge")
-                else:
-                    if not nlconv:
+                    # Assign the old state
+                    # self.reinit(w_old)
+                    # Solve the system with annotation
+                    try:
+                        nliter, nlconv = solver.solve(annotate=True)
+                    except RuntimeError:
+                        # Sometimes this throws a runtime error
                         raise RuntimeError("Adjoint solve step didn't converge")
+                    else:
+                        if not nlconv:
+                            raise RuntimeError("Adjoint solve step didn't converge")
                 
             return nliter, nlconv
 
