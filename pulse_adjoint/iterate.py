@@ -92,7 +92,7 @@ def get_initial_step(solver, expr, control, target):
         
     elif control == "pressure":
         max_diff = abs(np.max(diff))
-        nsteps = float(max_diff) / MAX_PRESSURE_STEP + 1
+        nsteps = int(np.ceil(float(max_diff) / MAX_PRESSURE_STEP)) + 1
         step = diff/float(nsteps)
 
     logger.debug("Intial number of steps: {}".format(nsteps))
@@ -295,13 +295,13 @@ def iterate_pressure(solver, target, p_expr,
             s0, s1 = prev_states
 
             delta = get_delta(new_control, c0, c1)
-            
-
-            solver.get_state().vector().zero()
-            solver.get_state().vector().axpy(1.0-delta, s0.vector())
-            solver.get_state().vector().axpy(delta, s1.vector())
-
-        
+            w = Function(solver.get_state().function_space())
+            w.vector().zero()
+            w.vector().axpy(1.0-delta, s0.vector())
+            w.vector().axpy(delta, s1.vector())
+            solver.reinit(w, annotate = \
+                          not parameters["adjoint"]["stop_annotating"])
+                    
         
         try:
             nliter, nlconv = solver.solve()
@@ -327,6 +327,7 @@ def iterate_pressure(solver, target, p_expr,
             continue
         
         else:
+            ncrashes = 0
             logger.info("\nSUCCESFULL STEP:")
 
             target_reached = check_target_reached(solver, p_expr, "pressure", target)
@@ -475,9 +476,10 @@ def iterate_gamma(solver, target, gamma,
                 logger.info("Assign an old state")
                 idx = np.argmin(old_diffs)
                 state_old = old_states[idx]
-                solver.get_state().vector().zero()
-                solver.get_state().vector().axpy(1.0, state_old.vector())
 
+                solver.reinit(state_old, annotate = \
+                              not parameters["adjoint"]["stop_annotating"])
+             
                 prev_states.append(state_old)
                 control_values.append(old_gammas[idx])
                 
@@ -504,6 +506,7 @@ def iterate_gamma(solver, target, gamma,
 
             step = change_step_size(step, 0.5, "gamma")
         else:
+            ncrashes = 0
             logger.info("\nSUCCESFULL STEP:")
             g_previous.assign(gamma.copy())
 
