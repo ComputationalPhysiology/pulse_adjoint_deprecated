@@ -8,6 +8,7 @@ import operator as op
 MAX_GAMMA_STEP = 0.05
 MAX_PRESSURE_STEP = 0.2
 MAX_CRASH = 10
+MAX_ITERS = 100
 
     
 
@@ -259,11 +260,12 @@ def iterate_pressure(solver, target, p_expr,
     prev_states = [solver.get_state().copy(True)]
 
     ncrashes = 0
+    niters = 0
     
     
     while not target_reached:
-
-        if ncrashes > MAX_CRASH:
+        niters += 1
+        if ncrashes > MAX_CRASH or niters > MAX_ITERS:
             raise SolverDidNotConverge
 
         control_value_old = control_values[-1]
@@ -595,10 +597,12 @@ def iterate2(control, solver, target, expr=None,
     
     prev_states = [solver.get_state().copy(True)]
 
+    niters = 0
     ncrashes = 0
     while not target_reached:
 
-        if ncrashes > MAX_CRASH:
+        niters += 1
+        if ncrashes > MAX_CRASH or niters > MAX_ITERS:
             raise SolverDidNotConverge
 
         control_value_old = control_values[-1]
