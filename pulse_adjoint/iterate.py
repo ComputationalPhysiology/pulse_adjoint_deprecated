@@ -295,16 +295,22 @@ def iterate_pressure(solver, target, p_expr,
             s0, s1 = prev_states
 
             delta = get_delta(new_control, c0, c1)
-            w = Function(solver.get_state().function_space())
-            w.vector().zero()
-            w.vector().axpy(1.0-delta, s0.vector())
-            w.vector().axpy(delta, s1.vector())
-            solver.reinit(w, annotate = \
-                          not parameters["adjoint"]["stop_annotating"])
+            if not parameters["adjoint"]["stop_annotating"]:
+                w = Function(solver.get_state().function_space())
+                w.vector().zero()
+                w.vector().axpy(1.0-delta, s0.vector())
+                w.vector().axpy(delta, s1.vector())
+                solver.reinit(w, annotate = True)
+            else:
+                solver.get_state().vector().zero()
+                solver.get_state().vector().axpy(1.0-delta, s0.vector())
+                solver.get_state().vector().axpy(delta, s1.vector())
                     
         
         try:
             nliter, nlconv = solver.solve()
+            if not nlconv:
+                raise SolverDidNotConverge("Solver did not converge")
         except SolverDidNotConverge as ex:
             logger.info("\nNOT CONVERGING")
             logger.info("Reduce control step")

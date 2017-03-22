@@ -57,7 +57,7 @@ class BasicHeartProblem(collections.Iterator):
             target_pressure = p_lv_next
             pressure = {"p_lv":self.p_lv}
 
-        iterate("pressure", self.solver, target_pressure, pressure)
+        iterate("pressure", self.solver, target_pressure, pressure, continuation = False)
         
     
     def get_state(self, copy = True):
