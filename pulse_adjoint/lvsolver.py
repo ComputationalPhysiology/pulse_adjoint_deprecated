@@ -79,7 +79,7 @@ class LVSolver(object):
         prm = {"nonlinear_solver": "snes", "snes_solver":{}} if self.use_snes else {"nonlinear_solver": "newton", "newton_solver":{}}
 
         prm[nsolver]['absolute_tolerance'] = 1E-8
-        prm[nsolver]['relative_tolerance'] = 1E-8
+        prm[nsolver]['relative_tolerance'] = 1E-12
         prm[nsolver]['maximum_iterations'] = 15
         # prm[nsolver]['relaxation_parameter'] = 1.0
         prm[nsolver]['linear_solver'] = 'mumps'
@@ -181,38 +181,19 @@ class LVSolver(object):
 
         else:
             # The solver converged
-            # Try to solve again to check whether the convergence
-            # was absolute or relative
-            try:
-                nliter, nlconv = solver.solve(annotate=False)
-                if not nlconv:
-                    raise RuntimeError("Solver did not converge...")
-            except RuntimeError as ex:
+            # If we are annotating we need to annotate the solve as well
+            if not parameters["adjoint"]["stop_annotating"]:
 
-                self.reinit(w_old)
-                raise SolverDidNotConverge("Solver did not converge absolute")
-
-            else:
-                if nliter > 1:
-                    # The convergece was relative
-                    logger.warning("Solver did not converge absolute")
-                    # Reinitialze forms with old state
-                    self.reinit(w_old)
-                    raise SolverDidNotConverge("Solver did not converge absolute")
+                # Solve the system with annotation
+                try:
+                    nliter, nlconv = solver.solve(annotate=True)
+                except RuntimeError:
+                    # Sometimes this throws a runtime error
+                    self.reinit(w_old, annotate=True)
+                    raise RuntimeError("Adjoint solve step didn't converge")
                 else:
-            
-                    # If we are annotating we need to annotate the solve as well
-                    if not parameters["adjoint"]["stop_annotating"]:
-
-                        # Solve the system with annotation
-                        try:
-                            nliter, nlconv = solver.solve(annotate=True)
-                        except RuntimeError:
-                            # Sometimes this throws a runtime error
-                            raise RuntimeError("Adjoint solve step didn't converge")
-                        else:
-                            if not nlconv:
-                                raise RuntimeError("Adjoint solve step didn't converge")
+                    if not nlconv:
+                        raise RuntimeError("Adjoint solve step didn't converge")
                 
             return nliter, nlconv
 
