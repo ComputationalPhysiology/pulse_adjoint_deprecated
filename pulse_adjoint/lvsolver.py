@@ -184,14 +184,22 @@ class LVSolver(object):
             # If we are annotating we need to annotate the solve as well
             if not parameters["adjoint"]["stop_annotating"]:
 
+                # Increase the tolerance slightly (don't know why we need to do this)
+                nsolver = "snes_solver" if self.use_snes else "newton_solver"
+                solver.parameters[nsolver]['relative_tolerance'] /= 0.001
+                solver.parameters[nsolver]['absolute_tolerance'] /= 0.1
                 # Solve the system with annotation
                 try:
                     nliter, nlconv = solver.solve(annotate=True)
                 except RuntimeError:
                     # Sometimes this throws a runtime error
+                    solver.parameters[nsolver]['relative_tolerance'] *= 0.001
+                    solver.parameters[nsolver]['absolute_tolerance'] *= 0.1
                     self.reinit(w_old, annotate=True)
                     raise RuntimeError("Adjoint solve step didn't converge")
                 else:
+                    solver.parameters[nsolver]['relative_tolerance'] *= 0.001
+                    solver.parameters[nsolver]['absolute_tolerance'] *= 0.1
                     if not nlconv:
                         raise RuntimeError("Adjoint solve step didn't converge")
                 
