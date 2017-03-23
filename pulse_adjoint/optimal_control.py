@@ -415,6 +415,8 @@ class OptimalControl(object):
             tol= opt_params["active_opt_tol"]
             max_iter = opt_params["active_maxiter"]
 
+        
+
         self.tol = tol
 
         if nvar == 1:
@@ -437,8 +439,16 @@ class OptimalControl(object):
             self.opt_type = opt_params.pop("opt_type", "scipy_slsqp")
             self._get_options(lb, ub, tol, max_iter, **opt_params)
 
-            
-        
+        logger.info("".center(72, "#"))
+        logger.info(" Building optimal control problem ".center(72, "#"))
+        msg = ("\n\tNumber of variables:\t{}".format(nvar) +
+               "\n\tLower bound:\t{}".format(np.min(lb)) +
+               "\n\tUpper bound:\t{}".format(np.max(ub)) +
+               "\n\tTolerance:\t{}".format(tol) +
+               "\n\tMaximum iterations:\t{}".format(max_iter)+
+               "\n\tOptimization algoritmh:\t{}\n".format(self.opt_type))
+        logger.info(msg)
+        logger.info("".center(72, "#"))
 
     def _get_options(self, lb, ub, tol, max_iter, **kwargs):
 
