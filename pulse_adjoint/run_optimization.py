@@ -344,6 +344,10 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
         paramvec_start = paramvec.copy()
         state_start = rd.for_run.cphm.get_state()
         niter = 0
+
+        gamma_max = params["Optimization_parmeteres"]["gamma_max"]
+        mat_max = params["Optimization_parmeteres"]["matparams_max"]
+        mat_min = params["Optimization_parmeteres"]["matparams_min"]
        
         while not done and niter < 5:
             # Evaluate the reduced functional in case the solver chrashes at the first point.
@@ -385,8 +389,22 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
                 # previous iteration and reduce the step size and try again
                 rd.reset()
                 rd.derivative_scale /= 2.0
+
+                # There might be many reasons for why the sovler is not converging, 
+                # but most likely it happens because the optimization algorithms try to
+                # evaluate the function in a point in the parameter space, which is close
+                # to the boundary. One thing we can do is to reduce the mangnitude of the
+                # gradient (but keeping the direction) so that the step size reduces.
+                # Another thing we can do is to actually change the bounds so that
+                # the algorithm do not go into the nasty parts of the parameters space
+                params["Optimization_parmeteres"]["gamma_max"] *= 0.8
+                params["Optimization_parmeteres"]["matparams_max"] *= 0.9
+                params["Optimization_parmeteres"]["matparams_min"] *= 2
                                 
             else:
+                params["Optimization_parmeteres"]["gamma_max"] = gamma_max
+                params["Optimization_parmeteres"]["matparams_max"] = mat_max
+                params["Optimization_parmeteres"]["matparams_min"] = mat_min
                
                 solved = True
                 dfunc_value_rel = rd.for_res["func_value"] \
@@ -423,7 +441,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
             msg = ("Optimization provided a worse result than the initial guess. "
                    "\nMake the initial guess the solution")
             logger.warning(msg)
-            rd.for_run.cphm.solver.reinit(state_start)
+            rd.for_run.cphm.solver.reinit(state_start, annotate=True)
             paramvec.assign(paramvec_start)
             
         

@@ -391,18 +391,20 @@ class ActiveForwardRunner(BasicForwardRunner):
         logger.debug("Try to step up gamma")
         
         w_old = self.cphm.get_state()
-        gamma_old = self.gamma_previous.copy()
-        
+        gamma_old = self.gamma_previous.copy(True)
+        logger.info("Gamma old = {}".format(gather_broadcast(gamma_old.vector().array())))
+                    
         try:
-            self.cphm.next_active(m, self.gamma_previous.copy())
+            self.cphm.next_active(m, self.gamma_previous)
     	    
         except SolverDidNotConverge as ex:
             logger.debug("Stepping up gamma failed")
 
             logger.debug("Assign the old state and old gamma")
             # Assign the old state
-            self.cphm.solver.get_state().assign(w_old)
+            self.cphm.solver.reinit(w_old)
             # Assign the old gamma
+            logger.info("Gamma old = {}".format(gather_broadcast(gamma_old.vector().array())))
             self.cphm.solver.parameters['material'].gamma.assign(gamma_old)
             self.gamma_previous.assign(gamma_old)
 

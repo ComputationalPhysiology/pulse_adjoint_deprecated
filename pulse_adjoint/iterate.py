@@ -8,7 +8,7 @@ import operator as op
 MAX_GAMMA_STEP = 0.05
 MAX_PRESSURE_STEP = 0.2
 MAX_CRASH = 10
-MAX_ITERS = 100
+MAX_ITERS = 20
 
     
 
@@ -265,7 +265,7 @@ def iterate_pressure(solver, target, p_expr,
     
     while not target_reached:
         niters += 1
-        if ncrashes > MAX_CRASH or niters > MAX_ITERS:
+        if ncrashes > MAX_CRASH or niters > 2*MAX_ITERS:
             raise SolverDidNotConverge
 
         control_value_old = control_values[-1]
@@ -437,16 +437,20 @@ def iterate_gamma(solver, target, gamma,
         
     first_step =True
 
-    
+    annotate = not parameters["adjoint"]["stop_annotating"]
     ncrashes = 0
-        
-        
+    niters = 0
     logger.info("\n\tIncrement gamma...")
     logger.info("\tMean \tMax")
     while not target_reached:
         
-        if ncrashes > MAX_CRASH:
+        niters += 1
+        if ncrashes > MAX_CRASH or niters > MAX_ITERS:
+            solver.reinit(prev_states[0], annotate = annotate)
+            gamma.assign(control_values[0], annotate=annotate)
+            
             raise SolverDidNotConverge
+
 
         control_value_old = control_values[-1]
         state_old = prev_states[-1]
@@ -603,6 +607,7 @@ def iterate2(control, solver, target, expr=None,
 
         niters += 1
         if ncrashes > MAX_CRASH or niters > MAX_ITERS:
+           
             raise SolverDidNotConverge
 
         control_value_old = control_values[-1]
