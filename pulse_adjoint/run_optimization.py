@@ -341,10 +341,12 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
         # Some flags
         solved = False
         done = False
-        paramvec_start = paramvec.copy()
+        paramvec_start = paramvec.copy(True)
         state_start = rd.for_run.cphm.get_state()
         niter = 0
 
+        par_max = np.max(gather_broadcast(paramvec_start.vector().array()))
+        par_min = np.min(gather_broadcast(paramvec_start.vector().array()))
         gamma_max = params["Optimization_parmeteres"]["gamma_max"]
         mat_max = params["Optimization_parmeteres"]["matparams_max"]
         mat_min = params["Optimization_parmeteres"]["matparams_min"]
@@ -400,8 +402,8 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
                 # Usually the main problem is that the optimziation tries an activation that
                 # is too strong (high gamma max) in the active phase, or at material parameter
                 # set that is too soft (low material parameters) in the passive phase
-                params["Optimization_parmeteres"]["gamma_max"] *= 0.9
-                params["Optimization_parmeteres"]["matparams_min"] *= 2
+                params["Optimization_parmeteres"]["gamma_max"] = np.max(par_max, 0.9*params["Optimization_parmeteres"]["gamma_max"])
+                params["Optimization_parmeteres"]["matparams_min"] = np.min(par_min, 2*params["Optimization_parmeteres"]["matparams_min"])
                                 
             else:
                 params["Optimization_parmeteres"]["gamma_max"] = gamma_max
