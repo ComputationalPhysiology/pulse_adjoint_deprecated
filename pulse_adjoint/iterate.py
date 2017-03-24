@@ -7,6 +7,7 @@ import operator as op
 
 MAX_GAMMA_STEP = 0.05
 MAX_PRESSURE_STEP = 0.2
+MAX_PRESSURE_STEP_BIV = 0.05
 MAX_CRASH = 10
 MAX_ITERS = 20
 
@@ -93,7 +94,12 @@ def get_initial_step(solver, expr, control, target):
         
     elif control == "pressure":
         max_diff = abs(np.max(diff))
-        nsteps = int(np.ceil(float(max_diff) / MAX_PRESSURE_STEP)) + 1
+        if len(diff) == 2:
+            MAX_STEP = MAX_PRESSURE_STEP_BIV
+        else:
+            MAX_STEP = MAX_PRESSURE_STEP
+            
+        nsteps = int(np.ceil(float(max_diff) / MAX_STEP)) + 1
         step = diff/float(nsteps)
 
     logger.debug("Intial number of steps: {}".format(nsteps))
