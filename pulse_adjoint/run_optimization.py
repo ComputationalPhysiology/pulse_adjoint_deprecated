@@ -396,14 +396,15 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
                 # to the boundary. One thing we can do is to reduce the mangnitude of the
                 # gradient (but keeping the direction) so that the step size reduces.
                 # Another thing we can do is to actually change the bounds so that
-                # the algorithm do not go into the nasty parts of the parameters space
-                params["Optimization_parmeteres"]["gamma_max"] *= 0.8
-                params["Optimization_parmeteres"]["matparams_max"] *= 0.9
+                # the algorithm do not go into the nasty parts of the parameters space.
+                # Usually the main problem is that the optimziation tries an activation that
+                # is too strong (high gamma max) in the active phase, or at material parameter
+                # set that is too soft (low material parameters) in the passive phase
+                params["Optimization_parmeteres"]["gamma_max"] *= 0.9
                 params["Optimization_parmeteres"]["matparams_min"] *= 2
                                 
             else:
                 params["Optimization_parmeteres"]["gamma_max"] = gamma_max
-                params["Optimization_parmeteres"]["matparams_max"] = mat_max
                 params["Optimization_parmeteres"]["matparams_min"] = mat_min
                
                 solved = True
