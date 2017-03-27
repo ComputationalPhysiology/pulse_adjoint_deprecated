@@ -94,7 +94,7 @@ def get_initial_step(solver, expr, control, target):
         
     elif control == "pressure":
         max_diff = abs(np.max(diff))
-        if len(diff) == 2:
+        if hasattr(diff, "__len__") and len(diff) == 2:
             MAX_STEP = MAX_PRESSURE_STEP_BIV
         else:
             MAX_STEP = MAX_PRESSURE_STEP
