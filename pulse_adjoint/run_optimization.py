@@ -439,17 +439,17 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
 
         dfunc_value_rel = rd.for_res["func_value"] \
                           /rd.ini_for_res["func_value"]
-        if not done and dfunc_value_rel > 1.0:
+        if not done and dfunc_value_rel > 1.1:
             
             msg = ("Optimization provided a worse result than the initial guess. "
                    "\nMake the initial guess the solution")
             logger.warning(msg)
-            rd.for_run.cphm.solver.reinit(state_start, annotate=True)
+            rd.for_run.cphm.solver.reinit(state_start)
             paramvec.assign(paramvec_start)
-            
+        else:
         
-        x = np.array([opt_result.pop("x")]) if nvar == 1 else gather_broadcast(opt_result.pop("x"))
-        assign_to_vector(paramvec.vector(), gather_broadcast(x))
+            x = np.array([opt_result.pop("x")]) if nvar == 1 else gather_broadcast(opt_result.pop("x"))
+            assign_to_vector(paramvec.vector(), gather_broadcast(x))
 
         
         logger.info(Text.blue("\nForward solution at optimal parameters"))
