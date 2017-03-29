@@ -504,7 +504,7 @@ def make_control(params, patient):
             if params["phase"] in [PHASES[0], PHASES[2]]:
 
                 
-                val_const = Constant(val) if paramvec_.value_size() == 1 \
+                val_const = Constant([val]) if paramvec_.value_size() == 1 \
                             else Constant([val]*paramvec_.value_size())
                 
 
