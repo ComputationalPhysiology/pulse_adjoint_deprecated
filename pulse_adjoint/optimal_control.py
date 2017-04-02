@@ -99,12 +99,6 @@ class MyCallBack(object):
         self.rd = rd
         self.opt_funcvalues= []
 
-        logger.info("\n"+"Starting optimization".center(100, "-"))
-        logger.info("Scale: {}, \nDerivative Scale: {}".format(rd.scale,
-                                                                 rd.derivative_scale))
-        logger.info("Tolerace: {}, \nMaximum iterations: {}\n".format(tol, max_iter))
-        logger.info(print_head(rd.for_res))
-
     def __call__(self, x):
        
         self.ncalls += 1
@@ -418,6 +412,7 @@ class OptimalControl(object):
         
 
         self.tol = tol
+        self.max_iter = max_iter
 
         if nvar == 1:
 
@@ -492,6 +487,12 @@ class OptimalControl(object):
             
 
         module, method = self.opt_type.split("_")
+
+        logger.info("\n"+"Starting optimization".center(100, "-"))
+        logger.info("Scale: {}, \nDerivative Scale: {}".format(self.rd.scale,
+                                                               self.rd.derivative_scale))
+        logger.info("Tolerace: {}, \nMaximum iterations: {}\n".format(self.tol,
+                                                                      self.max_iter))
 
         t = Timer()
         t.start()

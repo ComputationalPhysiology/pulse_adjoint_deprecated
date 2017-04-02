@@ -142,7 +142,7 @@ class RegionalStrainTarget(OptimizationTarget):
     target
     """                                  
     def __init__(self, mesh, crl_basis, dmu, weights=None, nregions = None,
-                 tensor="gradu", F_ref = Identity(3)):
+                 tensor="gradu", F_ref = None):
         """
         Initialize regional strain target
 
@@ -167,12 +167,13 @@ class RegionalStrainTarget(OptimizationTarget):
         """
         self._name = "Regional Strain"
         self._tensor = tensor
-        self._F_ref = F_ref
+        
 
         if weights is None: weights = np.ones((17,3))
         self.nregions = np.shape(weights)[0] if nregions is None else nregions
         dim = mesh.geometry().dim()
         self.dim = dim
+        self._F_ref = F_ref if F_ref is not None else Identity(dim)
         
         self.target_space = VectorFunctionSpace(mesh, "R", 0, dim = dim)
         
@@ -309,7 +310,7 @@ class RegionalStrainTarget(OptimizationTarget):
         F = (grad(u) + I)*inv(self._F_ref)
         # Compute the strains
         if self._tensor == "gradu":
-            tensor = F - Identity(3)
+            tensor = F - Identity(self.dim)
         elif self._tensor == "E":
             C = F.T * F
             tensor = 0.5*(C-I)

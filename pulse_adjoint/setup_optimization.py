@@ -504,7 +504,7 @@ def make_control(params, patient):
             if params["phase"] in [PHASES[0], PHASES[2]]:
 
                 
-                val_const = Constant([val]) if paramvec_.value_size() == 1 \
+                val_const = Constant(val) if paramvec_.value_size() == 1 \
                             else Constant([val]*paramvec_.value_size())
                 
 
@@ -797,7 +797,6 @@ class MyReducedFunctional(ReducedFunctional):
 
         self.verbose = verbose
         from optimal_control import has_scipy016
-        self.my_print_line = logger.debug if has_scipy016 else logger.info
         
     def __call__(self, value, return_fail = False):
 
@@ -861,7 +860,7 @@ class MyReducedFunctional(ReducedFunctional):
             self.first_call = False
 
 	    # Some printing
-            self.my_print_line(print_head(self.for_res))
+            logger.info(print_head(self.for_res))
             
         control = Control(self.paramvec)
             
@@ -884,8 +883,6 @@ class MyReducedFunctional(ReducedFunctional):
                     else self.grad_norm_scaled[-1]
 
 
-        self.my_print_line(Text.yellow(print_line(self.for_res, self.iter,
-                                            grad_norm, func_value)))
         self.func_values_lst.append(func_value*self.scale)
         self.controls_lst.append(Vector(paramvec_new.vector()))
 
@@ -893,6 +890,7 @@ class MyReducedFunctional(ReducedFunctional):
         logger.debug(Text.yellow("Stop annotating"))
         parameters["adjoint"]["stop_annotating"] = True
 
+        self.print_line()
 
         if return_fail:
             return self.scale*func_value, crash
@@ -921,6 +919,16 @@ class MyReducedFunctional(ReducedFunctional):
             if len(self.grad_norm): self.grad_norm.pop()
             if len(self.grad_norm_scaled): self.grad_norm_scaled.pop()
 
+    def print_line(self):
+        grad_norm = None if len(self.grad_norm_scaled) == 0 \
+                    else self.grad_norm_scaled[-1]
+
+        func_value = self.for_res["func_value"]
+       
+       
+        
+        logger.info(print_line(self.for_res, self.iter,
+                               grad_norm, func_value))
 
         
     def derivative(self, *args, **kwargs):
@@ -971,6 +979,7 @@ class RegionalParameter(dolfin.Function):
 
         # Functionspace for the indicator functions
         self._IndSpace = dolfin.FunctionSpace(mesh, "DG", 0)
+
        
         # Make indicator functions
         self._ind_functions = []

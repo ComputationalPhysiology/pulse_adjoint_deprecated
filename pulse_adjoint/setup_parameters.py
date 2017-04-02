@@ -401,7 +401,7 @@ def setup_application_parameters():
     ## Additional setup ##
 
     # Do you want to find the unloaded geometry and use that?
-    params.add("unload", True)
+    params.add("unload", False)
     
     # For passive optimization, include all passive points ('all')
     # or only the final point ('-1'), or specific point ('point')
@@ -420,7 +420,8 @@ def setup_application_parameters():
     params.add("optimize_matparams", True)
 
     # Normalization factor for active contraction
-    params.add("T_ref", 1.0)
+    # For default values see material module
+    params.add("T_ref", 0.0)
 
     # If you want to use a zero initial guess for gamma (False),
     # or use gamma from previous iteration as initial guess (True)

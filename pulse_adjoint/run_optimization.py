@@ -235,9 +235,14 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     #Get initial guess for gamma
     if not params["nonzero_initial_guess"] or params["active_contraction_iteration_number"] == 0:
         val = 0.0
-        # Use zero initial gubess
-        zero = Constant(val) if gamma.value_size() == 1 \
-          else Constant([val]*gamma.value_size())
+
+        if gamma.value_size() == 1:
+            if gamma.value_rank() == 0:
+                zero = Constant(val)
+            else:
+                zero = Constant([val])
+        else:
+            zero = Constant([val]*gamma.value_size())
 
         gamma.assign(zero)
        
@@ -409,47 +414,22 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
                 params["Optimization_parmeteres"]["gamma_max"] = gamma_max
                 params["Optimization_parmeteres"]["matparams_min"] = mat_min
                
-                solved = True
-                dfunc_value_rel = rd.for_res["func_value"] \
-                                  /rd.ini_for_res["func_value"]
-
-               
+                done = True
                 
-                if not params["Optimization_parmeteres"]["adapt_scale"] or \
-                   dfunc_value_rel < params["Optimization_parmeteres"]["soft_tol_rel"]: 
-                    done = True
-                else:
-                    # We have not improved much from the initial guess
-                    logger.warning(Text.red("Poor imporovement- increase step size"))
-                    
-                    # Repeat and increase the sensitivity, i.e
-                    # increase the step size of the gradient. 
-                    rd.reset()
-                    rd.derivative_scale *= 3.0
-
-            
             
             niter += 1
                     
 
-        if not solved:
-            msg = "Unable to solve problem. Try to restart with smallar tolerance"
-            raise RuntimeError(msg)
-
-
-        dfunc_value_rel = rd.for_res["func_value"] \
-                          /rd.ini_for_res["func_value"]
-        if not done and dfunc_value_rel > 1.1:
-            
-            msg = ("Optimization provided a worse result than the initial guess. "
-                   "\nMake the initial guess the solution")
+        if not done:
+            opt_result = {}
+            control_idx = np.argmin(rd.func_values_lst)
+            x = gather_broadcast(rd.controls_lst[control_idx].array())
+            msg = "Unable to solve problem. Choose the best value"
             logger.warning(msg)
-            rd.for_run.cphm.solver.reinit(state_start)
-            paramvec.assign(paramvec_start)
         else:
-        
             x = np.array([opt_result.pop("x")]) if nvar == 1 else gather_broadcast(opt_result.pop("x"))
-            assign_to_vector(paramvec.vector(), gather_broadcast(x))
+            
+        assign_to_vector(paramvec.vector(), gather_broadcast(x))
 
         
         logger.info(Text.blue("\nForward solution at optimal parameters"))

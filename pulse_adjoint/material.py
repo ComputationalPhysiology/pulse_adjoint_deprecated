@@ -59,27 +59,28 @@ class Material(object):
           ["active_stress", "active_strain", "active_strain_rossi"], \
           "The active model '{}' is not implemented.".format(self._active_model)
 
-        if T_ref is None:
-            self._T_ref = 100.0 if self._active_model == "active_stress"  else 1.0
-        else:
+        if T_ref:
             self._T_ref = T_ref
-            
-        # self._T_ref = 1.0
-  
+        else:
+            self._T_ref = 75.0 if self._active_model\
+                          == "active_stress"  else 0.4
 
         if params:
             self.parameters = params
             for k,v in params.iteritems():
+                
                 if isinstance(v, (float, int)):
                     setattr(self, k, Constant(v))
-                elif isinstance(v, RegionalParameter):
                     
+                elif isinstance(v, RegionalParameter):
+                   
                     setattr(self, k, Function(v.get_ind_space(), name = k))
                     mat = getattr(self, k)
                     mat.assign(project(v.get_function(), v.get_ind_space()))
+                    
                 else:
                     setattr(self, k, v)
-
+            
 
     def strain_energy(self, F):
         r"""
@@ -234,9 +235,9 @@ class Material(object):
         wactive = self.Wactive(gamma, diff = 1)
 
         if p is None:
-            return 2*w1*B + 2*w4f*ff  + 2*wactive*ff 
+            return 2*w1*B + 2*w4f*ff  + wactive*ff 
         else:
-            return 2*w1*B + 2*w4f*ff  + 2*wactive*ff - p*I
+            return 2*w1*B + 2*w4f*ff  + wactive*ff - p*I
         
         
     def Wactive(self, gamma, I4f = 0, diff = 0):
@@ -256,7 +257,7 @@ class Material(object):
         if self._active_model == 'active_stress':
 
             if diff == 0:
-                return self._T_ref*gamma*I4f
+                return 0.5*self._T_ref*gamma*I4f
             elif diff == 1:
                 return self._T_ref*gamma 
             
@@ -589,7 +590,8 @@ class HolzapfelOgden(Material):
            \frac{a b}{2}  e^{ b (I_1 - 3)}     
         
         """
-      
+
+       
         a = self.a
         b = self.b
         # if float(a) < DOLFIN_EPS:

@@ -57,7 +57,7 @@ class BasicHeartProblem(collections.Iterator):
             target_pressure = p_lv_next
             pressure = {"p_lv":self.p_lv}
 
-        iterate("pressure", self.solver, target_pressure, pressure, continuation = False)
+        iterate("pressure", self.solver, target_pressure, pressure, continuation = True)
         
     
     def get_state(self, copy = True):
@@ -70,17 +70,16 @@ class BasicHeartProblem(collections.Iterator):
             return self.solver.get_state()
         
     def get_gamma(self, copy =True):
-        if copy:
-            return self.solver.parameters["material"].gamma.copy(True)
-        else:
-            return self.solver.parameters["material"].gamma
 
-            
-    def get_inner_cavity_volume(self):
-        """
-        Return the volume of left ventricular chamber
-        """
-        return assemble(self.vol_form)
+        gamma = self.solver.parameters["material"].gamma
+        if isinstance(gamma, Constant):
+            return gamma
+        
+        if copy:
+            return gamma.copy(True)
+        else:
+            return gamma
+
 
     def _init_pressures(self, pressure, p, chamber = "lv"):
 
