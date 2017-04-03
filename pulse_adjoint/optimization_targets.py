@@ -465,7 +465,9 @@ class Regularization(object):
     """Class for regularization
     of the control parameter
     """
-    def __init__(self, mesh, spacestr = "CG_1", lmbda = 0.0, regtype = "L2_grad", mshfun = None):
+    def __init__(self, mesh, spacestr = "CG_1",
+                 lmbda = 0.0, regtype = "L2_grad",
+                 mshfun = None):
         """Initialize regularization object
 
         :param space: The mesh
@@ -541,10 +543,15 @@ class Regularization(object):
             return (inner(self._m, self._m)/self.meshvol)*self.dx
 
         else:
-            if self.spacestr in ["CG_1", "regional"]:
+            if self.spacestr == "CG_1":
                 
                 return (inner(grad(self._m), grad(self._m))/self.meshvol)*self.dx
-            
+
+            elif self.spacestr == "regional":
+                m_fun = self._m.get_function()
+                m_mean = project(project(m_fun, self._realspace), self._m.get_ind_space())
+                return ((m_fun - m_mean)**2/self.meshvol)*self.dx
+                
             else:
                 return Constant(0.0)*self.dx
 
@@ -568,6 +575,7 @@ class Regularization(object):
         except:
             from IPython import embed; embed()
             exit()
+
         return self.lmbda*form
 
         
