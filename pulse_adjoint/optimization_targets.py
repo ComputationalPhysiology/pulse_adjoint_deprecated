@@ -548,9 +548,38 @@ class Regularization(object):
                 return (inner(grad(self._m), grad(self._m))/self.meshvol)*self.dx
 
             elif self.spacestr == "regional":
-                m_fun = self._m.get_function()
-                m_mean = project(project(m_fun, self._realspace), self._m.get_ind_space())
-                return ((m_fun - m_mean)**2/self.meshvol)*self.dx
+
+
+                
+                expr_arr = ["0"]*self._m.value_size()
+
+                # Sum all the components to find the mean
+                expr_arr[0]="1"
+                m_sum = dot(self._m, Expression(tuple(expr_arr)))
+                expr_arr[0]="0"
+                
+                for i in range(1,self._m.value_size()):
+                     expr_arr[i]="1"
+                     m_sum += dot(self._m, Expression(tuple(expr_arr)))
+                     expr_arr[i]="0"
+
+                # Compute the mean
+                m_avg = m_sum / self._m.value_size()
+
+                # Compute the variance
+                expr_arr[0]="1"
+                m_reg= (dot(self._m, Expression(tuple(expr_arr))) - m_avg)**2 \
+                       /self._m.value_size()
+                expr_arr[0]="0"
+                for i in range(1,self._m.value_size()):
+                     expr_arr[i]="1"
+                     m_reg += (dot(self._m, Expression(tuple(expr_arr))) - m_avg)**2\
+                              /self._m.value_size()
+                     expr_arr[i]="0"
+
+                # Create a functional term
+                return (m_reg/self.meshvol)*self.dx
+              
                 
             else:
                 return Constant(0.0)*self.dx
@@ -569,12 +598,12 @@ class Regularization(object):
 
         """
         # raise Exception
-        try:
-            form = self.get_form()
-            self._value = assemble(form)
-        except:
-            from IPython import embed; embed()
-            exit()
+        # try:
+        form = self.get_form()
+        self._value = assemble(form)
+        # except Exception as ex:
+            # from IPython import embed; embed()
+            # exit()
 
         return self.lmbda*form
 
@@ -592,85 +621,3 @@ class Regularization(object):
         
 
 
-# class RegionalStrainComponentTarget(RegionalStrainTarget):
-#     """Class for one component regional strain optimization
-#     target
-#     """                                  
-#     def __init__(self, mesh, crl_basis, dmu, weights=np.ones((17,3)), nregions = None):
-#         """Initialize regional strain target
-
-#         :param mesh: The mesh
-#         :type mesh: :py:class:`dolfin.Mesh`
-#         :param comp: A vectorfield with the strain component
-#         :type comp: :py:class:`dolfin.Function`
-#         :type mesh: :py:class:`dolfin.Mesh`
-#         :param dmu: Measure with subdomain information
-#         :type dmu: :py:class:`dolfin.Measure`
-#         :param weights: Weights on the different segements
-#         :type wieghts: :py:function:`numpy.array`
-        
-#         """
-#         self._name = "Regional Strain"
-#         self.nregions = np.shape(weights)[0] if nregions is None else nregions
-#         dim = mesh.geometry().dim()
-#         self.dim = dim
-        
-#         self.target_space = FunctionSpace(mesh, "R", 0)
-#         self.weight_space = FunctionSpace(mesh, "R", 0)
-       
-#         if weights.shape == (self.nregions, 1):
-#             self.weights_arr = weights
-#         else:
-#             from adjoint_contraction_args import logger
-#             msg = "Weights do not correspond to the number of regions and dimension.\n"+\
-#                   "Dim = {}, number of regions = {}, {} and {} was given".format(dim,
-#                                                                                  self.nregions,
-#                                                                                  weights.shape[1],
-#
-
-
-
-#                                                                                  weights.shape[0])
-#             logger.warning(msg)
-#             self.weights_arr =np.ones((self.nregions,1))
-
-#         self.comp = comp        
-#         self.dmu = dmu
-
-#         self.meshvols = [Constant(assemble(Constant(1.0)*dmu(i+1)),
-#                                   name = "mesh volume") for i in range(self.nregions)]
-        
-#         OptimizationTarget.__init__(self, mesh)
-
-#     def _set_weights():
-#         pass
-#         # for i in range(self.nregions):
-#         #     weights
-
-#     def assign_simulated(self, u):
-#         """Assing simulated regional strain
-
-#         :param u: New displacement
-#         :type u: :py:class:`dolfin.Function`
-#         """
-        
-#         # Compute the strains
-#         gradu = grad(u)
-#         grad_u_diag = as_vector(inner(e,gradu*e) for e in self.crl_basis])
-
-#         # Make a project for dolfin-adjoint recording
-#         for i in range(self.nregions):
-#             solve(inner(self._trial, self._test)*self.dmu(i+1) == \
-#                   inner(grad_u_diag, self._test)*self.dmu(i+1), \
-#                   self.simulated_fun[i])
-
-#     def assign_functional(self):
-        
-#         for i in range(self.nregions):
-#             solve(self._trial_r*self._test_r/self.meshvol*dx == \
-#                   self._test_r*self._form[i]/self.meshvols[i]*self.dmu(i+1), \
-#                   self.functional[i])
-
-       
-#     def get_functional(self):
-#         return (list_sum(self.functional)/self.meshvol)*dx
