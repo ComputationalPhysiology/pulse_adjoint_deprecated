@@ -463,7 +463,7 @@ def print_optimization_report(params, opt_controls, init_controls,
     logger.info("\nFunctional Values")
     logger.info(" "*7+"\t"+print_head(ini_for_res, False))
 
-    if len(opt_result["grad_norm"]) == 0:
+    if not opt_result.has_key("grad_norm") or len(opt_result["grad_norm"]) == 0:
         grad_norm_ini = 0.0
         grad_norm_opt = 0.0
     else:
