@@ -316,14 +316,19 @@ class RegionalStrainTarget(OptimizationTarget):
             tensor = 0.5*(C-I)
 
 
-        tensor_diag = as_vector([inner(e,tensor*e) for e in self.crl_basis])
+        if len(self.crl_basis) > 0:
+            tensor_diag = as_vector([inner(e,tensor*e) for e in self.crl_basis])
 
-        # Make a project for dolfin-adjoint recording
-        for i in range(self.nregions):
-            solve(inner(self._trial, self._test)*self.dmu(i+1) == \
-                  inner(tensor_diag, self._test)*self.dmu(i+1), \
-                  self.simulated_fun[i], solver_parameters={"linear_solver": "gmres"})
-            
+            # Make a project for dolfin-adjoint recording
+            for i in range(self.nregions):
+                solve(inner(self._trial, self._test)*self.dmu(i+1) == \
+                      inner(tensor_diag, self._test)*self.dmu(i+1), \
+                      self.simulated_fun[i], solver_parameters={"linear_solver": "gmres"})
+        else:
+            from adjoint_contraction_args import logger
+            logger.warning("No local basis exist. Regional strain cannot be computed")
+
+    
     def assign_functional(self):
         
         for i in range(self.nregions):
@@ -388,7 +393,7 @@ class VolumeTarget(OptimizationTarget):
     target
     """
     
-    def __init__(self, mesh, dmu, chamber = "LV"):
+    def __init__(self, mesh, dmu, chamber = "LV", approx = "project"):
         """Initialize the functions
 
         :param mesh: The mesh
@@ -408,6 +413,7 @@ class VolumeTarget(OptimizationTarget):
         self.target_space = FunctionSpace(mesh, "R", 0)
         self.endoarea = Constant(assemble(Constant(1.0)*dmu),
                                  name = "endo area")
+        self.approx = approx
         OptimizationTarget.__init__(self, mesh)
 
     def print_head(self):
@@ -437,9 +443,12 @@ class VolumeTarget(OptimizationTarget):
 
         :param u: New displacement
         """
-        # u_int = interpolate(project(u, self._disp_space),
-                            # self._interpolation_space)
-        u_int =project(u, self._interpolation_space)
+
+        if self.approx == "interpolate":
+            u_int = interpolate(project(u, self._disp_space),
+                                self._interpolation_space)
+        else:
+            u_int =project(u, self._interpolation_space)
         
         # Compute volume
         F = grad(u_int) + Identity(3)
