@@ -392,9 +392,9 @@ def make_solver_parameters(params, patient, matparams,
     
         
         # Apply a linear sprint robin type BC to limit motion
-        robin_bc += [Constant(params["base_spring_k"], 
+        robin_bc += [[Constant(params["base_spring_k"], 
                                    name ="base_spring_constant"),
-                     patient.markers["BASE"][0]]
+                     patient.markers["BASE"][0]]]
 
 
 
