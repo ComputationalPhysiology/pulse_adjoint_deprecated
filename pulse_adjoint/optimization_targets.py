@@ -142,7 +142,7 @@ class RegionalStrainTarget(OptimizationTarget):
     target
     """                                  
     def __init__(self, mesh, crl_basis, dmu, weights=None, nregions = None,
-                 tensor="gradu", F_ref = None):
+                 tensor="gradu", F_ref = None, approx = "original"):
         """
         Initialize regional strain target
 
@@ -167,7 +167,7 @@ class RegionalStrainTarget(OptimizationTarget):
         """
         self._name = "Regional Strain"
         self._tensor = tensor
-        
+        self.approx = approx
 
         if weights is None: weights = np.ones((17,3))
         self.nregions = np.shape(weights)[0] if nregions is None else nregions
@@ -305,9 +305,21 @@ class RegionalStrainTarget(OptimizationTarget):
         :param u: New displacement
         :type u: :py:class:`dolfin.Function`
         """
-        
+
+
+        if self.approx == "interpolate":
+            u_int = interpolate(project(u, self._disp_space),
+                                self._interpolation_space)
+            
+        elif self.approx == "project":
+            u_int =project(u, self._interpolation_space)
+
+        else:
+            u_int = u
+
+            
         I = Identity(self.dim)
-        F = (grad(u) + I)*inv(self._F_ref)
+        F = (grad(u_int) + I)*inv(self._F_ref)
         # Compute the strains
         if self._tensor == "gradu":
             tensor = F - Identity(self.dim)

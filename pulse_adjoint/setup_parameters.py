@@ -446,10 +446,11 @@ def setup_application_parameters():
     params.add("active_relax", 0.001)
 
 
-    # When computing the volume, do you want to the project or  interpolate
+    # When computing the volume/strain, do you want to the project or  interpolate
     # the diplacement onto a CG 1 space, or do you want to keep the original
     # displacement (default CG2)
     params.add("volume_approx", "project", ["project", "interpolate", "original"])
+    params.add("strain_approx", "original", ["project", "interpolate", "original"])
 
     return params
 

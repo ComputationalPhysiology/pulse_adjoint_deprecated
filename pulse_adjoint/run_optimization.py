@@ -411,7 +411,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
                 params["Optimization_parameters"]["matparams_min"] = np.min([par_min, 2*params["Optimization_parameters"]["matparams_min"]])
                                 
             else:
-                params["Optimization_parameters"["gamma_max"] = gamma_max
+                params["Optimization_parameters"]["gamma_max"] = gamma_max
                 params["Optimization_parameters"]["matparams_min"] = mat_min
                
                 done = True
@@ -614,7 +614,7 @@ def get_optimization_targets(params, solver_parameters):
                                  solver_parameters["crl_basis"],
                                  dX,
                                  solver_parameters["strain_weights"],
-                                 F_ref = F_ref)
+                                 F_ref = F_ref, approx = params["strain_approx"])
     
         
 
