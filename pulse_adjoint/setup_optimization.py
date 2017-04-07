@@ -323,7 +323,11 @@ def make_solver_parameters(params, patient, matparams,
         pressure = {"p_lv":p_lv}
     
 
+
     
+    robin_bc = [[Constant(params["pericardium_spring"], 
+                                   name ="pericardium_spring_constant"),
+                     patient.markers["EPI"][0]]]
 
 
     if params["base_bc"] == "from_seg_base":
@@ -339,8 +343,7 @@ def make_solver_parameters(params, patient, matparams,
 
         endoring = VertexDomain(mesh_verts)
         base_it = Expression("t", t = 0.0, name = "base_iterator")
-        
-        robin_bc = [None]
+
        
         # Expression for defining the boundary conditions
         base_bc_y = BaseExpression(mesh_verts, seg_verts, "y", base_it, name = "base_expr_y")
@@ -360,8 +363,7 @@ def make_solver_parameters(params, patient, matparams,
             return bc
 
     elif params["base_bc"] == "fixed":
-        
-        robin_bc = [None]
+
         base_bc_y = None
         base_bc_z = None
         base_it = None
@@ -390,12 +392,14 @@ def make_solver_parameters(params, patient, matparams,
     
         
         # Apply a linear sprint robin type BC to limit motion
-        robin_bc = [[Constant(params["base_spring_k"], 
+        robin_bc += [Constant(params["base_spring_k"], 
                                    name ="base_spring_constant"),
-                     patient.markers["BASE"][0]]]
+                     patient.markers["BASE"][0]]
 
 
 
+
+    
     # Circumferential, Radial and Longitudinal basis vector
     crl_basis = {}
     for att in ["circumferential", "radial", "longitudinal"]:

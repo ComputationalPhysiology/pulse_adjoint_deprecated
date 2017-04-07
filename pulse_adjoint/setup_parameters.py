@@ -351,6 +351,9 @@ def setup_application_parameters():
     # Spring constant at base (Note: works one for base_bc = fix_x)
     params.add("base_spring_k", 1.0)
 
+    # Spring constatnt at pericardium (if zero - divergence free)
+    params.add("pericardium_spring", 0.0)
+
     # Material parameters
     material_parameters = Parameters("Material_parameters")
     material_parameters.add("a", 2.28)
@@ -442,6 +445,12 @@ def setup_application_parameters():
     params.add("passive_relax", 0.1)
     params.add("active_relax", 0.001)
 
+
+    # When computing the volume, do you want to the project or  interpolate
+    # the diplacement onto a CG 1 space, or do you want to keep the original
+    # displacement (default CG2)
+    params.add("volume_approx", "project", ["project", "interpolate", "original"])
+
     return params
 
 def setup_optimization_parameters():
@@ -524,7 +533,7 @@ def setup_unloading_parameters():
 
     params = Parameters("Unloading_parameters")
 
-    params.add("method", "hybrid", ["hybrid", "fixed_points", "raghavan"])
+    params.add("method", "hybrid", ["hybrid", "fixed_point", "raghavan"])
     params.add("tol", 0.05)
     params.add("maxiter", 5)
 

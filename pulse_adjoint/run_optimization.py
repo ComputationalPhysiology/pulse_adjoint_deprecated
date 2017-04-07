@@ -29,7 +29,7 @@ from optimal_control import OptimalControl
 from lvsolver import SolverDidNotConverge
 
 
-def run_unloaded_optimization(params, patient):
+def run_unloaded_optimization(params, patient, initial_guess = 30.0):
     from unloading import UnloadedMaterial
   
     pfd = patient.passive_filling_duration
@@ -47,7 +47,7 @@ def run_unloaded_optimization(params, patient):
         
 
     h5group = params["h5group"]
-    params["Material_parameters"]["a"] = 30.0
+    params["Material_parameters"]["a"] = initial_guess
     
     estimator =  UnloadedMaterial(p_geometry, pressures, volumes,
                                   params, **params["Unloading_parameters"])
@@ -573,7 +573,7 @@ def get_optimization_targets(params, solver_parameters):
                      subdomain_data = solver_parameters["facet_function"],
                      domain = mesh)(solver_parameters["markers"][marker][0])
         
-        targets["volume"] = VolumeTarget(mesh,dS, "LV")
+        targets["volume"] = VolumeTarget(mesh,dS, "LV", approx = params["volume_approx"])
 
     if p["rv_volume"]:
             
@@ -581,7 +581,7 @@ def get_optimization_targets(params, solver_parameters):
                      subdomain_data = solver_parameters["facet_function"],
                      domain = mesh)(solver_parameters["markers"]["ENDO_RV"][0])
         
-        targets["rv_volume"] = VolumeTarget(mesh,dS, "RV")
+        targets["rv_volume"] = VolumeTarget(mesh,dS, "RV", approx = params["volume_approx"])
 
     if p["regional_strain"]:
 
