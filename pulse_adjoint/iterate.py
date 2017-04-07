@@ -143,7 +143,7 @@ def step_too_large(current, target, step, control):
                 comp = op.gt if c < t else op.lt
                 too_large.append(comp(c+s, t))
                 
-            return all(too_large)
+            return any(too_large)
         
 
 def change_step_size(step, factor, control):
@@ -278,7 +278,6 @@ def iterate_pressure(solver, target, p_expr,
         state_old = prev_states[-1]
 
         first_step = len(prev_states) < 2
-        
 
         # Check if we are close
         if step_too_large(control_value_old, target, step, "pressure"):
@@ -550,176 +549,6 @@ def iterate(control, *args, **kwargs):
 
     if control == "gamma":
         return iterate_gamma(*args, **kwargs)
-
-
-
-def iterate2(control, solver, target, expr=None,
-            continuation = True, max_adapt_iter = 8, adapt_step=True):
-    """
-    Using the given solver, iterate control to given target. 
-    
-
-    Parameters
-    ----------
-
-    solver (LVSolver)
-        The solver
-    target (dolfin.Function or tuple or float)
-        The target value. Typically a float if target is LVP, a tuple
-        if target is (LVP, RVP) and a function if target is gamma.
-    control (str)
-        Control mode, so far either 'pressure' or 'gamma'
-    p_expr (dict)
-        A dictionary with expression for the pressure and keys
-        'p_lv' (and 'p_rv' if BiV)
-    continuation (bool)
-        Apply continuation for better guess for newton solver
-        Note: Replay test seems to fail when continuation is True, 
-        but taylor test passes
-    max_adapt_iter (int)
-        If number of iterations is less than this number and adapt_step=True,
-        then adapt control step
-    adapt_step (bool)
-        Adapt / increase step size when sucessful iterations are achevied. 
-
-    
-    """
-
-    if control == "pressure":
-        assert expr is not None, "provide the pressure"
-        assert isinstance(expr, dict), "p_expr should be a dictionray"
-        assert expr.has_key("p_lv"), "p_expr do not have the key 'p_lv'"
-        
-        
-
-    target_reached = check_target_reached(solver, expr, control, target)
-    logger.info("\nIterate Control: {}".format(control))
-
-    
-    step = get_initial_step(solver, expr, control, target)
-
-    value = get_current_control_value(solver, expr, control)
-    logger.info("Current value")
-    print_control(value)
-    
-    control_values  = [value]
-
-    
-    prev_states = [solver.get_state().copy(True)]
-
-    niters = 0
-    ncrashes = 0
-    while not target_reached:
-
-        niters += 1
-        if ncrashes > MAX_CRASH or niters > MAX_ITERS:
-           
-            raise SolverDidNotConverge
-
-        control_value_old = control_values[-1]
-        state_old = prev_states[-1]
-
-        first_step = len(prev_states) < 2
-        
-
-        # Check if we are close
-        if step_too_large(control_value_old, target, step, control):
-            logger.info("Change step size for final iteration")
-            # Change step size so that target is reached in the next iteration
-            if control == "gamma":
-                step = Function(target.function_space(), name = "gamma_step")
-                step.vector().axpy(1.0, target.vector())
-                step.vector().axpy(-1.0, control_value_old.vector())
-            elif control == "pressure":
-                step = target-control_value_old
-
-        
-        
-        new_control = get_current_control_value(solver, expr, control)
-        if control == "gamma":
-            new_control.vector().axpy(1.0, step.vector())
-        elif control == "pressure":
-            new_control += step
-    
-        assign_new_control(solver, expr, control, new_control)        
-        logger.info("\nTry new {}".format(control))
-        print_control(new_control)
-
-
-        # Prediction step (Make a better guess for newtons method)
-        # Assuming state depends continuously on the control
-        if not first_step and continuation:
-            c0, c1 = control_values[-2:]
-            s0, s1 = prev_states
-
-            delta = get_delta(new_control, c0, c1)
-            
-
-            solver.get_state().vector().zero()
-            solver.get_state().vector().axpy(1.0-delta, s0.vector())
-            solver.get_state().vector().axpy(delta, s1.vector())
-
-        
-        
-        try:
-            nliter, nlconv = solver.solve()
-        except:
-            logger.info("\nNOT CONVERGING")
-            logger.info("Reduce control step")
-            ncrashes += 1
-
-            if control == "gamma":
-                new_control.vector().axpy(-1.0, step.vector())
-            elif control == "pressure":
-                new_control -= step
-     
-            # Assign old state
-            logger.debug("Assign old state")
-            # solver.reinit(state_old)
-            solver.get_state().vector().zero()
-            solver.reinit(state_old)
-
-            # Assign old control value
-            logger.debug("Assign old control")
-            assign_new_control(solver, expr, control, new_control)
-            # Reduce step size
-            step = change_step_size(step, 0.5, control)
-            
-            continue
-        
-        else:
-            logger.info("\nSUCCESFULL STEP:")
-
-            target_reached = check_target_reached(solver, expr, control, target)
-
-            if not target_reached:
-
-                if nliter < max_adapt_iter and adapt_step:
-                    logger.info("Adapt step size. New step size:")
-                    step = change_step_size(step, 2.0, control)
-                    print_control(step)
-                
-                control_values.append(new_control)
-
-                if first_step:
-                    prev_states.append(solver.get_state().copy(True))
-                else:
-                
-                    # Switch place of the state vectors
-                    prev_states = [prev_states[-1], prev_states[0]]
-
-                    # Inplace update of last state values
-                    prev_states[-1].vector().zero()
-                    prev_states[-1].vector().axpy(1.0, solver.get_state().vector())
-
-
-    if control == "gamma":
-        assign_new_control(solver, expr, control, target)
-        solver.solve()
-                
-
-    return control_values, prev_states
-        
 
     
 

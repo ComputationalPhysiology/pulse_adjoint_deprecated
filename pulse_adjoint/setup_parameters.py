@@ -495,7 +495,7 @@ def setup_optimization_parameters():
 
     """
     # Parameters for the Optimization
-    params = Parameters("Optimization_parmeteres")
+    params = Parameters("Optimization_parameters")
     params.add("opt_type", "scipy_slsqp")
     params.add("method_1d", "bounded")
     params.add("active_opt_tol", 1e-6)

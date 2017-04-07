@@ -528,7 +528,7 @@ class PassiveForwardRunner(BasicForwardRunner):
     def assign_material_parameters(self, m):
 
         self.paramvec.assign(m)
-        npassive = sum([ not self.params["Optimization_parmeteres"][k] \
+        npassive = sum([ not self.params["Optimization_parameters"][k] \
                      for k in ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]])
     
 
@@ -536,7 +536,7 @@ class PassiveForwardRunner(BasicForwardRunner):
 
         
         if npassive == 1:
-            fixed_idx = np.nonzero([not self.params["Optimization_parmeteres"][k] for k in lst])[0][0]
+            fixed_idx = np.nonzero([not self.params["Optimization_parameters"][k] for k in lst])[0][0]
             par = lst[fixed_idx].split("fix_")[-1]
             if self.params["matparams_space"] == "regional":
                 paramvec = project(self.paramvec.get_function(), self.paramvec.get_ind_space())
@@ -547,7 +547,7 @@ class PassiveForwardRunner(BasicForwardRunner):
             mat.assign(paramvec)
         else:
             paramvec_split = split(self.paramvec)
-            fixed_idx = np.nonzero([not self.params["Optimization_parmeteres"][k] for k in lst])[0]
+            fixed_idx = np.nonzero([not self.params["Optimization_parameters"][k] for k in lst])[0]
 
             
             for it, idx in enumerate(fixed_idx):

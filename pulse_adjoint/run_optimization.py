@@ -324,7 +324,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
 
     
     
-    opt_params = params["Optimization_parmeteres"]
+    opt_params = params["Optimization_parameters"]
     x = gather_broadcast(paramvec.vector().array())
     nvar = len(x)
     
@@ -352,9 +352,9 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
 
         par_max = np.max(gather_broadcast(paramvec_start.vector().array()))
         par_min = np.min(gather_broadcast(paramvec_start.vector().array()))
-        gamma_max = float(params["Optimization_parmeteres"]["gamma_max"])
-        mat_max = float(params["Optimization_parmeteres"]["matparams_max"])
-        mat_min = float(params["Optimization_parmeteres"]["matparams_min"])
+        gamma_max = float(params["Optimization_parameters"]["gamma_max"])
+        mat_max = float(params["Optimization_parameters"]["matparams_max"])
+        mat_min = float(params["Optimization_parameters"]["matparams_min"])
        
         while not done and niter < 5:
             # Evaluate the reduced functional in case the solver chrashes at the first point.
@@ -407,12 +407,12 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
                 # Usually the main problem is that the optimziation tries an activation that
                 # is too strong (high gamma max) in the active phase, or at material parameter
                 # set that is too soft (low material parameters) in the passive phase
-                params["Optimization_parmeteres"]["gamma_max"] = np.max([par_max, 0.9*params["Optimization_parmeteres"]["gamma_max"]])
-                params["Optimization_parmeteres"]["matparams_min"] = np.min([par_min, 2*params["Optimization_parmeteres"]["matparams_min"]])
+                params["Optimization_parameters"]["gamma_max"] = np.max([par_max, 0.9*params["Optimization_parameters"]["gamma_max"]])
+                params["Optimization_parameters"]["matparams_min"] = np.min([par_min, 2*params["Optimization_parameters"]["matparams_min"]])
                                 
             else:
-                params["Optimization_parmeteres"]["gamma_max"] = gamma_max
-                params["Optimization_parmeteres"]["matparams_min"] = mat_min
+                params["Optimization_parameters"["gamma_max"] = gamma_max
+                params["Optimization_parameters"]["matparams_min"] = mat_min
                
                 done = True
                 

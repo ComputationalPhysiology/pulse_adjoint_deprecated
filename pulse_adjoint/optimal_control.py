@@ -384,7 +384,7 @@ class OptimalControl(object):
         assert any(opt_import), msg
 
 
-        opt_params = params["Optimization_parmeteres"].to_dict()
+        opt_params = params["Optimization_parameters"].to_dict()
 
         x = gather_broadcast(paramvec.vector().array())
         nvar = len(x)

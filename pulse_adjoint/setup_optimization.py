@@ -462,7 +462,7 @@ def make_control(params, patient):
 
     # Number of passive parameters to optimize
     fixed_matparams_keys = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
-    npassive = sum([ not params["Optimization_parmeteres"][k] \
+    npassive = sum([ not params["Optimization_parameters"][k] \
                      for k in fixed_matparams_keys])
 
         
@@ -500,7 +500,7 @@ def make_control(params, patient):
     for par, val in matparams.iteritems():
 
         # Check if material parameter should be fixed
-        if not params["Optimization_parmeteres"]["fix_{}".format(par)]:
+        if not params["Optimization_parameters"]["fix_{}".format(par)]:
             # If not, then we need to put the parameter into some dolfin function
 
             
