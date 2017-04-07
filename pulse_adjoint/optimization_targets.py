@@ -413,6 +413,8 @@ class VolumeTarget(OptimizationTarget):
         self.target_space = FunctionSpace(mesh, "R", 0)
         self.endoarea = Constant(assemble(Constant(1.0)*dmu),
                                  name = "endo area")
+
+        assert approx in ["project", "interpolate", "original"]
         self.approx = approx
         OptimizationTarget.__init__(self, mesh)
 
@@ -447,9 +449,13 @@ class VolumeTarget(OptimizationTarget):
         if self.approx == "interpolate":
             u_int = interpolate(project(u, self._disp_space),
                                 self._interpolation_space)
-        else:
+            
+        elif self.approx == "project":
             u_int =project(u, self._interpolation_space)
-        
+
+        else:
+            u_int = u
+            
         # Compute volume
         F = grad(u_int) + Identity(3)
         J = det(F)
