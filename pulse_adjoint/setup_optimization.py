@@ -324,10 +324,9 @@ def make_solver_parameters(params, patient, matparams,
     
 
 
-    
-    robin_bc = [[Constant(params["pericardium_spring"], 
-                                   name ="pericardium_spring_constant"),
-                     patient.markers["EPI"][0]]]
+    pericard = Function(V_real, name = "pericardium_spring")
+    pericard.assign(Constant(params["pericardium_spring"]))
+    robin_bc = [[pericard, patient.markers["EPI"][0]]]
 
 
     if params["base_bc"] == "from_seg_base":
@@ -392,9 +391,9 @@ def make_solver_parameters(params, patient, matparams,
     
         
         # Apply a linear sprint robin type BC to limit motion
-        robin_bc += [[Constant(params["base_spring_k"], 
-                                   name ="base_spring_constant"),
-                     patient.markers["BASE"][0]]]
+        base_spring = Function(V_real, name = "base_spring")
+        base_spring.assign(Constant(params["base_spring_k"]))
+        robin_bc += [[base_spring,patient.markers["BASE"][0]]]
 
 
 
