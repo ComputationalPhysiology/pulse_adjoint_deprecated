@@ -508,7 +508,7 @@ def setup_optimization_parameters():
     params.add("gamma_min", 0.0)
     params.add("gamma_max", 0.4)
     
-    params.add("matparams_min", 0.1)
+    params.add("matparams_min", 1.0)
     params.add("matparams_max", 50.0)
     params.add("fix_a", False)
     params.add("fix_a_f", True)
@@ -541,6 +541,8 @@ def setup_unloading_parameters():
     unload_options = Parameters("unload_options")
     unload_options.add("maxiter", 10)
     unload_options.add("tol", 0.01)
+    unload_options.add("regen_fibers", True)
+    
     params.add(unload_options)
 
     return params
