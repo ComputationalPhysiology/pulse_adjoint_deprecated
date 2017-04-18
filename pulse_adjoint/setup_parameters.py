@@ -499,9 +499,9 @@ def setup_optimization_parameters():
     params = Parameters("Optimization_parameters")
     params.add("opt_type", "scipy_slsqp")
     params.add("method_1d", "bounded")
-    params.add("active_opt_tol", 1e-6)
+    params.add("active_opt_tol", 1e-10)
     params.add("active_maxiter", 100)
-    params.add("passive_opt_tol", 1e-6)
+    params.add("passive_opt_tol", 1e-10)
     params.add("passive_maxiter", 30)
     params.add("scale", 1.0)
     
@@ -541,7 +541,7 @@ def setup_unloading_parameters():
     unload_options = Parameters("unload_options")
     unload_options.add("maxiter", 10)
     unload_options.add("tol", 0.01)
-    unload_options.add("regen_fibers", True)
+    unload_options.add("regen_fibers", False)
     
     params.add(unload_options)
 

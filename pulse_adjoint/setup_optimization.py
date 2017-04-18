@@ -597,7 +597,8 @@ def get_measurements(params, patient):
         start = 0
         end = patient.num_points
 
-        pvals = params["Passive_optimization_weigths"]
+        # pvals = params["Passive_optimization_weigths"]
+        pvals = params["Active_optimization_weigths"]
         
     if params["unload"]:
         end += 1
