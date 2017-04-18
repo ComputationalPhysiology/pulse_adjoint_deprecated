@@ -458,20 +458,24 @@ class VolumeTarget(OptimizationTarget):
         :param u: New displacement
         """
 
-        if self.approx == "interpolate":
-            u_int = interpolate(project(u, self._disp_space),
-                                self._interpolation_space)
+        if u is None:
+            vol = (-1.0/3.0)*dot(self._X,self._N)
             
-        elif self.approx == "project":
-            u_int =project(u, self._interpolation_space)
-
         else:
-            u_int = u
+            if self.approx == "interpolate":
+                u_int = interpolate(project(u, self._disp_space),
+                                    self._interpolation_space)
             
-        # Compute volume
-        F = grad(u_int) + Identity(3)
-        J = det(F)
-        vol = (-1.0/3.0)*dot(self._X + u_int, J*inv(F).T*self._N)
+            elif self.approx == "project":
+                u_int =project(u, self._interpolation_space)
+
+            else:
+                u_int = u
+            
+            # Compute volume
+            F = grad(u_int) + Identity(3)
+            J = det(F)
+            vol = (-1.0/3.0)*dot(self._X + u_int, J*inv(F).T*self._N)
 
         # Make a project for dolfin-adjoint recording
         solve(inner(self._trial, self._test)/self.endoarea*self.dmu == \
