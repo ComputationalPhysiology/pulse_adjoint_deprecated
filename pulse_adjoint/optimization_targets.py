@@ -37,6 +37,13 @@ class OptimizationTarget(object):
 
         # A real space for projecting the functional
         self.realspace = FunctionSpace(mesh, "R", 0)
+
+        ## These spaces are only used if you want to project
+        ## or interpolate the displacement before assigning it
+        # Space for interpolating the displacement if needed
+        self._interpolation_space = VectorFunctionSpace(mesh,"CG", 1)
+        # Displacement space
+        self._disp_space = VectorFunctionSpace(mesh,"CG", 2)
         
         # The volume of the mesh
         self.meshvol = Constant(assemble(Constant(1.0)*dx(mesh)),
@@ -169,39 +176,37 @@ class RegionalStrainTarget(OptimizationTarget):
         self._tensor = tensor
         self.approx = approx
 
-        if weights is None: weights = np.ones((17,3))
-        self.nregions = np.shape(weights)[0] if nregions is None else nregions
-        dim = mesh.geometry().dim()
-        self.dim = dim
-        self._F_ref = F_ref if F_ref is not None else Identity(dim)
-        
-        self.target_space = VectorFunctionSpace(mesh, "R", 0, dim = dim)
-        
-        
-        self.weight_space = TensorFunctionSpace(mesh, "R", 0)
-       
-        if weights.shape == (self.nregions, dim):
-            self.weights_arr = weights
-        else:
-            from adjoint_contraction_args import logger
-            msg = "Weights do not correspond to the number of regions and dimension.\n"+\
-                  "Dim = {}, number of regions = {}, {} and {} was given".format(dim,
-                                                                                 self.nregions,
-                                                                                 weights.shape[1],
-                                                                                 weights.shape[0])
-            logger.debug(msg)
-            self.weights_arr =np.ones((self.nregions,dim))
 
         self.crl_basis = []
         for l in ["circumferential", "radial", "longitudinal"]:
             if crl_basis.has_key(l):
                 self.crl_basis.append(crl_basis[l])
+
+        self.nbasis = len(self.crl_basis)
+
+
+        assert self.nbasis > 0, "Number of basis functions must be greater than zero"
+        self.regions = np.array(list(set(gather_broadcast(dmu.subdomain_data().array()))))
         
+        self.nregions = len(self.regions)
+        if weights is None:
+            self.weights_arr = np.ones((self.nregions,self.nbasis))
+        else:
+            self.weights_arr = weights
+
+        dim = mesh.geometry().dim()
+        self.dim = dim
+        self._F_ref = F_ref if F_ref is not None else Identity(dim)
+
+        
+        self.target_space = VectorFunctionSpace(mesh, "R", 0, dim = self.nbasis)
+        self.weight_space = TensorFunctionSpace(mesh, "R", 0)
         self.dmu = dmu
 
-        self.meshvols = [Constant(assemble(Constant(1.0)*dmu(i+1)),
-                                  name = "mesh volume") for i in range(self.nregions)]
-        
+
+        self.meshvols = [Constant(assemble(Constant(1.0)*dmu(int(i))),
+                                  name = "mesh volume") for i in self.regions]
+
         OptimizationTarget.__init__(self, mesh)
 
     def print_head(self):
@@ -234,10 +239,10 @@ class RegionalStrainTarget(OptimizationTarget):
 
         """
         strains = []
-        for i in range(self.nregions):
+        for i in self.regions:
             f = Function(self.target_space)
-            if target_data.has_key(i+1):
-                assign_to_vector(f.vector(), np.array(target_data[i+1][n]))
+            if target_data.has_key(int(i)):
+                assign_to_vector(f.vector(), np.array(target_data[int(i)][n]))
                 strains.append(f)
             
         self.data.append(strains)
@@ -271,7 +276,7 @@ class RegionalStrainTarget(OptimizationTarget):
     def _set_weights(self):
 
         for i in range(self.nregions):
-            weight = np.zeros(self.dim**2)
+            weight = np.zeros(self.nbasis**2)
             weight[0::(self.dim+1)] = self.weights_arr[i]
             assign_to_vector(self.weights[i].vector(), weight)
 
@@ -332,9 +337,9 @@ class RegionalStrainTarget(OptimizationTarget):
             tensor_diag = as_vector([inner(e,tensor*e) for e in self.crl_basis])
 
             # Make a project for dolfin-adjoint recording
-            for i in range(self.nregions):
-                solve(inner(self._trial, self._test)*self.dmu(i+1) == \
-                      inner(tensor_diag, self._test)*self.dmu(i+1), \
+            for i, r in enumerate(self.regions):
+                solve(inner(self._trial, self._test)*self.dmu(int(r)) == \
+                      inner(tensor_diag, self._test)*self.dmu(int(r)), \
                       self.simulated_fun[i], solver_parameters={"linear_solver": "gmres"})
         else:
             from adjoint_contraction_args import logger
@@ -343,9 +348,9 @@ class RegionalStrainTarget(OptimizationTarget):
     
     def assign_functional(self):
         
-        for i in range(self.nregions):
+        for i, r in enumerate(self.regions):
             solve(self._trial_r*self._test_r/self.meshvol*dx == \
-                  self._test_r*self._form[i]/self.meshvols[i]*self.dmu(i+1), \
+                  self._test_r*self._form[i]/self.meshvols[i]*self.dmu(int(r)), \
                   self.functional[i])
 
        
@@ -415,9 +420,6 @@ class VolumeTarget(OptimizationTarget):
         self._name = "{} Volume".format(chamber)
         self._X = SpatialCoordinate(mesh)
         self._N = FacetNormal(mesh)
-        
-        self._interpolation_space = VectorFunctionSpace(mesh,"CG", 1)
-        self._disp_space = VectorFunctionSpace(mesh,"CG", 2)
 
         self.dmu = dmu
         self.chamber = chamber
@@ -484,13 +486,7 @@ class VolumeTarget(OptimizationTarget):
     def _set_form(self):
         self._form =  ((self.target_fun - self.simulated_fun)/self.target_fun)**2
         
-class GLStrainTarget(OptimizationTarget):
-    """Class for global longitudinal
-    strain optimization target
-    """
-    def __init__(self):
-        self._name = "GL Strain"
-
+    
 
 class Regularization(object):
     """Class for regularization
@@ -652,3 +648,79 @@ class Regularization(object):
         
 
 
+
+
+
+if __name__ == "__main__":
+
+    from setup_parameters import setup_general_parameters
+    setup_general_parameters()
+    from mesh_generation import load_geometry_from_h5
+    geo = load_geometry_from_h5("../tests/data/mesh_simple_1.h5")
+
+   
+    V = VectorFunctionSpace(geo.mesh, "CG", 2)
+    u0 = Function(V)
+    u1 = Function(V, "../tests/data/inflate_mesh_simple_1.xml")
+
+    V0 = VectorFunctionSpace(geo.mesh, "CG", 1)
+    
+    
+    
+    dS = Measure("exterior_facet",
+                 subdomain_data = geo.ffun,
+                 domain = geo.mesh)(geo.markers["ENDO"][0])
+
+    
+    basis = {}
+    for l in ["circumferential", "radial", "longitudinal"]:
+        basis[l] = getattr(geo, l)
+        
+    dX = Measure("dx", subdomain_data=geo.sfun, domain=geo.mesh)
+    nregions = len(set(geo.sfun.array()))
+
+
+    for u in [u0, u1]:
+        for approx in ["project", "interpolate", "original"]:
+
+
+            # ui = u0
+            ui = u1
+        
+            if approx == "interpolate":
+                u_int = interpolate(project(ui, V),V0)
+            
+            elif approx == "project":
+                u_int = project(ui, V0)
+
+            else:
+                u_int = ui
+
+                       
+            F_ref = grad(u_int) + Identity(3)
+            
+
+            print "\nApprox = {}:".format(approx)
+            target_vol = VolumeTarget(geo.mesh, dS, "LV", approx)
+            target_vol.set_target_functions()
+            target_vol.assign_simulated(u)
+            
+            vol = gather_broadcast(target_vol.simulated_fun.vector().array())[0]
+            print "Volume = ", vol
+
+
+            target_strain = RegionalStrainTarget(geo.mesh,
+                                                 basis, 
+                                                 dX,
+                                                 nregions = nregions,
+                                                 tensor = "gradu",
+                                                 F_ref = F_ref,
+                                                 approx=approx)
+
+            target_strain.set_target_functions()
+            target_strain.assign_simulated(u)
+
+            strain = [gather_broadcast(target_strain.simulated_fun[i].vector().array()) \
+                      for i in range(nregions)]
+            print "Regional strain = ", strain
+        
