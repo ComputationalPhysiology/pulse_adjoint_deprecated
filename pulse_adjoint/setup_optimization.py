@@ -625,9 +625,10 @@ def get_measurements(params, patient):
 
                 s = patient.strain[region]
                 if params["unload"]:
-                    s = np.append(0.0, s)
+                    s = [(0.0, 0.0, 0.0)] + s
                         
                 strain[region] = s[start:end]
+
         else:
             msg = ("\nPatient do not have strain as attribute."+
                    "\nStrain will not be used")
