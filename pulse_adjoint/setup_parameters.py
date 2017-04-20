@@ -439,6 +439,11 @@ def setup_application_parameters():
     # If False turn of logging of the forward model during functional evaluation
     params.add("verbose", False)
 
+    # If you optimize against strain which reference geometry should be used
+    # to compute the strains.  "0" is the starting geometry, "ED" is the end-diastolic
+    # geometry, while if you are using unloading, you can also use that geometry as referece. 
+    params.add("strain_reference", "0", ["0", "ED", "unloaded"])
+    
     # Relaxation parameters. If smaller than one, the step size
     # in the direction will be smaller, and perhaps avoid the solver
     # to crash.

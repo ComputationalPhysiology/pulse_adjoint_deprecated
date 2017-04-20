@@ -165,9 +165,11 @@ def run_active_optimization(params, patient):
     #Load patient data, and set up the simulation
     measurements, solver_parameters, pressure, gamma = setup_simulation(params, patient)
 
+
     # Loop over contract points
     i = 0
-    # for i in range(patient.num_contract_points):
+    logger.info("Number of contract points: {}".format(patient.num_contract_points))
+
     
     while i < patient.num_contract_points:
         params["active_contraction_iteration_number"] = i
@@ -209,9 +211,11 @@ def run_active_optimization(params, patient):
                 raise RuntimeError("Unable to increasure")
         else:
 
+            
             # Make sure to do interpolation if that was done earlier
             plv = get_simulated_pressure(params)
             if not plv == measurements["pressure"][i+1]:
+                logger.info("Interpolate")
                 patient.interpolate_data(i+patient.passive_filling_duration-1)
                 measurements = get_measurements(params, patient)
                 i -= 1
@@ -589,32 +593,60 @@ def get_optimization_targets(params, solver_parameters):
                      subdomain_data = solver_parameters["mesh_function"],
                      domain = mesh)
 
-        if params["unload"] and params["phase"] == PHASES[1]:
+
+   
+        load_displacemet = (params["unload"] and not params["strain_reference"] == "unloaded") or \
+                           (not params["unload"] and params["strain_reference"] == "ED")
+        
+        if load_displacemet and params["phase"] == PHASES[1]:
             # We need to recompute strains wrt reference as diastasis
          
+            
+
+            if params["strain_reference"] == "0":
+                group = "1"
+            else:
+                #strain reference =  "ED"
+
+                if params["unload"]:
+                    group = str(solver_parameters["passive_filling_duration"])
+                else:
+                    group = str(solver_parameters["passive_filling_duration"]-1)
+
             family, degree = solver_parameters["state_space"].split(":")[0].split("_")
             u = Function(VectorFunctionSpace(solver_parameters["mesh"], family, int(degree)))
+            
             with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
         
                 # Get previous state
                 group = "/".join([params["h5group"],
                                   PASSIVE_INFLATION_GROUP,
-                                  "displacement","1"])
+                                  "displacement",group])
                 h5file.read(u, group)
 
+            
+            if params["strain_approx"] in ["project","interpolate"]:
+
+                V = VectorFunctionSpace(solver_parameters["mesh"], "CG", 1)
+                if params["strain_approx"] == "project":
+                    u = project(u, V)
+                else:
+                    u = interpolate(u, V)
+                    
+                
             F_ref = grad(u) + Identity(3)
                 
 
         else:
             F_ref = Identity(3)
 
-
         targets["regional_strain"] = \
             RegionalStrainTarget(mesh,
                                  solver_parameters["crl_basis"],
                                  dX,
                                  solver_parameters["strain_weights"],
-                                 F_ref = F_ref, approx = params["strain_approx"])
+                                 F_ref = F_ref,
+                                 approx = params["strain_approx"])
     
         
 
