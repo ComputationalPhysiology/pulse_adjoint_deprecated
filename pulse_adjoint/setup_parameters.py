@@ -296,8 +296,6 @@ def setup_application_parameters():
     | matparams_space                     | 'R_0'                                                | Space for material parameters.     |
     |                                     |                                                      | 'R_0', 'regional' or 'CG_1'        |         
     +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | noise                               | False                                                | If synthetic data, add noise       |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
     | use_deintegrated_strains            | False                                                | Use full strain field              |
     +-------------------------------------+------------------------------------------------------+------------------------------------+
     | nonzero_initial_guess               | True                                                 | If true, use gamma = 0 as initial  |
@@ -307,8 +305,6 @@ def setup_application_parameters():
     |                                     |                                                      | or 'active_strain_rossi'           |
     +-------------------------------------+------------------------------------------------------+------------------------------------+
     | base_spring_k                       | 1.0                                                  | Basal spring constant              |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | synth_data                          | False                                                | Synthetic data                     |
     +-------------------------------------+------------------------------------------------------+------------------------------------+
     | sim_file                            | 'result.h5'                                          | Path to result file                |
     +-------------------------------------+------------------------------------------------------+------------------------------------+
@@ -430,10 +426,6 @@ def setup_application_parameters():
     # or use gamma from previous iteration as initial guess (True)
     params.add("nonzero_initial_guess", True)
 
-    # Use synthetic data
-    params.add("synth_data", False)
-    # Noise is added to synthetic data
-    params.add("noise", False)
     # Log level
     params.add("log_level", logging.INFO)
     # If False turn of logging of the forward model during functional evaluation

@@ -40,7 +40,7 @@ def update_unloaded_patient(params, patient):
     return patient
 
     
-def initialize_patient_data(patient_parameters, synth_data=False):
+def initialize_patient_data(patient_parameters, *args):
     """
     Make an instance of patient from :py:module`patient_data`
     baed on th given parameters
@@ -49,9 +49,7 @@ def initialize_patient_data(patient_parameters, synth_data=False):
     ----------
     patient_parameters: dict
         the parameters 
-    synth_data: bool
-        If synthetic data or not
-
+    
     Returns
     -------
     patient: :py:class`patient_data.Patient`
@@ -68,11 +66,6 @@ def initialize_patient_data(patient_parameters, synth_data=False):
     from patient_data import Patient
     
     patient = Patient(**patient_parameters)
-
-    if synth_data:
-        patient.passive_filling_duration = SYNTH_PASSIVE_FILLING
-        patient.num_contract_points =  NSYNTH_POINTS + 1
-        patient.num_points = SYNTH_PASSIVE_FILLING + NSYNTH_POINTS + 1
 
     return patient
 
@@ -160,7 +153,7 @@ def check_patient_attributes(patient):
             no_ffun = False
 
         if no_ffun:
-            setattr(patient, 'strain_weights',
+            setattr(patient, 'ffun',
                     MeshFunction("size_t", mesh, 2, mesh.domains()))
 
     # Cell markers 
@@ -172,7 +165,7 @@ def check_patient_attributes(patient):
             no_sfun = False
 
         if no_sfun:
-            setattr(patient, 'strain_weights',
+            setattr(patient, 'sfun',
                     MeshFunction("size_t", mesh, 3, mesh.domains()))
 
 
@@ -213,57 +206,7 @@ def save_patient_data_to_simfile(patient, sim_file):
                             fields, local_basis)
 
 
-def load_synth_data(mesh, synth_output, num_points, use_deintegrated_strains = False):
-    pressure = []
-    volume = []
-    
-    strainfieldspace = VectorFunctionSpace(mesh, "CG", 1, dim = 3)
-    strain_deintegrated = []
 
-    strain_fun = Function(VectorFunctionSpace(mesh, "R", 0, dim = 3))
-    scalar_fun = Function(FunctionSpace(mesh, "R", 0))
-
-    c = [[] for i in range(17)]
-    r = [[] for i in range(17)]
-    l = [[] for i in range(17)]
-    with HDF5File(mpi_comm_world(), synth_output, "r") as h5file:
-       
-        for point in range(num_points):
-            assert h5file.has_dataset("point_{}".format(point)), "point {} does not exist".format(point)
-            # assert h5file.has_dataset("point_{}/{}".format(point, strain_group)), "invalid strain group, {}".format(strain_group)
-
-            # Pressure
-            h5file.read(scalar_fun.vector(), "/point_{}/pressure".format(point), True)
-            p = gather_broadcast(scalar_fun.vector().array())
-            pressure.append(p[0])
-
-            # Volume
-            h5file.read(scalar_fun.vector(), "/point_{}/volume".format(point), True)
-            v = gather_broadcast(scalar_fun.vector().array())
-            volume.append(v[0])
-
-            # Strain
-            for i in STRAIN_REGION_NUMS:
-                h5file.read(strain_fun.vector(), "/point_{}/strain/region_{}".format(point, i), True)
-                strain_arr = gather_broadcast(strain_fun.vector().array())
-                c[i-1].append(strain_arr[0])
-                r[i-1].append(strain_arr[1])
-                l[i-1].append(strain_arr[2])
-
-            if use_deintegrated_strains:
-                strain_fun_deintegrated = Function(strainfieldspace, name = "strainfield_point_{}".format(point))
-                h5file.read(strain_fun_deintegrated.vector(), "/point_{}/strainfield".format(point), True)
-                strain_deintegrated.append(Vector(strain_fun_deintegrated.vector()))
-
-    # Put the strains in the right format
-    strain = {i:[] for i in STRAIN_REGION_NUMS }
-    for i in STRAIN_REGION_NUMS:
-        strain[i] = zip(c[i-1], r[i-1], l[i-1])
-
-    if use_deintegrated_strains:
-        strain = (strain, strain_deintegrated)
-        
-    return pressure, volume, strain
 
 
 def get_simulated_strain_traces(phm):
@@ -554,8 +497,8 @@ def make_control(params, patient):
     
     
 def get_measurements(params, patient):
-    """Get the measurement or the synthetic data
-    to be used as BC or targets in the optimization
+    """Get the measurement to be used as BC 
+    or targets in the optimization
 
     :param params: Application parameter
     :param patient: class with the patient data
@@ -607,99 +550,92 @@ def get_measurements(params, patient):
     p["rv_volume"] = pvals["rv_volume"] > 0 and hasattr(patient, "RVV")
     p["regional_strain"] = pvals["regional_strain"] > 0
         
-    # !! FIX THIS LATER !!
-    if params["synth_data"]:
 
-        synth_output =  params["outdir"] +  "/synth_data.h5"
-        num_points = SYNTH_PASSIVE_FILLING + NSYNTH_POINTS + 1
-            
-        pressure, volume, strain = load_synth_data(patient.mesh, synth_output, num_points, params["use_deintegrated_strains"])
-        
-            
+    ## Pressure
+    
+    # We need the pressure as a BC
+    pressure = np.array(patient.pressure)
+
+    # Compute offsets
+    # Choose the pressure at the beginning as reference pressure
+    if params["unload"]:
+        reference_pressure = 0.0
+        pressure = np.append(0.0, pressure)
     else:
-
-        ## Pressure
+        reference_pressure = pressure[0] 
+    logger.info("LV Pressure offset = {} kPa".format(reference_pressure))
         
-        # We need the pressure as a BC
-        pressure = np.array(patient.pressure)
-   
-        # Compute offsets
-        # Choose the pressure at the beginning as reference pressure
+    #Here the issue is that we do not have a stress free reference mesh. 
+    #The reference mesh we use is already loaded with a certain
+    #amount of pressure, which we remove.
+    pressure = np.subtract(pressure,reference_pressure)
+    measurements["pressure"] = pressure[start:end]
+
+    
+    if hasattr(patient, "RVP"):
+        rv_pressure = np.array(patient.RVP)
         if params["unload"]:
             reference_pressure = 0.0
-            pressure = np.append(0.0, pressure)
+            rv_pressure = np.append(0.0, rv_pressure)
         else:
-            reference_pressure = pressure[0] 
-        logger.info("LV Pressure offset = {} kPa".format(reference_pressure))
-
-        #Here the issue is that we do not have a stress free reference mesh. 
-        #The reference mesh we use is already loaded with a certain
-        #amount of pressure, which we remove.
-        pressure = np.subtract(pressure,reference_pressure)
-        measurements["pressure"] = pressure[start:end]
-
+            reference_pressure = rv_pressure[0]
+        logger.info("RV Pressure offset = {} kPa".format(reference_pressure))
         
-        if hasattr(patient, "RVP"):
-            rv_pressure = np.array(patient.RVP)
-            if params["unload"]:
-                reference_pressure = 0.0
-                rv_pressure = np.append(0.0, rv_pressure)
-            else:
-                reference_pressure = rv_pressure[0]
-            logger.info("RV Pressure offset = {} kPa".format(reference_pressure))
-            
-            rv_pressure = np.subtract(rv_pressure, reference_pressure)
-            measurements["rv_pressure"] = rv_pressure[start:end]
+        rv_pressure = np.subtract(rv_pressure, reference_pressure)
+        measurements["rv_pressure"] = rv_pressure[start:end]
             
         
         
-        ## Volume
-        if p["volume"]:
-            # Calculate difference bwtween calculated volume, and volume given from echo
-            volume_offset = get_volume_offset(patient, params)
-            logger.info("LV Volume offset = {} cm3".format(volume_offset))
-
-            logger.info("Measured LV volume = {}".format(patient.volume[0]))
-            
-            
-            # Subtract this offset from the volume data
-            volume = np.subtract(patient.volume,volume_offset)
-            logger.info("Computed LV volume = {}".format(volume[0]))
-            if params["unload"]:
-                volume = np.append(-1, volume)
+    ## Volume
+    if p["volume"]:
+        # Calculate difference bwtween calculated volume, and volume given from echo
+        volume_offset = get_volume_offset(patient, params)
+        logger.info("LV Volume offset = {} cm3".format(volume_offset))
+        logger.info("Measured LV volume = {}".format(patient.volume[0]))
+                    
+        # Subtract this offset from the volume data
+        volume = np.subtract(patient.volume,volume_offset)
+        logger.info("Computed LV volume = {}".format(volume[0]))
+        if params["unload"]:
+            volume = np.append(-1, volume)
                 
-            measurements["volume"] = volume[start:end]
+        measurements["volume"] = volume[start:end]
 
 
-        if p["rv_volume"]:
-            # Calculate difference bwtween calculated volume, and volume given from echo
-            volume_offset = get_volume_offset(patient, params, "rv")
-            logger.info("RV Volume offset = {} cm3".format(volume_offset))
-
-            logger.info("Measured RV volume = {}".format(patient.RVV[0]))
+    if p["rv_volume"]:
+        # Calculate difference bwtween calculated volume, and volume given from echo
+        volume_offset = get_volume_offset(patient, params, "rv")
+        logger.info("RV Volume offset = {} cm3".format(volume_offset))
+        logger.info("Measured RV volume = {}".format(patient.RVV[0]))
+        
+        # Subtract this offset from the volume data
+        volume = np.subtract(patient.RVV ,volume_offset)
+        logger.info("Computed RV volume = {}".format(volume[0]))
+        if params["unload"]:
+            volume = np.append(-1, volume)
             
-            # Subtract this offset from the volume data
-            volume = np.subtract(patient.RVV ,volume_offset)
-            logger.info("Computed RV volume = {}".format(volume[0]))
-            if params["unload"]:
-                volume = np.append(-1, volume)
-            
-            measurements["rv_volume"] = volume[start:end]
+        measurements["rv_volume"] = volume[start:end]
                 
 
-        if p["regional_strain"]:
+    if p["regional_strain"]:
 
-            strain = {}
-            if hasattr(patient, "strain"):
-                for region in patient.strain.keys():
-                    strain[region] = patient.strain[region][start:end]
-            else:
-                msg = ("\nPatient do not have strain as attribute."+
-                       "\nStrain will not be used")
-                p["regional_strain"] = False
-                logger.warning(msg)
-            measurements["regional_strain"] = strain
-    
+        strain = {}
+        if hasattr(patient, "strain"):
+            for region in patient.strain.keys():
+
+                s = patient.strain[region]
+                if params["unload"]:
+                    s = np.append(0.0, s)
+                        
+                strain[region] = s[start:end]
+        else:
+            msg = ("\nPatient do not have strain as attribute."+
+                   "\nStrain will not be used")
+            p["regional_strain"] = False
+            logger.warning(msg)
+            
+        measurements["regional_strain"] = strain
+            
 
     return measurements
 
@@ -733,28 +669,6 @@ def get_volume_offset(patient, params, chamber = "lv"):
     
     X = SpatialCoordinate(mesh)
     N = FacetNormal(mesh)
-
-    # if params["unload"] and params["phase"] == PHASES[1]:
-    #     # The cavicty volume is the volume of the uloaded geometry
-    #     # The first measured volume is the unloaded geometry,
-    #     # loaded with the first pressure. Use this to estimate the offset
-    #     family, degree = params["state_space"].split(":")[0].split("_")
-    #     u = Function(VectorFunctionSpace(mesh, family, int(degree)))
-    #     with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
-    #         # Get previous state
-    #         group = "/".join([params["h5group"],
-    #                           PASSIVE_INFLATION_GROUP,
-    #                           "displacement","1"])
-    #         h5file.read(u, group)
-
-    #     # We would like to use interpolate here, but project works with dolfin-adjoint
-    #     u_int = project(u, VectorFunctionSpace(patient.mesh, "CG", 1))
-    #     F = grad(u_int) + Identity(3)
-    #     J = det(F)
-    #     vol = assemble((-1.0/3.0)*dot(X+u_int,J*inv(F).T*N)*ds)
-    #     logger.info("Computed = {}".format(vol))
-    # else:
-        
     vol = assemble((-1.0/3.0)*dot(X,N)*ds)
     
     return volume - vol
@@ -765,7 +679,7 @@ def setup_simulation(params, patient):
     # Load measurements
     measurements = get_measurements(params, patient)
     solver_parameters, pressure, controls = make_solver_params(params, patient, measurements)
-   
+
     return measurements, solver_parameters, pressure, controls
 
 

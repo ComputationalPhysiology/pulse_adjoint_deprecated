@@ -61,8 +61,7 @@ def main(params):
     logger.setLevel(params["log_level"])
 
     ############# GET PATIENT DATA ##################
-    patient = initialize_patient_data(params["Patient_parameters"], 
-                                      params["synth_data"])
+    patient = initialize_patient_data(params["Patient_parameters"])
     
     
     # Save mesh and fibers to result file
