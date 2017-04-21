@@ -718,7 +718,7 @@ class MyReducedFunctional(ReducedFunctional):
         from optimal_control import has_scipy016
         
     def __call__(self, value, return_fail = False):
-
+        
 
         logger.debug("\nEvaluate functional...")
         adj_reset()
@@ -764,7 +764,20 @@ class MyReducedFunctional(ReducedFunctional):
         t.start()
 
         logger.debug("\nEvaluate forward model")
-        self.for_res, crash= self.for_run(paramvec_new, True)
+        from lvsolver import AdjointSolverDidNotConverge
+        try:
+            self.for_res, crash= self.for_run(paramvec_new, True)
+        except AdjointSolverDidNotConverge:
+            logger.warning("Adjoint solver did not converge. Reset...")
+            adj_reset()
+            parameters["adjoint"]["stop_annotating"] = True
+
+            func_value = np.inf
+            if return_fail:
+                return self.scale*func_value, True
+        
+            return self.scale*func_value
+            
         for_time = t.stop()
         logger.debug(("Evaluating forward model done. "+\
                       "Time to evaluate = {} seconds".format(for_time)))

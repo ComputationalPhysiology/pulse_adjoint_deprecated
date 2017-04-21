@@ -23,6 +23,9 @@ from copy import deepcopy
 class SolverDidNotConverge(Exception):
     pass
 
+class AdjointSolverDidNotConverge(Exception):
+    pass
+
 
 class LVSolver(object):
     """
@@ -196,12 +199,12 @@ class LVSolver(object):
                     solver.parameters[nsolver]['relative_tolerance'] *= 0.001
                     solver.parameters[nsolver]['absolute_tolerance'] *= 0.1
                     self.reinit(w_old, annotate=True)
-                    raise RuntimeError("Adjoint solve step didn't converge")
+                    raise AdjointSolverDidNotConverge("Adjoint solve step didn't converge")
                 else:
                     solver.parameters[nsolver]['relative_tolerance'] *= 0.001
                     solver.parameters[nsolver]['absolute_tolerance'] *= 0.1
                     if not nlconv:
-                        raise RuntimeError("Adjoint solve step didn't converge")
+                        raise AdjointSolverDidNotConverge("Adjoint solve step didn't converge")
                 
             return nliter, nlconv
 
