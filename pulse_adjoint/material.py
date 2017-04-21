@@ -65,6 +65,8 @@ class Material(object):
             self._T_ref = 75.0 if self._active_model\
                           == "active_stress"  else 0.4
 
+        self._T_ref = Constant(self._T_ref)
+
         if params:
             self.parameters = params
             for k,v in params.iteritems():
