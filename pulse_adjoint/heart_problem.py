@@ -226,12 +226,17 @@ class ActiveHeartProblem(BasicHeartProblem):
         with HDF5File(mpi_comm_world(), fname, "r") as h5file:
 
             for i in range(nstates):
+                
+                try:
+                    h5file.read(w, state_group.format(i))
+                    h5file.read(g, gamma_group.format(i))
 
-                h5file.read(w, state_group.format(i))
-                h5file.read(g, gamma_group.format(i))
+                except:
+                    logger.info("State {} does not exist".format(i))
 
-                states.append(w.copy(True))
-                gammas.append(g.copy(True))
+                else:
+                    states.append(w.copy(True))
+                    gammas.append(g.copy(True))
 
         return states, gammas
                 
