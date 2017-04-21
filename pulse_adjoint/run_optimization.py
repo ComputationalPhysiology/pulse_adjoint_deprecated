@@ -28,7 +28,16 @@ from pa_io import write_opt_results_to_h5, contract_point_exists
 from optimal_control import OptimalControl
 from lvsolver import SolverDidNotConverge
 
-
+def get_constant(value_size, value_rank, val):
+    if value_size == 1:
+        if value_rank == 0:
+            c = Constant(val)
+        else:
+            c = Constant([val])
+    else:
+        c = Constant([val]*value_size)
+    return c
+    
 def run_unloaded_optimization(params, patient, initial_guess = 30.0):
     from unloading import UnloadedMaterial
   
@@ -169,8 +178,7 @@ def run_active_optimization(params, patient):
     # Loop over contract points
     i = 0
     logger.info("Number of contract points: {}".format(patient.num_contract_points))
-
-    
+       
     while i < patient.num_contract_points:
         params["active_contraction_iteration_number"] = i
 
@@ -203,6 +211,42 @@ def run_active_optimization(params, patient):
                 else:
                     pressure_change = True
 
+                    # If you want to apply a different initial guess than
+                    # the pevious value, assign this now and evaluate.
+
+                    if params["initial_guess"] == "zero" :
+                        zero = get_constant(gamma.value_size(), gamma.value_rank(), 0.0)
+
+                        g = Function(gamma.function_space())
+                        g.assign(zero)
+                        rd(g)
+                    elif params["initial_guess"] == "smooth":
+
+                        # We find a constant that represents the previous state
+
+                        if params["gamma_space"] == "regional":
+
+                            # Sum all regional values with weights given by the size of the regions
+                            meshvols = [assemble((1.0)*dx(domain=patient.mesh,
+                                                          subdomain_data=patient.sfun)(int(i))) \
+                                        for i in set(gather_broadcast(patient.sfun.array()))]
+                            meshvol = sum(meshvols)
+                            g_arr = gather_broadcast(gamma.vector().array())
+                            val = sum(np.multiply(g_arr, meshvols))/float(meshvol)
+                            c = get_constant(gamma.value_size(), gamma.value_rank(), val)
+                            
+                        else:
+
+                            # Project the activation parameter onto the real line
+                            g_proj  = project(gamma, FunctionSpace(patient.mesh, "R", 0))
+                            val = gather_broadcast(g_proj.vector().array())[0]
+                            c = get_constant(gamma.value_size(), gamma.value_rank(), val)
+
+
+                        g = Function(gamma.function_space())
+                        g.assign(c)
+                        rd(g)
+                        
                     logger.info("\nSolve optimization problem.......")
                     solve_oc_problem(params, rd, gamma)
                     adj_reset()
@@ -237,38 +281,32 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     
     
     #Get initial guess for gamma
-    if not params["nonzero_initial_guess"] or params["active_contraction_iteration_number"] == 0:
-        val = 0.0
-
-        if gamma.value_size() == 1:
-            if gamma.value_rank() == 0:
-                zero = Constant(val)
-            else:
-                zero = Constant([val])
-        else:
-            zero = Constant([val]*gamma.value_size())
-
+    if params["active_contraction_iteration_number"] == 0:
+        
+        zero = get_constant(gamma.value_size(), gamma.value_rank(), 0.0)
         gamma.assign(zero)
-       
+
+
     else:
+
         # Use gamma from the previous point as initial guess
         # Load gamma from previous point
         g_temp = Function(gamma.function_space())
         with HDF5File(mpi_comm_world(), params["sim_file"], "r") as h5file:
             h5file.read(g_temp, "active_contraction/contract_point_{}/optimal_control".format(params["active_contraction_iteration_number"]-1))
+            
         gamma.assign(g_temp)
-        
-
+            
     # Load targets
     optimization_targets, bcs = load_targets(params, solver_parameters, measurements)
-    
+   
     for_run = ActiveForwardRunner(solver_parameters,
                                   pressure,
                                   bcs,
                                   optimization_targets,
                                   params,
                                   gamma)
-
+ 
     # Update weights so that the initial value of the
     # functional is 0.1
     if params["adaptive_weights"]:
@@ -290,7 +328,7 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
     rd = MyReducedFunctional(for_run, gamma,
                              relax = params["active_relax"],
                              verbose = params["verbose"])
-    
+   
     return rd, gamma
 
  

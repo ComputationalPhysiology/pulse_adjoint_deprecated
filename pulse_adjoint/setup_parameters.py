@@ -424,7 +424,7 @@ def setup_application_parameters():
 
     # If you want to use a zero initial guess for gamma (False),
     # or use gamma from previous iteration as initial guess (True)
-    params.add("nonzero_initial_guess", True)
+    params.add("initial_guess", "previous", ["previous", "zero", "smooth"])
 
     # Log level
     params.add("log_level", logging.INFO)

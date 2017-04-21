@@ -161,9 +161,8 @@ class ActiveHeartProblem(BasicHeartProblem):
             h5file.read(w_temp, group)
 
         self.solver.reinit(w_temp, annotate=annotate)
-        # self.solver.get_state().assign(w_temp, annotate = annotate)
         self.solver.solve()
-
+      
 
     def get_number_of_stored_states(self):
         
