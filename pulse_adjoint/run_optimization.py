@@ -228,8 +228,8 @@ def run_active_optimization(params, patient):
 
                             # Sum all regional values with weights given by the size of the regions
                             meshvols = [assemble((1.0)*dx(domain=patient.mesh,
-                                                          subdomain_data=patient.sfun)(int(i))) \
-                                        for i in set(gather_broadcast(patient.sfun.array()))]
+                                                          subdomain_data=patient.sfun)(int(r))) \
+                                        for r in set(gather_broadcast(patient.sfun.array()))]
                             meshvol = sum(meshvols)
                             g_arr = gather_broadcast(gamma.vector().array())
                             val = sum(np.multiply(g_arr, meshvols))/float(meshvol)
@@ -253,9 +253,9 @@ def run_active_optimization(params, patient):
          
             if not pressure_change:
                 raise RuntimeError("Unable to increasure")
+            
         else:
 
-            
             # Make sure to do interpolation if that was done earlier
             plv = get_simulated_pressure(params)
             if not plv == measurements["pressure"][i+1]:
