@@ -449,6 +449,8 @@ def setup_application_parameters():
     params.add("volume_approx", "project", ["project", "interpolate", "original"])
     params.add("strain_approx", "original", ["project", "interpolate", "original"])
 
+    params.add("strain_tensor", "gradu", ["E", "gradu"])
+
     return params
 
 def setup_optimization_parameters():

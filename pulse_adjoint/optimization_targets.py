@@ -197,6 +197,7 @@ class RegionalStrainTarget(OptimizationTarget):
         dim = mesh.geometry().dim()
         self.dim = dim
         self._F_ref = F_ref if F_ref is not None else Identity(dim)
+        # self._F_ref = Identity(dim)
 
         
         self.target_space = VectorFunctionSpace(mesh, "R", 0, dim = self.nbasis)
@@ -332,7 +333,7 @@ class RegionalStrainTarget(OptimizationTarget):
             C = F.T * F
             tensor = 0.5*(C-I)
 
-
+        
         if len(self.crl_basis) > 0:
             tensor_diag = as_vector([inner(e,tensor*e) for e in self.crl_basis])
 
@@ -624,14 +625,10 @@ class Regularization(object):
         :rtype: (:py:class:`ufl.Form`)
 
         """
-        # raise Exception
-        # try:
+   
         form = self.get_form()
         self._value = assemble(form)
-        # except Exception as ex:
-            # from IPython import embed; embed()
-            # exit()
-
+   
         return self.lmbda*form
 
         
