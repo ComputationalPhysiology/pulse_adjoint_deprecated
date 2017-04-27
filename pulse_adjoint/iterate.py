@@ -430,6 +430,9 @@ def iterate_gamma(solver, target, gamma,
     logger.debug("\tNext      {:.3f}  {:.3f} ".format(get_mean(target), 
                                                           get_max(target)))
 
+    if abs(get_mean(gamma)-get_mean(target))/0.7 > 0.2:
+        # This is way to much difference
+        raise SolverDidNotConverge
 
     g_previous = gamma.copy()
 
