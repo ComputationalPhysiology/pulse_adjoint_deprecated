@@ -85,7 +85,7 @@ def check_patient_attributes(patient):
         dim = patient.mesh.topology().dim()
 
 
-
+    
     ## Microstructure 
 
     # Fibers
@@ -100,7 +100,7 @@ def check_patient_attributes(patient):
 
             idx_arr = np.where([item.startswith("fiber") \
                                 for item in dir(patient)])[0]
-            if len(idx) == 0:
+            if len(idx_arr) == 0:
                 raise AttributeError(msg.format("fiber"))
             else:
                 att = dir(patient)[idx_arr[0]]
@@ -546,9 +546,12 @@ def get_measurements(params, patient):
     if params["unload"]:
         end += 1
         
-    p["volume"] = pvals["volume"] > 0
-    p["rv_volume"] = pvals["rv_volume"] > 0 and hasattr(patient, "RVV")
-    p["regional_strain"] = pvals["regional_strain"] > 0
+    p["volume"] = pvals["volume"] > 0 or params["phase"] == "all"
+    p["rv_volume"] = hasattr(patient, "RVV") and \
+                     (pvals["rv_volume"] > 0 or params["phase"] == "all")
+    
+    p["regional_strain"] = hasattr(patient, "strain") and \
+                           (pvals["regional_strain"] > 0 or params["phase"] == "all")
         
 
     ## Pressure

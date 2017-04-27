@@ -88,6 +88,25 @@ def passive_inflation_exists(params):
     h5file.close()
     return False
 
+def check_group_exists(h5name, h5group):
+    import h5py, os
+
+    if not os.path.exists(h5name):
+        return False
+
+    try:
+        h5file = h5py.File(h5name)
+    except:
+        return False
+
+    group_exists = False
+    if h5group in h5file:
+        group_exists = True
+        
+    h5file.close()
+    return group_exists
+        
+
 def contract_point_exists(params):
     import h5py, os
     import numpy as np

@@ -17,7 +17,7 @@
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 from dolfinimport import *
 from setup_optimization import setup_simulation, logger, MyReducedFunctional, get_measurements
-from utils import Text, Object, pformat, print_line, print_head, get_spaces,  UnableToChangePressureExeption, get_simulated_pressure
+from utils import Text, Object, pformat, print_line, print_head, get_spaces,  UnableToChangePressureExeption, get_simulated_pressure, check_group_exists
 from forward_runner import ActiveForwardRunner, PassiveForwardRunner
 from optimization_targets import *
 from numpy_mpi import *
@@ -39,8 +39,43 @@ def get_constant(value_size, value_rank, val):
     return c
     
 def run_unloaded_optimization(params, patient, initial_guess = 30.0):
+
+
+    # Run an inital optimization as we are used to
+    
+    params["unload"] = False
+    h5group = params["h5group"]
+    params["h5group"] = "initial_passive"
+    #Load patient data, and set up the simulation
+    measurements, solver_parameters, pressure, paramvec = setup_simulation(params, patient)
+    if check_group_exists(params["sim_file"], params["h5group"]):
+
+        group = "/".join([params["h5group"], PASSIVE_INFLATION_GROUP, "/optimal_control"])
+        with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
+            h5file.read(paramvec, group)
+            
+        # Load the initial guess
+        logger.info(Text.green("Fetch initial guess for material paramters"))
+
+    else:
+        logger.info(Text.blue("\nRun Passive Optimization"))
+
+        rd, paramvec = run_passive_optimization_step(params, 
+                                                     patient, 
+                                                     solver_parameters, 
+                                                     measurements, 
+                                                     pressure,
+                                                     paramvec)
+        
+        logger.info("\nSolve optimization problem.......")
+        params, rd, opt_result = solve_oc_problem(params, rd, paramvec, return_solution = True,
+                                                  store_solution = True)
+        assign_to_vector(paramvec.vector(), gather_broadcast(rd.for_res["optimal_control"].vector().array()))
+
+    params["unload"] = True
+    params["h5group"] = h5group
+    
     from unloading import UnloadedMaterial
-  
     pfd = patient.passive_filling_duration
     if patient.mesh_type() == "biv":
         
@@ -57,9 +92,11 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
 
     h5group = params["h5group"]
     params["Material_parameters"]["a"] = initial_guess
+
     
     estimator =  UnloadedMaterial(p_geometry, pressures, volumes,
-                                  params, **params["Unloading_parameters"])
+                                  params, paramvec,
+                                  **params["Unloading_parameters"])
     
 
     
@@ -355,7 +392,7 @@ def store(params, rd, opt_result):
     
     
         
-def solve_oc_problem(params, rd, paramvec, return_solution = False):
+def solve_oc_problem(params, rd, paramvec, return_solution = False, store_solution = True):
     """Solve the optimal control problem
 
     :param params: Application parameters
@@ -398,7 +435,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
         mat_max = float(params["Optimization_parameters"]["matparams_max"])
         mat_min = float(params["Optimization_parameters"]["matparams_min"])
        
-        while not done and niter < 5:
+        while not done and niter < 10:
             # Evaluate the reduced functional in case the solver chrashes at the first point.
             # If this is not done, and the solver crashes in the first point
             # then Dolfin adjoit has no recording and will raise an exception.
@@ -437,7 +474,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
                 # If the solver did not converge assign the state from
                 # previous iteration and reduce the step size and try again
                 rd.reset()
-                rd.derivative_scale /= 2.0
+                # rd.derivative_scale /= 2.0
 
                 # There might be many reasons for why the sovler is not converging, 
                 # but most likely it happens because the optimization algorithms try to
@@ -483,8 +520,10 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False):
         
         print_optimization_report(params, rd.paramvec, rd.initial_paramvec,
                                   rd.ini_for_res, rd.for_res, opt_result)
-        
-        store(params, rd, opt_result)
+
+        if store_solution:
+            store(params, rd, opt_result)
+            
         if return_solution:
             return params, rd, opt_result
 
