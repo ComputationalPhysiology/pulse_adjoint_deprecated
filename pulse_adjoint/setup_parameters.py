@@ -536,6 +536,7 @@ def setup_unloading_parameters():
     params.add("method", "hybrid", ["hybrid", "fixed_point", "raghavan"])
     params.add("tol", 0.05)
     params.add("maxiter", 5)
+    params.add("continuation", False)
 
     unload_options = Parameters("unload_options")
     unload_options.add("maxiter", 10)
