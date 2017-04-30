@@ -28,6 +28,7 @@ from pa_io import write_opt_results_to_h5, contract_point_exists
 from optimal_control import OptimalControl
 from lvsolver import SolverDidNotConverge
 
+
 def get_constant(value_size, value_rank, val):
     if value_size == 1:
         if value_rank == 0:
@@ -46,8 +47,20 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
     params["unload"] = False
     h5group = params["h5group"]
     params["h5group"] = "initial_passive"
+
+    # Interpolation of displacement does not work with dolfin-adjoint
+    # and can thus only be used when non-gradient based optimization
+    # is used. Interpolation is the only resonable thins to do. Everythin else
+    # will produce a different volume after invoking ALE.move.
+    # Hence, we force interpolation if scalar material parameters
+    vol_approx = params["volume_approx"]
+    if params["matparams_space"] == "R_0":
+        params["volume_approx"] = "interpolate"
+        
     #Load patient data, and set up the simulation
     measurements, solver_parameters, pressure, paramvec = setup_simulation(params, patient)
+
+
     if check_group_exists(params["sim_file"], params["h5group"]):
 
         group = "/".join([params["h5group"], PASSIVE_INFLATION_GROUP, "/optimal_control"])
@@ -68,9 +81,11 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
                                                      paramvec)
         
         logger.info("\nSolve optimization problem.......")
-        params, rd, opt_result = solve_oc_problem(params, rd, paramvec, return_solution = True,
+        params, rd, opt_result = solve_oc_problem(params, rd, paramvec,
+                                                  return_solution = True,
                                                   store_solution = True)
-        assign_to_vector(paramvec.vector(), gather_broadcast(rd.for_res["optimal_control"].vector().array()))
+        
+        
 
     params["unload"] = True
     params["h5group"] = h5group
@@ -102,8 +117,8 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
     
     estimator.unload_material(patient)
     params["h5group"] = h5group
-    
-        
+    params["volume_approx"] = vol_approx
+ 
     
     
 def run_passive_optimization(params, patient):
@@ -474,7 +489,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False, store_soluti
                 # If the solver did not converge assign the state from
                 # previous iteration and reduce the step size and try again
                 rd.reset()
-                # rd.derivative_scale /= 2.0
+                rd.derivative_scale /= 2.0
 
                 # There might be many reasons for why the sovler is not converging, 
                 # but most likely it happens because the optimization algorithms try to
@@ -492,7 +507,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False, store_soluti
             else:
                 params["Optimization_parameters"]["gamma_max"] = gamma_max
                 params["Optimization_parameters"]["matparams_min"] = mat_min
-               
+                rd.derivative_scale = 1.0
                 done = True
                 
             

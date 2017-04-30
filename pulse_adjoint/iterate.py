@@ -8,9 +8,8 @@ import operator as op
 MAX_GAMMA_STEP = 0.05
 MAX_PRESSURE_STEP = 0.2
 MAX_PRESSURE_STEP_BIV = 0.05
-MAX_CRASH = 10
-MAX_ITERS = 20
-
+MAX_CRASH = 5
+MAX_ITERS = 15
     
 
 def get_diff(current, target, control):
@@ -430,7 +429,7 @@ def iterate_gamma(solver, target, gamma,
     logger.debug("\tNext      {:.3f}  {:.3f} ".format(get_mean(target), 
                                                           get_max(target)))
 
-    if abs(get_mean(gamma)-get_mean(target))/0.7 > 0.2:
+    if abs(get_mean(gamma)-get_mean(target))/0.7 > 0.4:
         # This is way to much difference
         raise SolverDidNotConverge
 
