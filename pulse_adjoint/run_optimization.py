@@ -523,12 +523,15 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False, store_soluti
         else:
             x = np.array([opt_result.pop("x")]) if nvar == 1 else gather_broadcast(opt_result.pop("x"))
             
-        assign_to_vector(paramvec.vector(), gather_broadcast(x))
+        optimum = Function(paramvec.function_space())
+        assign_to_vector(optimum.vector(), gather_broadcast(x))
 
         
         logger.info(Text.blue("\nForward solution at optimal parameters"))
-        val = rd.for_run(paramvec, False)
+        val = rd.for_run(optimum, False)
           
+        assign_to_vector(paramvec.vector(), gather_broadcast(x))
+
         rd.for_res["initial_control"] = rd.initial_paramvec,
         rd.for_res["optimal_control"] = rd.paramvec
         

@@ -767,20 +767,9 @@ class MyReducedFunctional(ReducedFunctional):
         t.start()
 
         logger.debug("\nEvaluate forward model")
-        from lvsolver import AdjointSolverDidNotConverge
-        try:
-            self.for_res, crash= self.for_run(paramvec_new, True)
-        except AdjointSolverDidNotConverge:
-            logger.warning("Adjoint solver did not converge. Reset...")
-            adj_reset()
-            parameters["adjoint"]["stop_annotating"] = True
-
-            func_value = np.inf
-            if return_fail:
-                return self.scale*func_value, True
         
-            return self.scale*func_value
-            
+        self.for_res, crash= self.for_run(paramvec_new, True)
+                    
         for_time = t.stop()
         logger.debug(("Evaluating forward model done. "+\
                       "Time to evaluate = {} seconds".format(for_time)))
@@ -838,6 +827,7 @@ class MyReducedFunctional(ReducedFunctional):
         logger.setLevel(self.log_level)
         if not hasattr(self, "ini_for_res"):
             
+            self.cache = None
             self.first_call = True
             self.nr_crashes = 0
             self.iter = 0
