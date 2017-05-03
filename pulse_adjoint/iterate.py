@@ -348,7 +348,7 @@ def iterate_pressure(solver, target, p_expr,
 
                 if nliter < max_adapt_iter and adapt_step:
                     logger.info("Adapt step size. New step size:")
-                    step = change_step_size(step, 2.0, "pressure")
+                    step = change_step_size(step, 1.5, "pressure")
                     print_control(step)
 
                 control_values.append(new_control)
@@ -421,17 +421,12 @@ def iterate_gamma(solver, target, gamma,
 
     step, nr_steps = get_initial_step(solver, gamma, "gamma", target)
     
-    # max_diff = get_max_diff(target, gamma)
-    # nr_steps = max(2, int(np.ceil(max_diff/0.1)))
+   
     logger.debug("\tGamma:    Mean    Max   ")
     logger.debug("\tPrevious  {:.3f}  {:.3f}  ".format(get_mean(gamma), 
                                                        get_max(gamma)))
     logger.debug("\tNext      {:.3f}  {:.3f} ".format(get_mean(target), 
                                                           get_max(target)))
-
-    if abs(get_mean(gamma)-get_mean(target))/0.7 > 0.4:
-        # This is way to much difference
-        raise SolverDidNotConverge
 
     g_previous = gamma.copy()
 
@@ -439,9 +434,7 @@ def iterate_gamma(solver, target, gamma,
     control_values  = [gamma.copy(True)]
     prev_states = [solver.get_state().copy(True)]
     
-    # Keep the old gamma
-    # g_old = gamma.copy()
-        
+           
     first_step =True
 
     annotate = not parameters["adjoint"]["stop_annotating"]
@@ -474,13 +467,11 @@ def iterate_gamma(solver, target, gamma,
             step.vector().axpy(1.0, target.vector())
             step.vector().axpy(-1.0, control_value_old.vector())
             
-        # Loop over the steps
-        # for i in range(1, nr_steps):
-                
+                  
         # Increment gamma
         gamma.vector()[:] +=  step.vector()[:]
+        
         # Assing the new gamma
-
         assign_new_control(solver, gamma, "gamma", gamma)
 
         # Prediction step
@@ -519,7 +510,6 @@ def iterate_gamma(solver, target, gamma,
 
             # Assign old state
             logger.debug("Assign old state")
-            # solver.reinit(state_old)
             solver.get_state().vector().zero()
             solver.reinit(state_old)
 
@@ -534,7 +524,7 @@ def iterate_gamma(solver, target, gamma,
 
                 if nliter < max_adapt_iter and adapt_step:
                     logger.info("Adapt step size. New step size:")
-                    step = change_step_size(step, 2.0, "gamma")
+                    step = change_step_size(step, 1.5, "gamma")
                     print_control(step)
 
                 control_values.append(gamma.copy(True))
@@ -660,7 +650,7 @@ def _get_solver(biv = False):
 
         
     
-def test_stepping():
+def _test_stepping():
     from adjoint_contraction_args import logger
     logger.setLevel(10)
     
@@ -690,4 +680,4 @@ def test_stepping():
 
 
 if __name__ == "__main__":
-    test_stepping()
+    _test_stepping()
