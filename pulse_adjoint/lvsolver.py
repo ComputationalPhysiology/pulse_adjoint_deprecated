@@ -63,7 +63,9 @@ class LVSolver(object):
             prm= self.default_solver_parameters()
             
         self.parameters["solve"] = prm
-        
+
+        self.relax_adjoint_solver = True if not params.has_key("relax_adjoint_solver") \
+                                    else params["relax_adjoint_solver"]
         
         self._init_spaces()
         self._init_forms()
@@ -158,11 +160,18 @@ class LVSolver(object):
         problem = NonlinearVariationalProblem(self._G, self._w,
                                               self._bcs,
                                               self._dG)
+
+
+        PETScOptions.set('ksp_type', 'preonly')
+        PETScOptions.set('pc_type', 'lu')
+        PETScOptions.set('pc_factor_mat_solver_package', 'mumps')
+        PETScOptions.set("mat_mumps_icntl_7", 6)
+ 
         solver = NonlinearVariationalSolver(problem)
         solver.parameters.update(self.parameters["solve"])
         
         try:
-
+            
             nliter, nlconv = solver.solve(annotate=False)
             if not nlconv:
                 raise RuntimeError("Solver did not converge...")
@@ -180,28 +189,34 @@ class LVSolver(object):
             raise SolverDidNotConverge(ex)
 
         else:
+           
             # The solver converged
             # If we are annotating we need to annotate the solve as well
             if not parameters["adjoint"]["stop_annotating"]:
 
-                # Increase the tolerance slightly (don't know why we need to do this)
-                nsolver = "snes_solver" if self.use_snes else "newton_solver"
-                solver.parameters[nsolver]['relative_tolerance'] /= 0.001
-                solver.parameters[nsolver]['absolute_tolerance'] /= 0.1
+                if self.relax_adjoint_solver:
+                    # Increase the tolerance slightly
+                    # (don't know why we need to do this)
+                    nsolver = "snes_solver" if self.use_snes else "newton_solver"
+                    solver.parameters[nsolver]['relative_tolerance'] /= 0.001
+                    solver.parameters[nsolver]['absolute_tolerance'] /= 0.1
+                    
                 # Solve the system with annotation
                 try:
                     nliter, nlconv = solver.solve(annotate=True)
                 except RuntimeError:
                     # Sometimes this throws a runtime error
-                    solver.parameters[nsolver]['relative_tolerance'] *= 0.001
-                    solver.parameters[nsolver]['absolute_tolerance'] *= 0.1
+                    if self.relax_adjoint_solver:
+                        solver.parameters[nsolver]['relative_tolerance'] *= 0.001
+                        solver.parameters[nsolver]['absolute_tolerance'] *= 0.1
                     self.reinit(w_old, annotate=True)
                     raise  SolverDidNotConverge("Adjoint solve step didn't converge")
 
 
                 else:
-                    solver.parameters[nsolver]['relative_tolerance'] *= 0.001
-                    solver.parameters[nsolver]['absolute_tolerance'] *= 0.1
+                    if self.relax_adjoint_solver:
+                        solver.parameters[nsolver]['relative_tolerance'] *= 0.001
+                        solver.parameters[nsolver]['absolute_tolerance'] *= 0.1
                     if not nlconv:
                         raise  SolverDidNotConverge("Adjoint solve step didn't converge")
 
@@ -243,27 +258,16 @@ class LVSolver(object):
         self._I = Identity(dim)
         
         # Deformation gradient
-        F = grad(u) + self._I
-        self._C = F.T * F
+        self._F = grad(u) + self._I
+        self._C = self._F.T * self._F
         self._E = 0.5*(self._C - self._I)
-
-        
-        self._F = variable(F)
         J = det(self._F)
         
-
-
-        # # If model is compressible remove volumetric strains
-        # if self.is_incompressible():
-        F_iso = self._F
-        # else:
-        #     pass
-        # F_iso = variable(pow(J, -float(1)/dim)*self._F)
-
                 
         # Internal energy
-        self._strain_energy = material.strain_energy(F_iso)
+        self._strain_energy = material.strain_energy(self._F)
         self._pi_int = self._strain_energy + self._compressibility(J)
+                       
 
 
         # Testfunction for displacement
@@ -274,22 +278,15 @@ class LVSolver(object):
         ## Internal virtual work
         self._G = derivative(self._pi_int*dx, self._w, self._w_test) 
 
-        # This is the equivalent formulation
-        # P = diff(self._strain_energy, F_iso)
-        # self._G = inner(P, grad(du))*dx
-        # self._G -= dp*(J-1)*dx
-        # self._G -= p*J*inner(inv(F_iso).T, grad(du))*dx
-        # self._G -= p*J*inner(inv(self._F).T, grad(du))*dx
-        
         
         ## External work
         
         # Neumann BC
+        
         if self.parameters["bc"].has_key("neumann"):
             for neumann_bc in self.parameters["bc"]["neumann"]:
                 pressure, marker = neumann_bc
                 self._G += inner(J*pressure*dot(inv(self._F).T, N), du)*ds(marker)
-
 
         # Other body forces
         if self.parameters["bc"].has_key("body_force"):
@@ -319,25 +316,6 @@ class LVSolver(object):
             else:
                 self._bcs = self._make_dirichlet_bcs()
 
-
-        # Weakly impose Dirichlet by Nitsches method
-        # NOTE: THIS IS NOT TESTED
-        if self.parameters["bc"].has_key("nitsche"):
-            beta_value = 10
-            beta = Constant(beta_value)
-            
-            h_E = CellSize(mesh)
-            #MaxFacetEdgeLength(self.parameters["mesh"])
-            for nitsche in self.parameters["bc"]["nitsche"]:
-                
-                val, dS = nitsche
-                
-                self._G += - inner(dot(grad(u), N), v)*dS \
-                  + inner(u, dot(grad(v), N))*dS \
-                  + beta*h_E**-1*inner(u, v)*dS \
-                  - inner(val, dot(grad(v), N))*dS \
-                  - beta*h_E**-1*inner(val, v)*dS
-        
         self._dG = derivative(self._G, self._w, TrialFunction(self._W))
 
     def _make_dirichlet_bcs(self):
@@ -555,3 +533,5 @@ class Postprocess(object):
         solver.solve_local(res.vector(), assemble(L), V.dofmap())
         return res
         
+
+
