@@ -116,15 +116,19 @@ class Material(object):
 
         # Activation
         self.gamma = Constant(0, name="gamma") if gamma is None else gamma
+        self._T_ref = Constant(T_ref) if T_ref else Constant(1.0)
 
-        if T_ref:
-            self._T_ref = T_ref
+    def get_gamma(self):
+
+        # Activation
+        if isinstance(self.gamma, RegionalParameter):
+            # This means a regional gamma
+            # Could probably make this a bit more clean
+            gamma = self.gamma.get_function()
         else:
-            self._T_ref = 75.0 if self._active_model\
-                          == "active_stress"  else 0.7
+            gamma = self.gamma
 
-        self._T_ref = Constant(self._T_ref)
-            
+        return self._T_ref*gamma
 
     def strain_energy(self, F):
         r"""
@@ -152,13 +156,7 @@ class Material(object):
         """
 
         
-        # Activation
-        if isinstance(self.gamma, RegionalParameter):
-            # This means a regional gamma
-            # Could probably make this a bit more clean
-            gamma = self.gamma.get_function()
-        else:
-            gamma = self.gamma
+        gamma = self.get_gamma()
 
 
         # Active stress model
@@ -222,13 +220,7 @@ class Material(object):
 
         """
         # Activation
-        if isinstance(self.gamma, RegionalParameter):
-            # This means a regional gamma
-            # Could probably make this a bit more clean
-            gamma = self.gamma.get_function()
-        else:
-            gamma = self.gamma
-
+        gamma = self.get_gamma()
 
         dim = get_dimesion(F)
         I = Identity(dim)
@@ -301,9 +293,9 @@ class Material(object):
         if self._active_model == 'active_stress':
 
             if diff == 0:
-                return 0.5*self._T_ref*gamma*(I4f-1)
+                return 0.5*gamma*(I4f-1)
             elif diff == 1:
-                return self._T_ref*gamma 
+                return gamma 
             
         else:
             # No active stress
@@ -743,12 +735,7 @@ class Guccione(Material) :
 
         """
         # Activation
-        if isinstance(self.gamma, RegionalParameter):
-            # This means a regional gamma
-            # Could probably make this a bit more clean
-            gamma = self.gamma.get_function()
-        else:
-            gamma = self.gamma
+        gamma = self.get_gamma()
 
         
         dim = get_dimesion(F)
@@ -831,12 +818,7 @@ class Guccione(Material) :
 
 
         # Activation
-        if isinstance(self.gamma, RegionalParameter):
-            # This means a regional gamma
-            # Could probably make this a bit more clean
-            gamma = self.gamma.get_function()
-        else:
-            gamma = self.gamma
+        gamma = self.get_gamma()
 
         I4 = inner(C*e1, e1)
         Wactive = self.Wactive(gamma, I4, diff = 0)
@@ -883,9 +865,9 @@ if __name__ == "__main__":
     params["active_model"] = active_model
     params["T_ref"]
 
-    # material_model = "holzapfel_odgen"
+    material_model = "holzapfel_odgen"
     # material_model = "guccione"
-    material_model = "neo_hookean"
+    # material_model = "neo_hookean"
 
     from setup_optimization import make_solver_params
     solver_parameters, pressure, paramvec= make_solver_params(params, patient)
@@ -893,7 +875,7 @@ if __name__ == "__main__":
     gamma = Function(V_real, name = "gamma")
 
     matparams = setup_material_parameters(material_model)
-
+    # matparams["a_f"] = 0.0
     args = (patient.fiber,
             gamma,
             matparams,
