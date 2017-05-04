@@ -154,7 +154,7 @@ def check_patient_attributes(patient):
 
         if no_ffun:
             setattr(patient, 'ffun',
-                    MeshFunction("size_t", mesh, 2, mesh.domains()))
+                    MeshFunction("size_t", patient.mesh, 2, patient.mesh.domains()))
 
     # Cell markers 
     if dim == 3 and not hasattr(patient, 'sfun'):
@@ -166,7 +166,7 @@ def check_patient_attributes(patient):
 
         if no_sfun:
             setattr(patient, 'sfun',
-                    MeshFunction("size_t", mesh, 3, mesh.domains()))
+                    MeshFunction("size_t", patient.mesh, 3, patient.mesh.domains()))
 
 
     ## Other
@@ -228,7 +228,7 @@ def make_solver_parameters(params, patient, matparams,
                            gamma = Constant(0.0),
                            paramvec = None, measurements = None):
 
-     ##  Material model
+    ##  MateRial
     from material import HolzapfelOgden
     
     material = HolzapfelOgden(patient.fiber, gamma,
@@ -652,6 +652,11 @@ def get_volume_offset(patient, params, chamber = "lv"):
         mesh = patient.mesh
         ffun = patient.ffun
 
+    if params["Patient_parameters"]["geometry_index"] == "-1":
+        idx = patient.passive_filling_duration-1
+    else:
+        idx = int(params["Patient_parameters"]["geometry_index"])
+
     if chamber == "lv":
     
         if patient.markers.has_key("ENDO_LV"):
@@ -659,11 +664,11 @@ def get_volume_offset(patient, params, chamber = "lv"):
         else:
             endo_marker = patient.markers["ENDO"][0]
 
-        volume = patient.volume[0]
+        volume = patient.volume[idx]
         
     else:
         endo_marker = patient.markers["ENDO_RV"][0]
-        volume = patient.RVV[0]
+        volume = patient.RVV[idx]
         
     
     logger.info("Measured = {}".format(volume))

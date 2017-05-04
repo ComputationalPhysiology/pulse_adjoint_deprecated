@@ -48,6 +48,22 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
     h5group = params["h5group"]
     params["h5group"] = "initial_passive"
 
+    unload_params = params["Unloading_parameters"].to_dict()
+    estimate_initial_guess = unload_params.pop('estimate_initial_guess', True)
+
+    if params["Patient_parameters"]["geometry_index"] == "-1" and estimate_initial_guess:
+        msg = ("You cannot estimate the initial guess when using "
+               "end-diastolic geometry as reference.")
+        logger.warning(msg)
+        estimate_initial_guess = False
+        
+
+    # if params["Patient_parameters"]["geometry_index"] == "-1":
+        # initial_guess = 1.0
+    # else:
+    initial_guess = 30.0
+
+
     # Interpolation of displacement does not work with dolfin-adjoint
     # and can thus only be used when non-gradient based optimization
     # is used. Interpolation is the only resonable thins to do. Everythin else
@@ -60,7 +76,7 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
     #Load patient data, and set up the simulation
     measurements, solver_parameters, pressure, paramvec = setup_simulation(params, patient)
 
-
+    
     if check_group_exists(params["sim_file"], params["h5group"]):
 
         group = "/".join([params["h5group"], PASSIVE_INFLATION_GROUP, "/optimal_control"])
@@ -71,20 +87,25 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
         logger.info(Text.green("Fetch initial guess for material paramters"))
 
     else:
-        logger.info(Text.blue("\nRun Passive Optimization"))
+        
 
-        rd, paramvec = run_passive_optimization_step(params, 
-                                                     patient, 
-                                                     solver_parameters, 
-                                                     measurements, 
-                                                     pressure,
-                                                     paramvec)
-        
-        logger.info("\nSolve optimization problem.......")
-        params, rd, opt_result = solve_oc_problem(params, rd, paramvec,
-                                                  return_solution = True,
-                                                  store_solution = True)
-        
+        if estimate_initial_guess:
+
+            logger.info(Text.blue("\nRun Passive Optimization"))
+            rd, paramvec = run_passive_optimization_step(params, 
+                                                         patient, 
+                                                         solver_parameters, 
+                                                         measurements, 
+                                                         pressure,
+                                                         paramvec)
+            
+            logger.info("\nSolve optimization problem.......")
+            params, rd, opt_result = solve_oc_problem(params, rd, paramvec,
+                                                      return_solution = True,
+                                                      store_solution = True)
+        else:
+            c = get_constant(paramvec.value_size(), paramvec.value_rank(), initial_guess)
+            paramvec.assign(c)
         
 
     params["unload"] = True
@@ -92,31 +113,21 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
     
     from unloading import UnloadedMaterial
     pfd = patient.passive_filling_duration
+    geo_idx = int(params["Patient_parameters"]["geometry_index"])
+    geo_idx = geo_idx if geo_idx >= 0 else pfd-1
     if patient.mesh_type() == "biv":
         
         pressures = zip(patient.pressure[:pfd], patient.RVP[:pfd])
         volumes = zip(patient.volume[:pfd], patient.RVV[:pfd])
-        p_geometry = pressures[0]
-        
-        
+                
     else:
         pressures = patient.pressure[:pfd]
         volumes = patient.volume[:pfd]
-        p_geometry = pressures[0]
         
-
-    h5group = params["h5group"]
-    params["Material_parameters"]["a"] = initial_guess
-
-    
-    estimator =  UnloadedMaterial(p_geometry, pressures, volumes,
-                                  params, paramvec,
-                                  **params["Unloading_parameters"])
-    
-
-    
+    estimator =  UnloadedMaterial(geo_idx, pressures, volumes,
+                                  params, paramvec,**unload_params)    
     estimator.unload_material(patient)
-    params["h5group"] = h5group
+    
     params["volume_approx"] = vol_approx
  
     
