@@ -153,8 +153,12 @@ def setup_patient_parameters():
     params = Parameters("Patient_parameters")
     params.add("patient", "Joakim")
     params.add("patient_type", "full")
-    params.add("weight_rule", DEFAULT_WEIGHT_RULE, WEIGHT_RULES)
-    params.add("weight_direction", DEFAULT_WEIGHT_DIRECTION, WEIGHT_DIRECTIONS) 
+    params.add("weight_rule",
+               DEFAULT_WEIGHT_RULE,
+               WEIGHT_RULES)
+    params.add("weight_direction",
+               DEFAULT_WEIGHT_DIRECTION,
+               WEIGHT_DIRECTIONS)
     params.add("resolution", "low_res")
     params.add("pressure_path", "")
     params.add("mesh_path", "")
@@ -166,6 +170,14 @@ def setup_patient_parameters():
     params.add("fiber_angle_endo", 60)
     params.add("mesh_type", "lv", ["lv", "biv"])
     params.add("include_sheets", False)
+
+    # Which index does the geometry correspond to
+    # "0" means first measurement numer
+    # "-1" means end-diastole
+    # Any number between 0 and passive filling duration
+    # also work (passive filling duration would correspond)
+    # to end-diastole. 
+    params.add("geometry_index", "0")
 
     return params
 
@@ -357,6 +369,13 @@ def setup_application_parameters():
     material_parameters.add("b", 9.726)
     material_parameters.add("b_f", 15.779)
     params.add(material_parameters)
+
+    # Material model
+    params.add("material_model", "holzapfel_ogden",
+               ["holzapfel_ogden",
+                "neo_hookean",
+                "guccione"])
+    
     
     # Space for material parameter(s)
     # If optimization of multiple material parameters are selected,
@@ -453,6 +472,32 @@ def setup_application_parameters():
 
     return params
 
+def setup_material_parameters(material_model):
+
+    material_parameters = Parameters("Material_parameters")
+    
+    if material_model == "guccione":
+        material_parameters.add("C", 2.0)
+        material_parameters.add("bf", 8.0)
+        material_parameters.add("bt", 2.0)
+        material_parameters.add("bfs", 4.0)
+
+    elif material_model == "neo_hookean":
+        
+        material_parameters.add("mu", 0.385)
+        
+    else:
+        # material_model == "holzapfel_odgen":
+        
+        material_parameters.add("a", 2.28)
+        material_parameters.add("a_f", 1.685)
+        material_parameters.add("b", 9.726)
+        material_parameters.add("b_f", 15.779)
+
+    return material_parameters
+    
+    
+
 def setup_optimization_parameters():
     """
     Parameters for the optimization.
@@ -533,10 +578,18 @@ def setup_unloading_parameters():
 
     params = Parameters("Unloading_parameters")
 
-    params.add("method", "hybrid", ["hybrid", "fixed_point", "raghavan"])
+    params.add("method", "hybrid",
+               ["hybrid","fixed_point","raghavan"])
+    # Terminate if difference in reference (unloaded) volume
+    # is less than tol
     params.add("tol", 0.05)
+    # Maximum number of coupled iterations
     params.add("maxiter", 5)
+    # Apply conitinuation step
     params.add("continuation", False)
+    # Estimate initial guess based on loaded configuration
+    params.add("estimate_initial_guess", True)
+    
 
     unload_options = Parameters("unload_options")
     unload_options.add("maxiter", 10)

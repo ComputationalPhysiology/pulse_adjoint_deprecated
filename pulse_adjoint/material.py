@@ -18,6 +18,15 @@
 from dolfinimport import *
 from setup_optimization import RegionalParameter
 
+def get_dimesion(F):
+    
+    if DOLFIN_VERSION_MAJOR > 1.6:
+        dim = find_geometric_dimension(F)
+    else:
+        dim = F.geometric_dimension()
+
+    return dim
+
 
 def subplus(x):
     r"""
@@ -45,43 +54,76 @@ def heaviside(x):
 
 class Material(object):
     """
-    Base class for material
+    Initialize material model
+    
+    :param f0: Fiber field
+    :type f0: :py:class`dolfin.Function`
+    :param gamma: Activation parameter
+    :type gamma: :py:class`dolfin.Function`
+    :param dict params: material parameters
+    :param str active_model: The active model. Possible values are
+    'active_stress', 'active_strain' and 
+                                 'active_strain_rossi'.
+    :param s0: Sheet field
+    :type s0: :py:class`dolfin.Function`
+    :param n0: Fiber-sheet field
+    :type n0: :py:class`dolfin.Function`
+    :param float T_ref: Scale factor for active parameter
+
     """
-    def __init__(self, T_ref = None, params = None):
-        """
-        Initialize base class
+    def __init__(self, f0 = None, gamma = None, params = None,
+                 active_model = "active_strain", s0 = None,
+                 n0 = None, T_ref = None, dev_iso_split = True):
 
-        :param float T_ref: Scale factor for active parameter
-
-        """
+        # Consider only deviatoric strains or not
+        self._dev_iso_split = dev_iso_split
         
-        assert self._active_model in \
-          ["active_stress", "active_strain", "active_strain_rossi"], \
-          "The active model '{}' is not implemented.".format(self._active_model)
+        # Fiber system
+        self.f0 = f0
+        self.s0 = s0
+        self.n0 = n0
+
+
+        # Parameters
+        if params is None:
+            params = self.default_parameters()
+
+        for k,v in params.iteritems():
+            setattr(self, k, v)
+
+                
+        self.parameters = params
+        for k,v in params.iteritems():
+                
+            if isinstance(v, (float, int)):
+                setattr(self, k, Constant(v))
+                
+            elif isinstance(v, RegionalParameter):
+                   
+                setattr(self, k, Function(v.get_ind_space(), name = k))
+                mat = getattr(self, k)
+                mat.assign(project(v.get_function(), v.get_ind_space()))
+                
+            else:
+                setattr(self, k, v)
+                    
+
+        # Active model
+        assert active_model in \
+            ["active_stress", "active_strain", "active_strain_rossi"], \
+            "The active model '{}' is not implemented.".format(active_model)
+        self._active_model = active_model
+
+        # Activation
+        self.gamma = Constant(0, name="gamma") if gamma is None else gamma
 
         if T_ref:
             self._T_ref = T_ref
         else:
             self._T_ref = 75.0 if self._active_model\
-                          == "active_stress"  else 0.4
+                          == "active_stress"  else 0.7
 
         self._T_ref = Constant(self._T_ref)
-
-        if params:
-            self.parameters = params
-            for k,v in params.iteritems():
-                
-                if isinstance(v, (float, int)):
-                    setattr(self, k, Constant(v))
-                    
-                elif isinstance(v, RegionalParameter):
-                   
-                    setattr(self, k, Function(v.get_ind_space(), name = k))
-                    mat = getattr(self, k)
-                    mat.assign(project(v.get_function(), v.get_ind_space()))
-                    
-                else:
-                    setattr(self, k, v)
             
 
     def strain_energy(self, F):
@@ -132,11 +174,7 @@ class Material(object):
             I1  = self.I1e(F, gamma)
             I4f = self.I4fe(F, gamma)
             
-        if DOLFIN_VERSION_MAJOR > 1.6:
-            dim = find_geometric_dimension(F)
-        else:
-            dim = F.geometric_dimension()
-            
+        dim = get_dimesion(F)
         W1   = self.W_1(I1, diff = 0, dim = dim)
         W4f  = self.W_4(I4f, diff = 0)
         Wactive = self.Wactive(gamma, I4f, diff = 0)
@@ -191,55 +229,59 @@ class Material(object):
         else:
             gamma = self.gamma
 
-        # Left Cauchy green
-        
 
-        
-
-        if DOLFIN_VERSION_MAJOR > 1.6:
-            dim = find_geometric_dimension(F)
-        else:
-            dim = F.geometric_dimension()
-
+        dim = get_dimesion(F)
         I = Identity(dim)
+        J = det(F)
+        
+        if self._dev_iso_split:
+            F_iso = pow(J, -float(1)/dim)*F
+        else:
+            F_iso = F
         
         # Active stress model
         if self._active_model == 'active_stress':
-            B = F*F.T
+            B_iso = F_iso*F_iso.T
             # Fibers on the current configuration
-            f = F*self.f0
+            f_iso = F_iso*self.f0
         
         
             # Invariants
-            I1  = self.I1(F)
-            I4f = self.I4f(F)
+            I1_iso  = self.I1(F)
+            I4f_iso = self.I4f(F)
+
+            F_ref = I
 
         # Active strain model
         else:
             Fa = self.Fa(gamma)
-            Fe = F*inv(Fa)
+            Fe_iso = F_iso*inv(Fa)
 
-            B = Fe*Fe.T
+            B_iso = Fe_iso*Fe_iso.T
 
             # Fibers on the current configuration
-            f = Fe*self.f0
+            f_iso = Fe_iso*self.f0
             
             # Invariants
-            I1  = self.I1e(F, gamma)
-            I4f = self.I4fe(F, gamma)
+            I1_iso  = self.I1e(F, gamma)
+            I4f_iso = self.I4fe(F, gamma)
+
+            # F_ref = inv(Fa).T
+            F_ref = I
             
-        J = det(F)
+
 
         # The outer product of the fibers
-        ff = outer(f,f)
-        w1 = self.W_1(I1, diff = 1, dim = dim)
-        w4f = self.W_4(I4f, diff = 1)
+        ff = outer(f_iso,f_iso)
+        w1 = self.W_1(I1_iso, diff = 1, dim = dim)
+        w4f = self.W_4(I4f_iso, diff = 1)
         wactive = self.Wactive(gamma, diff = 1)
 
+        T = 2*w1*B_iso + 2*w4f*ff  + wactive*ff
         if p is None:
-            return 2*w1*B + 2*w4f*ff  + wactive*ff 
+            return T - 1.0/3.0 * tr(T)*I
         else:
-            return 2*w1*B + 2*w4f*ff  + wactive*ff - p*I
+            return T - 1.0/3.0 * tr(T)*I - p*I
         
         
     def Wactive(self, gamma, I4f = 0, diff = 0):
@@ -259,7 +301,7 @@ class Material(object):
         if self._active_model == 'active_stress':
 
             if diff == 0:
-                return 0.5*self._T_ref*gamma*I4f
+                return 0.5*self._T_ref*gamma*(I4f-1)
             elif diff == 1:
                 return self._T_ref*gamma 
             
@@ -290,8 +332,12 @@ class Material(object):
            I_1 = \mathrm{tr}(\mathbf{C})
 
         """
-
-        C =  F.T * F
+        if self._dev_iso_split:
+            J = det(F)
+            dim = get_dimesion(F)
+            F = pow(J, -float(1)/dim)*F
+            
+        C =   F.T * F
         return  tr(C)
         
         
@@ -308,6 +354,11 @@ class Material(object):
         if self.f0 is None:
             return Constant(0.0)
 
+        if self._dev_iso_split:
+            J = det(F)
+            dim = get_dimesion(F)
+            F = pow(J, -float(1)/dim)*F
+            
         C =  F.T * F
         return inner(C*self.f0, self.f0)
 
@@ -326,7 +377,11 @@ class Material(object):
         if self.s0 is None:
             return Constant(0.0)
 
-      
+        if self._dev_iso_split:
+            J = det(F)
+            dim = get_dimesion(F)
+            F = pow(J, -float(1)/dim)*F
+            
         C =  F.T * F 
         return  inner(C*self.s0, self.s0)
 
@@ -343,6 +398,11 @@ class Material(object):
         if self.n0 is None:
             return Constant(0.0)
 
+        if self._dev_iso_split:
+            J = det(F)
+            dim = get_dimesion(F)
+            F = pow(J, -float(1)/dim)*F
+            
         C =  F.T * F
         
         return  inner(C*self.n0, self.n0)
@@ -354,8 +414,11 @@ class Material(object):
         if (self.f0 and self.s0) is None:
             return Constant(0.0)
 
-        J = det(F)
-        # C = pow(J, -float(2)/3) * F.T * F
+        if self._dev_iso_split:
+            J = det(F)
+            dim = get_dimesion(F)
+            F = pow(J, -float(1)/dim)*F
+            
         C = F.T * F
         return  inner(C*self.f0, self.s0)
 
@@ -404,12 +467,7 @@ class Material(object):
         I1  = self.I1(F)
         I4f = self.I4f(F)
         
-        
-        
-        if DOLFIN_VERSION_MAJOR > 1.6:
-            d = find_geometric_dimension(F)
-        else:
-            d = F.geometric_dimension()
+        d = get_dimesion(F)
 
         if self._active_model == 'active_stress':
             
@@ -518,46 +576,6 @@ class HolzapfelOgden(Material):
     
 
     """
-    def __init__(self, f0 = None, gamma = None, params = None,
-                 active_model = "active_strain",
-                 s0 = None, n0 = None, T_ref = None):
-        """
-        Initialize the Holzapfel and Ogden material model
-
-        :param f0: Fiber field
-        :type f0: :py:class`dolfin.Function`
-        :param gamma: Activation parameter
-        :type gamma: :py:class`dolfin.Function`
-        :param dict params: material parameters
-        :param str active_model: The active model. Possible values are
-                                 'active_stress', 'active_strain' and 
-                                 'active_strain_rossi'.
-        :param s0: Sheet field
-        :type s0: :py:class`dolfin.Function`
-        :param n0: Fiber-sheet field
-        :type n0: :py:class`dolfin.Function`
-        :param float T_ref: Scale factor for active parameter
-
-        """
-
-        # Fiber system
-        self.f0 = f0
-        self.s0 = s0
-        self.n0 = n0
-        
-        self.gamma = Constant(0, name="gamma") if gamma is None else gamma
-
-        # If no parameters are given, use the default ones
-        if params is None:
-            params = self.default_parameters()
-
-        self._active_model = active_model
-
-        
-        Material.__init__(self, T_ref, params)
-        
-
-
     def default_parameters(self):
         """
         Default matereial parameter for the Holzapfel Ogden model
@@ -677,57 +695,120 @@ class HolzapfelOgden(Material):
 
 class Guccione(Material) :
     """
-    Guccione material model. Copied from https://bitbucket.org/peppu/mechbench
+    Guccione material model. 
+
+    .. note: 
+       
+        Only implemented for active stress model
+
+
     """
-    def __init__(self, **params) :
-        params = params or {}
-        self._parameters = self.default_parameters()
-        self._parameters.update(params)
 
-        # Just some renaming in order to use existing code.
-        self.gamma = self._parameters["Tactive"]
-        self.f0 =  self._parameters["e1"]
+    def CauchyStress(self, F, p = None):
+        r"""
+        Chaucy Stress Tensor
 
+        Incompressible:
+
+        .. math::
+
+           \sigma = \mathbf{F} \frac{\partial \Psi}{\partial \mathbf{F}} 
+           - p\mathbf{I}
+
+        Since the strain energy depends on the invariants we can write
+
+        .. math::
+
+           \sigma = \mathbf{F} \sum_{i = 1, i\neq3}^{N} \psi_i 
+           \frac{\partial I_1}{\partial \mathbf{F}} - p\mathbf{I} 
+
+        Compressible:
+
+        .. math::
+
+           \sigma = \mathbf{F} \frac{\partial \psi}{\partial \mathbf{F}}
+
+        Since the strain energy depends on the invariants we can write
+
+        .. math::
+
+           \sigma = J^{-1} \mathbf{F} \sum_{i = 1}^{N} 
+           \psi_i \frac{\partial I_i}{\partial \mathbf{F}}
+
+        
+        :param F: Deformation gradient
+        :type F: :py:class:`dolfin.Function`
+        :param p: Hydrostatic pressure
+        :type p: :py:class:`dolfin.Function`
+
+        """
+        # Activation
+        if isinstance(self.gamma, RegionalParameter):
+            # This means a regional gamma
+            # Could probably make this a bit more clean
+            gamma = self.gamma.get_function()
+        else:
+            gamma = self.gamma
+
+        
+        dim = get_dimesion(F)
+        
+        F = variable(F)
+        I = Identity(dim)
+        J = det(F)
+        
+
+        P = diff(self.strain_energy(F), F)
+        T = P*F.T
+        if p is None:
+            return T
+            
+        else:
+            return T -  p*I
+            
+        
     @staticmethod
     def default_parameters() :
         p = { 'C' : 2.0,
               'bf' : 8.0,
               'bt' : 2.0,
-              'bfs' : 4.0,
-              'e1' : None,
-              'e2' : None,
-              'e3' : None,
-              'kappa' : None,
-              'Tactive' : None }
+              'bfs' : 4.0 }
         return p
 
     def is_isotropic(self) :
         """
         Return True if the material is isotropic.
         """
-        p = self._parameters
+        
+        p = self.parameters
         return p['bt'] == 1.0 and p['bf'] == 1.0 and p['bfs'] == 1.0
 
 
-
-    def is_incompressible(self) :
-        """
-        Return True if the material is incompressible.
-        """
-        return self._parameters['kappa'] is None
-
-    def strain_energy(self, F, p=None) :
+    def strain_energy(self, F) :
         """
         UFL form of the strain energy.
         """
-        params = self._parameters
+
+        msg = "Guccione material model, only implemented for active stress model"
+        assert self._active_model == "active_stress", msg
+        
+        params = self.parameters
 
         I = Identity(3)
         J = det(F)
-        C = pow(J, -float(2)/3) * F.T*F
+        dim = get_dimesion(F)
+        if self._dev_iso_split:
+            F = pow(J, -float(1)/dim)*F
+            
+        C = F.T*F
         E = 0.5*(C - I)
 
         CC  = Constant(params['C'], name='C')
+
+        e1 = self.f0
+        e2 = self.s0
+        e3 = self.n0
+        
         if self.is_isotropic() :
             # isotropic case
             Q = inner(E, E)
@@ -736,10 +817,6 @@ class Guccione(Material) :
             bt  = Constant(params['bt'], name='bt')
             bf  = Constant(params['bf'], name='bf')
             bfs = Constant(params['bfs'], name='bfs')
-
-            e1 = params['e1']
-            e2 = params['e2']
-            e3 = params['e3']
 
             E11, E12, E13 = inner(E*e1, e1), inner(E*e1, e2), inner(E*e1, e3)
             E21, E22, E23 = inner(E*e2, e1), inner(E*e2, e2), inner(E*e2, e3)
@@ -751,40 +828,27 @@ class Guccione(Material) :
         # passive strain energy
         Wpassive = CC/2.0 * (exp(Q) - 1)
 
-        # active strain energy
-        if params['Tactive'] is not None :
-            self.Tactive = Constant(params['Tactive'], name='Tactive')
-            I4 = inner(C*e1, e1)
-            # Wactive = self.Tactive/2.0 * (I4 - 1)
-            Wactive = self.gamma/2.0 * (I4 - 1)
-        else :
-            Wactive = 0.0
 
+
+        # Activation
+        if isinstance(self.gamma, RegionalParameter):
+            # This means a regional gamma
+            # Could probably make this a bit more clean
+            gamma = self.gamma.get_function()
+        else:
+            gamma = self.gamma
+
+        I4 = inner(C*e1, e1)
+        Wactive = self.Wactive(gamma, I4, diff = 0)
+        
         return Wpassive + Wactive 
 
 
 
 
 class NeoHookean(Material):
-    def __init__(self, f0 = None, gamma = None, params = None, active_model = "active_strain", s0 = None, n0 = None, T_ref = None):
+    
 
-        # Fiber system
-        self.f0 = f0
-        self.s0 = s0
-        self.n0 = n0
-       
-        self.gamma = Constant(0, name="gamma") if gamma is None else gamma
-
-        
-        if params is None:
-            params = self.default_parameters()
-
-        for k,v in params.iteritems():
-            setattr(self, k, v)
-
-        self._active_model = active_model
-
-        Material.__init__(self, T_ref, params)
         
     def default_parameters(self):
         return {"mu": 0.385}
@@ -802,7 +866,67 @@ class NeoHookean(Material):
         
     def W_4(self, *args, **kwargs):
         return 0
-            
+
+
+
+if __name__ == "__main__":
+
+    from patient_data import LVTestPatient
+    patient = LVTestPatient()
+
+    from setup_parameters import (setup_adjoint_contraction_parameters,
+                                  setup_material_parameters, setup_general_parameters)
+    setup_general_parameters()
+    params = setup_adjoint_contraction_parameters()
+    params["phase"] == "all"
+    active_model = "active_stress"
+    params["active_model"] = active_model
+    params["T_ref"]
+
+    # material_model = "holzapfel_odgen"
+    # material_model = "guccione"
+    material_model = "neo_hookean"
+
+    from setup_optimization import make_solver_params
+    solver_parameters, pressure, paramvec= make_solver_params(params, patient)
+    V_real = FunctionSpace(solver_parameters["mesh"],  "R", 0)
+    gamma = Function(V_real, name = "gamma")
+
+    matparams = setup_material_parameters(material_model)
+
+    args = (patient.fiber,
+            gamma,
+            matparams,
+            active_model,
+            patient.sheet,
+            patient.sheet_normal,
+            params["T_ref"])
+
+    if material_model == "holzapfel_odgen":
+        material = HolzapfelOgden(*args)
+
+    elif material_model == "guccione":
+        material = Guccione(*args)
+        
+    elif material_model == "neo_hookean":
+        material = NeoHookean(*args)
+        
+        
+    solver_parameters["material"] = material
+
+
+    from lvsolver import LVSolver
+    solver = LVSolver(solver_parameters)
+    solver.parameters["solve"]["snes_solver"]["report"] = True
+
+    
+    solver.solve()
+    
+
+    pressure["p_lv"].t = 0.1
+
+    solver.solve()
+
 
    
     
