@@ -315,6 +315,21 @@ class Material(object):
             return Fa
         
     
+
+
+    def RCG(self, F):
+
+        J = det(F)
+        dim = get_dimesion(F)
+           
+
+        if self._dev_iso_split:
+            C = pow(J, -float(2)/dim) *  F.T * F
+        else:
+            C = F.T * F
+
+        return C
+        
     def I1(self, F):
         r"""
         First Isotropic invariant
@@ -324,12 +339,8 @@ class Material(object):
            I_1 = \mathrm{tr}(\mathbf{C})
 
         """
-        if self._dev_iso_split:
-            J = det(F)
-            dim = get_dimesion(F)
-            F = pow(J, -float(1)/dim)*F
-            
-        C =   F.T * F
+        
+        C = self.RCG(F)
         return  tr(C)
         
         
@@ -346,12 +357,7 @@ class Material(object):
         if self.f0 is None:
             return Constant(0.0)
 
-        if self._dev_iso_split:
-            J = det(F)
-            dim = get_dimesion(F)
-            F = pow(J, -float(1)/dim)*F
-            
-        C =  F.T * F
+        C = self.RCG(F)
         return inner(C*self.f0, self.f0)
 
             
@@ -369,12 +375,7 @@ class Material(object):
         if self.s0 is None:
             return Constant(0.0)
 
-        if self._dev_iso_split:
-            J = det(F)
-            dim = get_dimesion(F)
-            F = pow(J, -float(1)/dim)*F
-            
-        C =  F.T * F 
+        C = self.RCG(F)
         return  inner(C*self.s0, self.s0)
 
     def I4n(self, F):
@@ -390,13 +391,7 @@ class Material(object):
         if self.n0 is None:
             return Constant(0.0)
 
-        if self._dev_iso_split:
-            J = det(F)
-            dim = get_dimesion(F)
-            F = pow(J, -float(1)/dim)*F
-            
-        C =  F.T * F
-        
+        C = self.RCG(F)
         return  inner(C*self.n0, self.n0)
 
     def I8fs(self, F):
@@ -406,12 +401,7 @@ class Material(object):
         if (self.f0 and self.s0) is None:
             return Constant(0.0)
 
-        if self._dev_iso_split:
-            J = det(F)
-            dim = get_dimesion(F)
-            F = pow(J, -float(1)/dim)*F
-            
-        C = F.T * F
+        C = self.RCG(F)
         return  inner(C*self.f0, self.s0)
 
     def I1e(self, F, gamma):
