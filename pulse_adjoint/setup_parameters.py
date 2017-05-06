@@ -36,9 +36,9 @@ def check_parameters(params):
             params["Optimization_targets"]["rv_volume"] = False
             
 
-def setup_adjoint_contraction_parameters():
+def setup_adjoint_contraction_parameters(material_model = "holzapfel_ogden"):
 
-    params = setup_application_parameters()
+    params = setup_application_parameters(material_model)
 
     # Patient parameters
     patient_parameters = setup_patient_parameters()
@@ -295,7 +295,7 @@ def setup_passive_optimization_weigths():
     
     return params
     
-def setup_application_parameters():
+def setup_application_parameters(material_model = "holzapfel_ogden"):
     """
     Setup the main parameters for the pipeline
 
@@ -361,20 +361,8 @@ def setup_application_parameters():
 
     # Spring constatnt at pericardium (if zero - divergence free)
     params.add("pericardium_spring", 0.0)
+    
 
-    # Material parameters
-    material_parameters = Parameters("Material_parameters")
-    material_parameters.add("a", 2.28)
-    material_parameters.add("a_f", 1.685)
-    material_parameters.add("b", 9.726)
-    material_parameters.add("b_f", 15.779)
-    params.add(material_parameters)
-
-    # Material model
-    params.add("material_model", "holzapfel_ogden",
-               ["holzapfel_ogden",
-                "neo_hookean",
-                "guccione"])
     
     
     # Space for material parameter(s)
@@ -390,6 +378,18 @@ def setup_application_parameters():
                                                  "active_strain_rossi",
                                                  "active_stress"])
 
+
+    # Material model
+    params.add("material_model", material_model,
+               ["holzapfel_ogden",
+                "neo_hookean",
+                "guccione"])
+    
+    # Material parameters
+    material_parameters = setup_material_parameters(material_model)
+    params.add(material_parameters)
+
+    
 
     # State space
     params.add("state_space", "P_2:P_1")
@@ -458,8 +458,8 @@ def setup_application_parameters():
     # Relaxation parameters. If smaller than one, the step size
     # in the direction will be smaller, and perhaps avoid the solver
     # to crash.
-    params.add("passive_relax", 0.1)
-    params.add("active_relax", 0.001)
+    params.add("passive_relax", 1.0)
+    params.add("active_relax", 1.0)
 
 
     # When computing the volume/strain, do you want to the project or  interpolate
@@ -469,7 +469,8 @@ def setup_application_parameters():
     params.add("strain_approx", "original", ["project", "interpolate", "original"])
 
     params.add("strain_tensor", "gradu", ["E", "gradu"])
-
+    params.add("map_strain", False)
+    
     return params
 
 def setup_material_parameters(material_model):
@@ -487,7 +488,7 @@ def setup_material_parameters(material_model):
         material_parameters.add("mu", 0.385)
         
     else:
-        # material_model == "holzapfel_odgen":
+        # material_model == "holzapfel_ogden":
         
         material_parameters.add("a", 2.28)
         material_parameters.add("a_f", 1.685)
@@ -550,10 +551,12 @@ def setup_optimization_parameters():
     params.add("scale", 1.0)
     
     params.add("gamma_min", 0.0)
-    params.add("gamma_max", 0.4)
+    params.add("gamma_max", 1.0)
     
     params.add("matparams_min", 1.0)
     params.add("matparams_max", 50.0)
+
+    
     params.add("fix_a", False)
     params.add("fix_a_f", True)
     params.add("fix_b", True)
@@ -566,6 +569,9 @@ def setup_optimization_parameters():
     params.add("disp", False)
 
     return params
+
+
+
 
 def setup_unloading_parameters():
     """

@@ -149,7 +149,8 @@ class RegionalStrainTarget(OptimizationTarget):
     target
     """                                  
     def __init__(self, mesh, crl_basis, dmu, weights=None, nregions = None,
-                 tensor="gradu", F_ref = None, approx = "original"):
+                 tensor="gradu", F_ref = None, approx = "original",
+                 map_strain = False):
         """
         Initialize regional strain target
 
@@ -175,12 +176,28 @@ class RegionalStrainTarget(OptimizationTarget):
         self._name = "Regional Strain"
         self._tensor = tensor
         self.approx = approx
+        self._map_strain = map_strain
+        if map_strain:
+            from unloading.utils import normalize_vector_field
+
+
+        dim = mesh.geometry().dim()
+        self.dim = dim
+        self._F_ref = F_ref if F_ref is not None else Identity(dim)
 
 
         self.crl_basis = []
         for l in ["circumferential", "radial", "longitudinal"]:
             if crl_basis.has_key(l):
-                self.crl_basis.append(crl_basis[l])
+
+                if map_strain:
+                    e_ = project(self._F_ref * crl_basis[l],
+                                 crl_basis[l].function_space())
+                    e = normalize_vector_field(e_)
+                else:
+                    e = crl_basis[l]
+                    
+                self.crl_basis.append(e)
 
         self.nbasis = len(self.crl_basis)
 
@@ -194,9 +211,7 @@ class RegionalStrainTarget(OptimizationTarget):
         else:
             self.weights_arr = weights
 
-        dim = mesh.geometry().dim()
-        self.dim = dim
-        self._F_ref = F_ref if F_ref is not None else Identity(dim)
+        
         # self._F_ref = Identity(dim)
 
         

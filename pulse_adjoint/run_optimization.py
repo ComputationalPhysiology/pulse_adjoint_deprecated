@@ -753,7 +753,8 @@ def get_optimization_targets(params, solver_parameters):
                                  solver_parameters["strain_weights"],
                                  tensor = params["strain_tensor"], 
                                  F_ref = F_ref,
-                                 approx = params["strain_approx"])
+                                 approx = params["strain_approx"],
+                                 map_strain = params["map_strain"])
     
         
 

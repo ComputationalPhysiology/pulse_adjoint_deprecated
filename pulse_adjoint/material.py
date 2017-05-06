@@ -855,7 +855,7 @@ if __name__ == "__main__":
     params["active_model"] = active_model
     params["T_ref"]
 
-    material_model = "holzapfel_odgen"
+    material_model = "holzapfel_ogden"
     # material_model = "guccione"
     # material_model = "neo_hookean"
 
@@ -874,7 +874,7 @@ if __name__ == "__main__":
             patient.sheet_normal,
             params["T_ref"])
 
-    if material_model == "holzapfel_odgen":
+    if material_model == "holzapfel_ogden":
         material = HolzapfelOgden(*args)
 
     elif material_model == "guccione":
