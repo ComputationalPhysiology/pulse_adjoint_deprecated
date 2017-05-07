@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=AdjointContractionArray
+#SBATCH --job-name=ImpactStress
 #
 # Project:
 #SBATCH --account=NN9249K
@@ -13,9 +13,10 @@
 
 #Send emails for start, stop, fail, etc...
 #SBATCH --mail-type=END
-#SBATCH --output=slurmfiles/impact-%j.out
+#SBATCH --output=slurmfiles/pah-%j.out
 #SBATCH --mail-user=henriknf@simula.no
 
+mkdir -p slurmfiles
 ## Set up job environment:
 source /cluster/bin/jobsetup
 

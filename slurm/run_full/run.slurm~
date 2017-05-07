@@ -1,7 +1,6 @@
 #!/bin/bash
 
-
-#SBATCH --job-name=AdjointContractionRun"$TASK_ID"
+#SBATCH --job-name=impact_stress
 #
 # Project:
 #SBATCH --account=NN9249K
@@ -12,7 +11,7 @@
 # Max memory usage:
 #SBATCH --mem-per-cpu=4G
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=8
+#SBATCH --ntasks-per-node=1
 
 #Send emails for start, stop, fail, etc...
 #SBATCH --mail-type=END
@@ -42,18 +41,31 @@ export F90=gfortran
 INPUT=$SUBMITDIR"/input/file_"$TASK_ID".yml"
 
 # Output file
-OUTDIR=$(python outfile.py $INPUT)
+OUTDIR=$(python outfile.py $INPUT "outdir")
 OUTPUT=$OUTDIR"/result.h5"
-GAMMACRASH=$OUTDIR"/gamma_crash.h5"
-
+echo $OUTDIR
+#GAMMACRASH=$OUTDIR"/gamma_crash.h5"
+MESH=$(python outfile.py $INPUT "mesh")
+PRESSURE=$(python outfile.py $INPUT "pressure")
+#ECHO=$(python outfile.py $INPUT "echo")
+#MESHBASE=${MESH##*/}
 ## Copy input files to the work directory:
 cp run.py $SCRATCH 
 cp $INPUT $SCRATCH
+cp $MESH $SCRATCH
+cp $PRESSURE $SCRATCH
+#cp $ECHO $SCRATCH
 ## Make sure the results are copied back to the submit directory (see Work Directory below):
-chkfile $OUTPUT
-chkfile $GAMMACRASH
+#chkfile $OUTPUT
+#chkfile $GAMMACRASH
+mkdir -p $OUTDIR
+
+cleanup "cp $SCRATCH/result.h5 $OUTDIR/result.h5"
+cleanup "cp $SCRATCH/input.yml $OUTDIR/input.yml"
+cleanup "cp $SCRATCH/output.log $OUTDIR/output.log"
 ## Do some work:
 cd $SCRATCH
+
 
 
 mpirun python run.py $INPUT $OUTPUT
