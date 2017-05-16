@@ -22,6 +22,22 @@ from adjoint_contraction_args import *
 from numpy_mpi import *
 from setup_parameters import *
 
+def get_material_model(material_model):
+
+    if material_model == "holzapfel_ogden":
+        from material import HolzapfelOgden
+        Material = HolzapfelOgden
+
+    elif material_model == "guccione":
+        from material import Guccione
+        Material = Guccione
+        
+    elif material_model == "neo_hookean":
+        from material import NeoHookean
+        Material = NeoHookean
+
+    return Material
+
 def update_unloaded_patient(params, patient):
 
     # Make sure to load the new referece geometry
@@ -229,14 +245,14 @@ def make_solver_parameters(params, patient, matparams,
                            paramvec = None, measurements = None):
 
     ##  MateRial
-    from material import HolzapfelOgden
     
-    material = HolzapfelOgden(patient.fiber, gamma,
-                              matparams,
-                              params["active_model"],
-                              s0 = patient.sheet,
-                              n0 = patient.sheet_normal,
-                              T_ref = params["T_ref"])
+    Material = get_material_model(params["material_model"])
+    material = Material(patient.fiber, gamma,
+                        matparams,
+                        params["active_model"],
+                        s0 = patient.sheet,
+                        n0 = patient.sheet_normal,
+                        T_ref = params["T_ref"])
     
         
     if measurements is None:
@@ -402,6 +418,11 @@ def make_control(params, patient):
         paramvec_ = Function(matparams_space, name = "matparam vector")
 
 
+
+    # If we want to estimate more than one parameter
+    
+    
+        
     # Number of passive parameters to optimize
     fixed_matparams_keys = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
     npassive = sum([ not params["Optimization_parameters"][k] \
@@ -516,7 +537,7 @@ def get_measurements(params, patient):
     if params["phase"] == PHASES[0]: #Passive inflation
         # We need just the points from the passive phase
         start = 0
-        end = patient.passive_filling_duration
+        end = patient.passive_filling_duration+1
 
         pvals = params["Passive_optimization_weigths"]
         
@@ -524,7 +545,7 @@ def get_measurements(params, patient):
 
     elif params["phase"] == PHASES[1]:
         # We need just the points from the active phase
-        start = patient.passive_filling_duration -1
+        start = patient.passive_filling_duration
         end = patient.num_points
         
         pvals = params["Active_optimization_weigths"]
@@ -643,35 +664,27 @@ def get_measurements(params, patient):
 
     return measurements
 
-def get_volume_offset(patient, params, chamber = "lv"):
 
-    if params["unload"]:
+def get_volume(patient, unload = False, chamber = "lv"):
+
+    if unload:
         mesh = patient.original_geometry
         ffun = MeshFunction("size_t", mesh, 2, mesh.domains())
     else:
         mesh = patient.mesh
         ffun = patient.ffun
 
-    if params["Patient_parameters"]["geometry_index"] == "-1":
-        idx = patient.passive_filling_duration-1
-    else:
-        idx = int(params["Patient_parameters"]["geometry_index"])
-
     if chamber == "lv":
-    
         if patient.markers.has_key("ENDO_LV"):
             endo_marker = patient.markers["ENDO_LV"][0]
         else:
             endo_marker = patient.markers["ENDO"][0]
-
-        volume = patient.volume[idx]
         
     else:
         endo_marker = patient.markers["ENDO_RV"][0]
-        volume = patient.RVV[idx]
-        
     
-    logger.info("Measured = {}".format(volume))
+    
+    
     ds = Measure("exterior_facet",
                  subdomain_data = ffun,
                  domain = mesh)(endo_marker)
@@ -679,7 +692,23 @@ def get_volume_offset(patient, params, chamber = "lv"):
     X = SpatialCoordinate(mesh)
     N = FacetNormal(mesh)
     vol = assemble((-1.0/3.0)*dot(X,N)*ds)
+    return vol
     
+
+def get_volume_offset(patient, params, chamber = "lv"):
+
+    if params["Patient_parameters"]["geometry_index"] == "-1":
+        idx = patient.passive_filling_duration-1
+    else:
+        idx = int(params["Patient_parameters"]["geometry_index"])
+
+    if chamber == "lv":
+        volume = patient.volume[idx]
+    else:
+        volume = patient.RVV[idx]
+        
+    logger.info("Measured = {}".format(volume))
+    vol = get_volume(patient, params["unload"], chamber)
     return volume - vol
 
 def setup_simulation(params, patient):

@@ -19,6 +19,19 @@ from adjoint_contraction_args import  logger, PHASES
 from pprint import pformat
 
 
+
+def get_dimesion(u):
+    from dolfin import DOLFIN_VERSION_MAJOR
+    from ufl.domain import find_geometric_dimension
+    
+    if DOLFIN_VERSION_MAJOR > 1.6:
+        dim = find_geometric_dimension(u)
+    else:
+        dim = u.geometric_dimension()
+
+    return dim
+
+
 class UnableToChangePressureExeption(Exception):
     pass
 

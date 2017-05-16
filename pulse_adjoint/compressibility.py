@@ -76,17 +76,10 @@ class Compressibility(object):
                     P1 = VectorElement("Lagrange", mesh.ufl_cell(), 1)
                     B = VectorElement("Bubble",   mesh.ufl_cell(), bdim)
                     Q = FiniteElement("Lagrange", mesh.ufl_cell(), 1)
-                    # from IPython import embed; embed()
-                    # exit()
+               
                     self.W = FunctionSpace(mesh, (P1 + B) * Q)
                     
-                # V = VectorElement(V_str.split("_")[0],
-                #                   mesh.ufl_cell(),
-                #                   int(V_str.split("_")[1]))
-                # Q = FiniteElement(Q_str.split("_")[0],
-                #                   mesh.ufl_cell(),
-                #                   int(Q_str.split("_")[1]))
-                
+     
                 
                 
             else:
@@ -117,7 +110,7 @@ class Compressibility(object):
             self.u, self.p = split(self.w)
     
         def __call__(self, J):
-            return -self.p*(J-1)
+            return -self.p*(J-1.0)
 
         def is_incompressible(self):
             return True
