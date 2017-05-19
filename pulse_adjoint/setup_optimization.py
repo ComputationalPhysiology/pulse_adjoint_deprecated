@@ -537,7 +537,7 @@ def get_measurements(params, patient):
     if params["phase"] == PHASES[0]: #Passive inflation
         # We need just the points from the passive phase
         start = 0
-        end = patient.passive_filling_duration+1
+        end = patient.passive_filling_duration
 
         pvals = params["Passive_optimization_weigths"]
         
@@ -545,7 +545,7 @@ def get_measurements(params, patient):
 
     elif params["phase"] == PHASES[1]:
         # We need just the points from the active phase
-        start = patient.passive_filling_duration
+        start = patient.passive_filling_duration-1
         end = patient.num_points
         
         pvals = params["Active_optimization_weigths"]
