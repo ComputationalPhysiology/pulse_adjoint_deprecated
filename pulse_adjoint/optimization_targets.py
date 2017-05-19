@@ -18,7 +18,7 @@ from dolfinimport import *
 from utils import list_sum
 import numpy as np
 from numpy_mpi import *
-
+from adjoint_contraction_args import logger
 
 __all__ = ["RegionalStrainTarget", "FullStrainTarget",
            "VolumeTarget", "Regularization"]
@@ -187,20 +187,33 @@ class RegionalStrainTarget(OptimizationTarget):
         dim = mesh.geometry().dim()
         self.dim = dim
         self._F_ref = F_ref if F_ref is not None else Identity(dim)
-
-
+        
+        
+        logger.debug("Load local basis.")
+        logger.debug("Map local basis to new reference: {}".format(map_strain))
         self.crl_basis = []
         for l in ["circumferential", "radial", "longitudinal"]:
+            msg = "{} : ".format(l)
+
             if crl_basis.has_key(l):
+                msg += "True"
+                logger.debug(msg)
 
                 if map_strain:
-                    e_ = project(self._F_ref * crl_basis[l],
-                                 crl_basis[l].function_space())
+                    
+                    Fe = self._F_ref * crl_basis[l]
+                    logger.debug("Project")
+                    e_ = project(Fe)
+                    logger.debug("Normalize")
                     e = normalize_vector_field(e_)
                 else:
                     e = crl_basis[l]
                     
                 self.crl_basis.append(e)
+                
+            else:
+                msg += "False"
+                logger.debug(msg)
 
         self.nbasis = len(self.crl_basis)
 
