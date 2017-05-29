@@ -535,7 +535,7 @@ class PassiveForwardRunner(BasicForwardRunner):
         
         if npassive == 1:
             fixed_idx = np.nonzero([not self.params["Fixed_parameters"][k] for k in lst])[0][0]
-            par = lst[fixed_idx].split("fix_")[-1]
+            par = lst[fixed_idx]
             if self.params["matparams_space"] == "regional":
                 paramvec = project(self.paramvec.get_function(), self.paramvec.get_ind_space())
             else:
