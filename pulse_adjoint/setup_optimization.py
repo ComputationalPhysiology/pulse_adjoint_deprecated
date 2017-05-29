@@ -123,16 +123,18 @@ def check_patient_attributes(patient):
                 rename_attribute(patient, att, 'fiber')
 
     # Sheets
-    if not hasattr(patient, 'sheet') and hasattr(patient, 'e_s'):
-        rename_attribute(patient, 'e_s', 'sheet')
-    else:
-        setattr(patient, 'sheet', None)
+    if not hasattr(patient, 'sheet'):
+        if hasattr(patient, 'e_s'):
+            rename_attribute(patient, 'e_s', 'sheet')
+        else:
+            setattr(patient, 'sheet', None)
 
     # Cross-sheet
-    if not hasattr(patient, 'sheet_normal') and hasattr(patient, 'e_sn'):
-        rename_attribute(patient, 'e_sn', 'sheet_normal')
-    else:
-        setattr(patient, 'sheet_normal', None)
+    if not hasattr(patient, 'sheet_normal'):
+        if hasattr(patient, 'e_sn'):
+            rename_attribute(patient, 'e_sn', 'sheet_normal')
+        else:
+            setattr(patient, 'sheet_normal', None)
 
 
     ## Local basis
@@ -244,8 +246,7 @@ def make_solver_parameters(params, patient, matparams,
                            gamma = Constant(0.0),
                            paramvec = None, measurements = None):
 
-    ##  MateRial
-    
+    ##  Material
     Material = get_material_model(params["material_model"])
     material = Material(patient.fiber, gamma,
                         matparams,
@@ -424,9 +425,7 @@ def make_control(params, patient):
     
         
     # Number of passive parameters to optimize
-    fixed_matparams_keys = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
-    npassive = sum([ not params["Optimization_parameters"][k] \
-                     for k in fixed_matparams_keys])
+    npassive = sum([not v for v in params["Fixed_parameters"].values()])
 
         
     if npassive <= 1:
@@ -463,7 +462,7 @@ def make_control(params, patient):
     for par, val in matparams.iteritems():
 
         # Check if material parameter should be fixed
-        if not params["Optimization_parameters"]["fix_{}".format(par)]:
+        if not params["Fixed_parameters"][par]:
             # If not, then we need to put the parameter into some dolfin function
 
             
@@ -665,7 +664,7 @@ def get_measurements(params, patient):
     return measurements
 
 
-def get_volume(patient, unload = False, chamber = "lv"):
+def get_volume(patient, unload = False, chamber = "lv", u = None):
 
     if unload:
         mesh = patient.original_geometry
@@ -691,7 +690,14 @@ def get_volume(patient, unload = False, chamber = "lv"):
     
     X = SpatialCoordinate(mesh)
     N = FacetNormal(mesh)
-    vol = assemble((-1.0/3.0)*dot(X,N)*ds)
+    if u is None:
+        vol_form = (-1.0/3.0)*dot(X,N) 
+    else:
+        F = grad(u) + Identity(3)
+        J = det(F)
+        vol_form = (-1.0/3.0)*dot(X + u, J*inv(F).T*N)
+
+    vol = assemble(vol_form*ds)
     return vol
     
 

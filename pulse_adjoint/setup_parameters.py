@@ -389,7 +389,8 @@ def setup_application_parameters(material_model = "holzapfel_ogden"):
     material_parameters = setup_material_parameters(material_model)
     params.add(material_parameters)
 
-    
+    fixed_matparams = setup_fixed_material_parameters(material_model)
+    params.add(fixed_matparams)
 
     # State space
     params.add("state_space", "P_2:P_1")
@@ -556,12 +557,6 @@ def setup_optimization_parameters():
     params.add("matparams_min", 1.0)
     params.add("matparams_max", 50.0)
 
-    
-    params.add("fix_a", False)
-    params.add("fix_a_f", True)
-    params.add("fix_b", True)
-    params.add("fix_b_f", True)
-
     params.add("soft_tol", 1e-6)
     params.add("soft_tol_rel", 0.1)
 
@@ -571,6 +566,24 @@ def setup_optimization_parameters():
     return params
 
 
+def setup_fixed_material_parameters(material_model):
+
+    fixed_matparams = Parameters("Fixed_parameters")
+    
+    if material_model == "holzapfel_ogden":
+        fixed_matparams.add("a", False)
+        fixed_matparams.add("a_f", True)
+        fixed_matparams.add("b", True)
+        fixed_matparams.add("b_f", True)
+    elif material_model == "neo_hookean":
+        fixed_matparams.add("mu", False)
+    elif material_model == "guccione":
+        fixed_matparams.add("C", False)
+        fixed_matparams.add("bf", True)
+        fixed_matparams.add("bt", True)
+        fixed_matparams.add("bfs", True)
+
+    return fixed_matparams
 
 
 def setup_unloading_parameters():
