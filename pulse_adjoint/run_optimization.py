@@ -39,7 +39,7 @@ def get_constant(value_size, value_rank, val):
         c = Constant([val]*value_size)
     return c
     
-def run_unloaded_optimization(params, patient, initial_guess = 30.0):
+def run_unloaded_optimization(params, patient):
 
 
     # Run an inital optimization as we are used to
@@ -56,12 +56,6 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
                "end-diastolic geometry as reference.")
         logger.warning(msg)
         estimate_initial_guess = False
-        
-
-    # if params["Patient_parameters"]["geometry_index"] == "-1":
-        # initial_guess = 1.0
-    # else:
-    initial_guess = 30.0
 
 
     # Interpolation of displacement does not work with dolfin-adjoint
@@ -103,15 +97,11 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
             params, rd, opt_result = solve_oc_problem(params, rd, paramvec,
                                                       return_solution = True,
                                                       store_solution = True)
-        else:
-            c = get_constant(paramvec.value_size(), paramvec.value_rank(), initial_guess)
-            paramvec.assign(c)
-        
+
 
     params["unload"] = True
     params["h5group"] = h5group
     
-    from unloading import UnloadedMaterial
     pfd = patient.passive_filling_duration
     geo_idx = int(params["Patient_parameters"]["geometry_index"])
     geo_idx = geo_idx if geo_idx >= 0 else pfd-1
@@ -123,11 +113,13 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
     else:
         pressures = patient.pressure[:pfd]
         volumes = patient.volume[:pfd]
-        
+
+    from unloading import UnloadedMaterial
     estimator =  UnloadedMaterial(geo_idx, pressures, volumes,
-                                  params, paramvec,**unload_params)    
+                                  params, paramvec,
+                                  optimize_matparams = params["optimize_matparams"],
+                                  **unload_params)    
     estimator.unload_material(patient)
-    
     params["volume_approx"] = vol_approx
  
     
