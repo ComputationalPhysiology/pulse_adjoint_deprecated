@@ -25,15 +25,15 @@ from setup_parameters import *
 def get_material_model(material_model):
 
     if material_model == "holzapfel_ogden":
-        from material import HolzapfelOgden
+        from material_models import HolzapfelOgden
         Material = HolzapfelOgden
 
     elif material_model == "guccione":
-        from material import Guccione
+        from material_models import Guccione
         Material = Guccione
         
     elif material_model == "neo_hookean":
-        from material import NeoHookean
+        from material_models import NeoHookean
         Material = NeoHookean
 
     return Material

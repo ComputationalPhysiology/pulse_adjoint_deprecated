@@ -552,7 +552,7 @@ def _get_solver(biv = False):
 
     from setup_parameters import setup_general_parameters, setup_application_parameters
     from utils import QuadratureSpace
-    from material import HolzapfelOgden
+    from material_models import HolzapfelOgden
     from lvsolver import LVSolver
     from setup_optimization import RegionalParameter
     

@@ -9,7 +9,21 @@ import numpy_mpi
 import heart_problem
 import lvsolver
 import optimal_control
+import material_models
+import active_models
 
 from iterate import iterate
 from adjoint_contraction_args import logger
 from setup_optimization import RegionalParameter
+
+
+from kinematics import (SecondOrderIdentity,
+                        DeformationGradient,
+                        Jacobian,
+                        GreenLagrangeStrain,
+                        LeftCauchyGreen,
+                        RightCauchyGreen,
+                        EulerAlmansiStrain,
+                        Invariants,
+                        PiolaTransform,
+                        InversePiolaTransform)
