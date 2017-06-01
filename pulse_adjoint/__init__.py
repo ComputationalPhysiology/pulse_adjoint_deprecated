@@ -27,3 +27,11 @@ from kinematics import (SecondOrderIdentity,
                         Invariants,
                         PiolaTransform,
                         InversePiolaTransform)
+
+
+__version__ = '1.0'
+__author__  = 'Henrik Finsberg'
+__credits__ = ['Henrik Finsberg']
+__license__ = 'LGPL-3'
+__maintainer__ = 'Henrik Finsberg'
+__email__ = 'henriknf@simula.no'

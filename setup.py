@@ -5,8 +5,8 @@ import sys
 from os.path import join as pjoin
 
 # Version number
-major = 0
-minor = 1
+major = 1
+minor = 0
 
 # scripts = [pjoin("scripts", "gotran2beat"),
 #            pjoin("scripts", "gotran2dolfin"),
