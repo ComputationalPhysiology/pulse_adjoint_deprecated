@@ -71,7 +71,7 @@ class BasicHeartProblem(collections.Iterator):
         
     def get_gamma(self, copy =True):
 
-        gamma = self.solver.parameters["material"].gamma
+        gamma = self.solver.parameters["material"].get_gamma()
         if isinstance(gamma, Constant):
             return gamma
         
@@ -261,7 +261,7 @@ class ActiveHeartProblem(BasicHeartProblem):
         if assign_prev_state:
             # Assign the previous state
             self.solver.reinit(states[-1])
-            self.solver.parameters['material'].gamma.assign(gammas[-1])
+            self.solver.parameters['material'].get_gamma().assign(gammas[-1])
         
         return self.get_state(False)
 

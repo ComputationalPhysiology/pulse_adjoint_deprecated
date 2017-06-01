@@ -123,7 +123,7 @@ class LVSolver(object):
             return split(self._w)[0]
 
     def get_gamma(self):
-        return self.parameters["material"].gamma
+        return self.parameters["material"].get_gamma()
 
     def is_incompressible(self):
         return self._compressibility.is_incompressible()

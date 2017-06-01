@@ -39,7 +39,7 @@ def get_current_control_value(solver, p_expr, control):
 def assign_new_control(solver, p_expr, control, new_control):
 
     if control == "gamma":
-        solver.parameters["material"].gamma.assign(new_control)
+        solver.parameters["material"].get_gamma().assign(new_control)
         
     elif control == "pressure":
         if p_expr.has_key("p_rv"):
@@ -419,8 +419,8 @@ def iterate_gamma(solver, target, gamma,
     
     target_reached = check_target_reached(solver, gamma, "gamma", target)
 
-    control_values  = [gamma.copy(True)]
-    prev_states = [solver.get_state().copy(True)]
+    control_values  = [gamma.copy(deepcopy=True)]
+    prev_states = [solver.get_state().copy(deepcopy=True)]
 
 
     step, nr_steps = get_initial_step(solver, gamma, "gamma", target)
@@ -432,11 +432,11 @@ def iterate_gamma(solver, target, gamma,
     logger.debug("\tNext      {:.3f}  {:.3f} ".format(get_mean(target), 
                                                           get_max(target)))
 
-    g_previous = gamma.copy()
+    g_previous = gamma.copy(deepcopy=True)
 
 
-    control_values  = [gamma.copy(True)]
-    prev_states = [solver.get_state().copy(True)]
+    control_values  = [gamma.copy(deepcopy=True)]
+    prev_states = [solver.get_state().copy(deepcopy=True)]
     
            
     first_step =True
@@ -521,7 +521,7 @@ def iterate_gamma(solver, target, gamma,
         else:
             ncrashes = 0
             logger.info("\nSUCCESFULL STEP:")
-            g_previous.assign(gamma.copy())
+            g_previous.assign(gamma.copy(deepcopy=True))
 
             target_reached = check_target_reached(solver, gamma, "gamma", target)
             if not target_reached:
@@ -531,8 +531,8 @@ def iterate_gamma(solver, target, gamma,
                     step = change_step_size(step, 1.5, "gamma")
                     print_control(step)
 
-                control_values.append(gamma.copy(True))
-                prev_states.append(solver.get_state().copy(True))
+                control_values.append(gamma.copy(deepcopy=True))
+                prev_states.append(solver.get_state().copy(deepcopy=True))
 
     
     return control_values, prev_states

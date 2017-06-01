@@ -125,6 +125,20 @@ class Material(object):
     def is_isochoric(self):
         return self.active.is_isochoric()
 
+    def get_gamma(self):
+        """
+        Return the contraciton paramter.
+        If regional, this will return one parameter
+        for each segment.
+        """
+        return self.active.get_gamma()
+    def get_activation(self):
+        """
+        Return the contraciton paramter.
+        If regional, this will return a piecewise
+        constant function (DG_0)
+        """
+        return self.active.get_activation()
 
     def strain_energy(self, F):
         r"""

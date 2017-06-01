@@ -168,7 +168,7 @@ class BasicForwardRunner(object):
        
         if phase == "active":
             # Add regulatization term to the functional
-            m = phm.solver.parameters['material'].gamma
+            m = phm.solver.parameters['material'].get_gamma()
             
         else:
 
@@ -368,7 +368,7 @@ class ActiveForwardRunner(BasicForwardRunner):
         
         
 
-        self.solver_parameters['material'].gamma.assign(gamma_previous, annotate = True)
+        self.solver_parameters['material'].get_gamma().assign(gamma_previous, annotate = True)
 
         self.cphm = ActiveHeartProblem(self.bcs,
                                        self.solver_parameters,
@@ -405,7 +405,7 @@ class ActiveForwardRunner(BasicForwardRunner):
             self.cphm.solver.reinit(w_old)
             # Assign the old gamma
             logger.info("Gamma old = {}".format(gather_broadcast(gamma_old.vector().array())))
-            self.cphm.solver.parameters['material'].gamma.assign(gamma_old)
+            self.cphm.solver.parameters['material'].get_gamma().assign(gamma_old)
             self.gamma_previous.assign(gamma_old)
 
            
@@ -429,7 +429,7 @@ class ActiveForwardRunner(BasicForwardRunner):
             self.cphm.solver.get_state().assign(w, annotate=annotate)
             
             # Now we make the final solve
-            self.cphm.solver.parameters['material'].gamma.assign(m)
+            self.cphm.solver.parameters['material'].get_gamma().assign(m)
                         
             w = self.cphm.get_state()
                       

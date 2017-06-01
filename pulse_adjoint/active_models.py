@@ -29,7 +29,11 @@ class ActiveModel(Invariants):
         return self._model
 
     def get_activation(self):
-
+        """
+        Return the contraciton paramter.
+        If regional, this will return a piecewise
+        constant function (DG_0)
+        """
         from setup_optimization import RegionalParameter
         # Activation
         if isinstance(self._gamma, RegionalParameter):
@@ -43,6 +47,11 @@ class ActiveModel(Invariants):
 
 
     def get_gamma(self):
+        """
+        Return the contraciton paramter.
+        If regional, this will return one parameter
+        for each segment.
+        """
         return self._gamma
 
     def get_component(self, component):
