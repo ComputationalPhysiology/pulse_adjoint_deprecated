@@ -100,7 +100,7 @@ def run_unloaded_optimization(params, patient):
 
 
     params["unload"] = True
-    params["h5group"] = h5group
+    params["h5group"] = ""
     
     pfd = patient.passive_filling_duration
     geo_idx = int(params["Patient_parameters"]["geometry_index"])
