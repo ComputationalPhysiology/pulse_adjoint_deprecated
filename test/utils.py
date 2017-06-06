@@ -25,7 +25,7 @@ import matplotlib as mpl
 
 import numpy as np
 
-import pulse_adjoint.material as mat
+import pulse_adjoint.models.material as mat
 from pulse_adjoint.lvsolver import LVSolver
 from pulse_adjoint.utils import Text, QuadratureSpace
 from pulse_adjoint.setup_optimization import (setup_general_parameters,
@@ -99,7 +99,7 @@ def setup_params(phase, space = "CG_1", mesh_type = "lv",
 
     
     params["sim_file"] = "test.h5"
-    params["outdir"] = "."
+
     set_log_active(True)
 
     logger.setLevel(DEBUG)
@@ -649,7 +649,6 @@ def get_application_parameters(space = "CG_1", phase="passive",
     ap_params["passive_weights"] = "-1"
     
     
-    ap_params["outdir"] = "data"
     ap_params["active_model"] = active_model
     ap_params["log_level"] = 20
     

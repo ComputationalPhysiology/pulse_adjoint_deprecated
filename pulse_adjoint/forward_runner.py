@@ -345,13 +345,8 @@ class ActiveForwardRunner(BasicForwardRunner):
 
 
 
-        # Store file with information about passive phase
-        self.h5filepath = params["sim_file"]
-        self.outdir = params["outdir"]
         self.active_contraction_iteration_number = params["active_contraction_iteration_number"]
         self.gamma_previous = gamma_previous
-        
-        
         
         BasicForwardRunner.__init__(self,
                                     solver_parameters,

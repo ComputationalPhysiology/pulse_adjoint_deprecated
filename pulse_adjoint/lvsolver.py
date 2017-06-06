@@ -15,10 +15,10 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-from dolfinimport import *
-from compressibility import get_compressibility
-from adjoint_contraction_args import logger
 from copy import deepcopy
+from .dolfinimport import *
+from .adjoint_contraction_args import logger
+from models.compressibility import get_compressibility
 
 class SolverDidNotConverge(Exception):
     pass
@@ -495,7 +495,7 @@ class Postprocess(object):
 
         """
 
-        f0 = self.solver.parameters["material"].f0
+        f0 = self.solver.parameters["material"].get_component("fiber")
         f =  self._F*f0
         
         return inner((self.chaucy_stress()*f)/f**2, f)

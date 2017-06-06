@@ -121,7 +121,7 @@ def run_unloaded_optimization(params, patient):
                                   **unload_params)    
     estimator.unload_material(patient)
     params["volume_approx"] = vol_approx
- 
+    params["h5group"] = ""
     
     
 def run_passive_optimization(params, patient):
@@ -432,7 +432,12 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False, store_soluti
         rd(x)
         rd.for_res["initial_control"] = rd.initial_paramvec,
         rd.for_res["optimal_control"] = rd.paramvec
-        store(params, rd, {})
+
+        if store_solution:
+            store(params, rd, {})
+            
+        if return_solution:
+            return params, rd, {}
 
     
     else:

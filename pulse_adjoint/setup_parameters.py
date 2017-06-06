@@ -340,8 +340,7 @@ def setup_application_parameters(material_model = "holzapfel_ogden"):
     +-------------------------------------+------------------------------------------------------+------------------------------------+
     | active_contraction_iteration_number | 0                                                    | Iteration in the active phase      |
     +-------------------------------------+------------------------------------------------------+------------------------------------+
-    | outdir                              |                                                      | Direction for the result           |
-    +-------------------------------------+------------------------------------------------------+------------------------------------+
+
 
     """
     params = Parameters("Application_parmeteres")
@@ -352,7 +351,6 @@ def setup_application_parameters(material_model = "holzapfel_ogden"):
     params.add("sim_file", "result.h5")
     # Store the results in the file within a folder
     params.add("h5group", "")
-    params.add("outdir", os.path.dirname(params["sim_file"]))
 
     ## Parameters ##
     

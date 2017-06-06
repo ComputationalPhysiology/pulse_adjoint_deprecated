@@ -3,6 +3,7 @@
 *.htm
 *.html
 *.pyc
+*.pye
 *.aux
 *.log
 *.bbl

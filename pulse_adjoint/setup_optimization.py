@@ -15,25 +15,25 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-from dolfinimport import *
 import numpy as np
-from utils import Object, Text, print_line, print_head
-from adjoint_contraction_args import *
-from numpy_mpi import *
-from setup_parameters import *
+from .dolfinimport import *
+from .utils import Object, Text, print_line, print_head
+from .adjoint_contraction_args import *
+from .numpy_mpi import *
+from .setup_parameters import *
 
 def get_material_model(material_model):
 
     if material_model == "holzapfel_ogden":
-        from material_models import HolzapfelOgden
+        from models.material import HolzapfelOgden
         Material = HolzapfelOgden
 
     elif material_model == "guccione":
-        from material_models import Guccione
+        from models.material import Guccione
         Material = Guccione
         
     elif material_model == "neo_hookean":
-        from material_models import NeoHookean
+        from models.material import NeoHookean
         Material = NeoHookean
 
     return Material

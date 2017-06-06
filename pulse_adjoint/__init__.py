@@ -9,8 +9,9 @@ import numpy_mpi
 import heart_problem
 import lvsolver
 import optimal_control
-import material_models
-import active_models
+
+import models
+import postprocess
 
 from iterate import iterate
 from adjoint_contraction_args import logger

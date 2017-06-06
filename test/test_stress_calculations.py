@@ -11,7 +11,7 @@ the deformation gradient into isochoring and deviatoric component.
 from dolfin import *
 import numpy as np
 from pulse_adjoint.lvsolver import LVSolver
-from pulse_adjoint.material_models import HolzapfelOgden, NeoHookean, Guccione
+from pulse_adjoint.models.material import HolzapfelOgden, NeoHookean, Guccione
 from pulse_adjoint.setup_optimization import (setup_solver_parameters,
                                               setup_general_parameters)
 from pulse_adjoint.adjoint_contraction_args import logger
