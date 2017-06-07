@@ -27,7 +27,7 @@ def make_logger(name, level = logging.INFO):
 
     mpi_filt = lambda: None
     def log_if_proc0(record):
-        if dolfin.mpi_comm_world().rank == 0:
+        if dolfin.MPI.rank(dolfin.mpi_comm_world()) == 0:
             return 1
         else:
             return 0

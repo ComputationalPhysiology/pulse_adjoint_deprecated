@@ -42,13 +42,7 @@ class LVSolver(object):
         self.iterative_solver = False
 
         # Update solver parameters
-        if params.has_key("solve"):
-            if params["solve"].has_key("nonlinear_solver") \
-              and params["solve"]["nonlinear_solver"] == "newton":
-                self.use_snes = False
-            else:
-                self.use_snes = True
-              
+        if params.has_key("solve"):              
             prm = self.default_solver_parameters()
 
             for k, v in params["solve"].iteritems():
@@ -59,7 +53,6 @@ class LVSolver(object):
                 else:
                     prm[k] = v
         else:
-            self.use_snes = False
             prm= self.default_solver_parameters()
             
         self.parameters["solve"] = prm
@@ -76,9 +69,9 @@ class LVSolver(object):
         
     def default_solver_parameters(self):
 
-        nsolver = "snes_solver" if self.use_snes else "newton_solver"
+        nsolver = "newton_solver"
 
-        prm = {"nonlinear_solver": "snes", "snes_solver":{}} if self.use_snes else {"nonlinear_solver": "newton", "newton_solver":{}}
+        prm = {"nonlinear_solver": "newton", "newton_solver":{}}
 
         prm[nsolver]['absolute_tolerance'] = 1E-8
         prm[nsolver]['relative_tolerance'] = 1E-12
@@ -162,11 +155,6 @@ class LVSolver(object):
                                               self._dG)
 
 
-        PETScOptions.set('ksp_type', 'preonly')
-        PETScOptions.set('pc_type', 'lu')
-        PETScOptions.set('pc_factor_mat_solver_package', 'mumps')
-        PETScOptions.set("mat_mumps_icntl_7", 6)
- 
         solver = NonlinearVariationalSolver(problem)
         solver.parameters.update(self.parameters["solve"])
         
@@ -197,7 +185,7 @@ class LVSolver(object):
                 if self.relax_adjoint_solver:
                     # Increase the tolerance slightly
                     # (don't know why we need to do this)
-                    nsolver = "snes_solver" if self.use_snes else "newton_solver"
+                    nsolver =  "newton_solver"
                     solver.parameters[nsolver]['relative_tolerance'] /= 0.001
                     solver.parameters[nsolver]['absolute_tolerance'] /= 0.1
                     

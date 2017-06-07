@@ -72,13 +72,13 @@ def setup_solver_parameters():
     for options
 
     """
-    solver = "snes"
+    solver = "newton"
     solver_str = "{}_solver".format(solver)
     # solver_parameters = {"snes_solver":{}}
     solver_parameters = {solver_str:{}}
 
     solver_parameters["nonlinear_solver"] = solver
-    solver_parameters[solver_str]["method"] = "newtontr"
+    #solver_parameters[solver_str]["method"] = "newtontr"
     solver_parameters[solver_str]["maximum_iterations"] = 50
     solver_parameters[solver_str]["absolute_tolerance"] = 1.0e-5
     solver_parameters[solver_str]["linear_solver"] = "lu"
