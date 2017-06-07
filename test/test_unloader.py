@@ -2,11 +2,11 @@ from pulse_adjoint.unloading import *
 from pulse_adjoint.setup_parameters import setup_general_parameters
 setup_general_parameters()
 
-from patient_data import LVTestPatient
+from pulse_adjoint import LVTestPatient
 geo_lv = LVTestPatient()
 p_lv= 2.0
 
-from patient_data import BiVTestPatient
+from pulse_adjoint import BiVTestPatient
 geo_biv = BiVTestPatient()
 p_biv= (2.0, 1.0)
 

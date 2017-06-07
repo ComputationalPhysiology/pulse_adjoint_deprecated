@@ -48,7 +48,6 @@ from pulse_adjoint.run_optimization import solve_oc_problem, run_unloaded_optimi
 
 from mesh_generation.idealized_geometry import mark_strain_regions
 from mesh_generation.generate_mesh import setup_fiber_parameters
-from mesh_generation.mesh_utils import load_geometry_from_h5, generate_fibers
 from mesh_generation.strain_regions import make_crl_basis
 
 # This is temporary
@@ -252,7 +251,7 @@ def get_fiber_params(fiber_angle):
 
 def create_geometry(ndiv, fiber_params):
 
-    from patient_data import LVTestPatient
+    from pulse_adjoint import LVTestPatient
     geo = LVTestPatient()
     mesh = geo.mesh
 
@@ -802,7 +801,7 @@ def run_unloaded_optimization(params, strains, vols, ap_params, pressures,
 
 def set_patient_attributes(params, pressures, vols, strains, unload):
 
-    from patient_data import FullPatient
+    from pulse_adjoint import FullPatient
     patient = FullPatient(init=False)
     patient.mesh = params["mesh"]
     patient.ffun = params["facet_function"]

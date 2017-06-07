@@ -39,7 +39,7 @@ spaces = ["regional", "CG_1"]
 phases = ["passive", "active"]
 active_models = ["active_strain", "active_stress"]
 
-from patient_data import LVTestPatient
+from pulse_adjoint import LVTestPatient
 patient = LVTestPatient()
 
 

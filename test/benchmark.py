@@ -15,11 +15,11 @@ import numpy as np
 from pulse_adjoint.setup_parameters import (setup_adjoint_contraction_parameters,
                                             setup_material_parameters, setup_general_parameters)
 from pulse_adjoint.lvsolver import LVSolver
-from patient_data import LVTestPatient
 from pulse_adjoint.iterate import iterate_pressure, iterate_gamma
 from pulse_adjoint.setup_optimization import make_solver_params
 from pulse_adjoint.models.material import Guccione
 
+from pulse_adjoint import LVTestPatient
 setup_general_parameters()
 
 
