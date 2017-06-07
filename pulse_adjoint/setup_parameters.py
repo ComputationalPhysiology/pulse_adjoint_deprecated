@@ -15,8 +15,8 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-from dolfinimport import *
-from adjoint_contraction_args import *
+from .dolfinimport import *
+from .adjoint_contraction_args import *
 
 def check_parameters(params):
     """Check that parameters are consistent.

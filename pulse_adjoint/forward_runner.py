@@ -287,6 +287,7 @@ class BasicForwardRunner(object):
 
 class ActiveForwardRunner(BasicForwardRunner):
     """
+
     The active forward runner 
 
     Parameters
@@ -313,7 +314,7 @@ class ActiveForwardRunner(BasicForwardRunner):
           params = setup_adjoint_contraction_parameter()
           params['phase'] = 'active_contraction'
           # Initialize patient data
-          patient = initialize_patient_data(param['Patient_parameters'], False)
+          patient = initialize_patient_data(param['Patient_parameters'])
 
           # Start with the first point with active contraction.
           # Make sure to run the passive inflation first!
@@ -451,7 +452,7 @@ class PassiveForwardRunner(BasicForwardRunner):
           params = setup_adjoint_contraction_parameter()
           params['phase'] = 'passive_inflation'
           # Initialize patient data
-          patient = initialize_patient_data(param['Patient_parameters'], False)
+          patient = initialize_patient_data(param['Patient_parameters'])
 
           #Load patient data, and set up the simulation
           measurements, solver_parameters, pressure, paramvec = setup_simulation(params, patient)

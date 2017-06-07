@@ -138,7 +138,7 @@ def run_passive_optimization(params, patient):
       setup_general_parameters()
       params = setup_adjoint_contraction_parameter()
       params['phase'] = 'passive_inflation'
-      patient = initialize_patient_data(param['Patient_parameters'], False)
+      patient = initialize_patient_data(param['Patient_parameters'])
       run_passive_optimization(params, patient)
 
 

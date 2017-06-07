@@ -1,9 +1,28 @@
-from dolfinimport import *
+#!/usr/bin/env python
+# Copyright (C) 2016 Henrik Finsberg
+#
+# This file is part of PULSE-ADJOINT.
+#
+# PULSE-ADJOINT is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# PULSE-ADJOINT is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
-from adjoint_contraction_args import logger
-from numpy_mpi import *
-from lvsolver import SolverDidNotConverge
 import operator as op
+
+from .dolfinimport import *
+from .adjoint_contraction_args import logger
+from .numpy_mpi import *
+from .lvsolver import SolverDidNotConverge
+
 
 MAX_GAMMA_STEP = 0.05
 MAX_PRESSURE_STEP = 0.2
@@ -550,16 +569,16 @@ def iterate(control, *args, **kwargs):
 
 def _get_solver(biv = False):
 
-    from setup_parameters import setup_general_parameters, setup_application_parameters
-    from utils import QuadratureSpace
-    from material_models import HolzapfelOgden
-    from lvsolver import LVSolver
-    from setup_optimization import RegionalParameter
+    from .setup_parameters import setup_general_parameters, setup_application_parameters
+    from .utils import QuadratureSpace
+    from .models.material import HolzapfelOgden
+    from .lvsolver import LVSolver
+    from .setup_optimization import RegionalParameter
     
     setup_general_parameters()
     params = setup_application_parameters()
 
-    from patient_data import LVTestPatient, BiVTestPatient
+    from .patient_data import LVTestPatient, BiVTestPatient
 
     if biv:
         patient = BiVTestPatient()

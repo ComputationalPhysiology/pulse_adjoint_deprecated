@@ -56,7 +56,7 @@ def update_unloaded_patient(params, patient):
     return patient
 
     
-def initialize_patient_data(patient_parameters, *args):
+def initialize_patient_data(patient_parameters):
     """
     Make an instance of patient from :py:module`patient_data`
     baed on th given parameters
@@ -74,12 +74,12 @@ def initialize_patient_data(patient_parameters, *args):
     **Example of usage**::
     
       params = setup_patient_parameters()
-      patient = initialize_patient_data(params, False)
+      patient = initialize_patient_data(params)
 
     """
     
     logger.info("Initialize patient data")
-    from patient_data import Patient
+    from .patient_data import Patient
     
     patient = Patient(**patient_parameters)
 

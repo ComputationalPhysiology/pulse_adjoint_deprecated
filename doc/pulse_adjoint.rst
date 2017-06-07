@@ -1,6 +1,16 @@
 pulse_adjoint package
 =====================
 
+Subpackages
+-----------
+
+.. toctree::
+
+    pulse_adjoint.models
+    pulse_adjoint.patient_data
+    pulse_adjoint.postprocess
+    pulse_adjoint.unloading
+
 Submodules
 ----------
 
@@ -8,14 +18,6 @@ pulse_adjoint.adjoint_contraction_args module
 ---------------------------------------------
 
 .. automodule:: pulse_adjoint.adjoint_contraction_args
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-pulse_adjoint.compressibility module
-------------------------------------
-
-.. automodule:: pulse_adjoint.compressibility
     :members:
     :undoc-members:
     :show-inheritance:
@@ -44,18 +46,26 @@ pulse_adjoint.heart_problem module
     :undoc-members:
     :show-inheritance:
 
-pulse_adjoint.lvsolver module
------------------------------
+pulse_adjoint.iterate module
+----------------------------
 
-.. automodule:: pulse_adjoint.lvsolver
+.. automodule:: pulse_adjoint.iterate
     :members:
     :undoc-members:
     :show-inheritance:
 
-pulse_adjoint.material module
+pulse_adjoint.kinematics module
+-------------------------------
+
+.. automodule:: pulse_adjoint.kinematics
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pulse_adjoint.lvsolver module
 -----------------------------
 
-.. automodule:: pulse_adjoint.material
+.. automodule:: pulse_adjoint.lvsolver
     :members:
     :undoc-members:
     :show-inheritance:
@@ -68,10 +78,26 @@ pulse_adjoint.numpy_mpi module
     :undoc-members:
     :show-inheritance:
 
+pulse_adjoint.optimal_control module
+------------------------------------
+
+.. automodule:: pulse_adjoint.optimal_control
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 pulse_adjoint.optimization_targets module
 -----------------------------------------
 
 .. automodule:: pulse_adjoint.optimization_targets
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+pulse_adjoint.pa_io module
+--------------------------
+
+.. automodule:: pulse_adjoint.pa_io
     :members:
     :undoc-members:
     :show-inheritance:
@@ -100,18 +126,10 @@ pulse_adjoint.setup_optimization module
     :undoc-members:
     :show-inheritance:
 
-pulse_adjoint.store_opt_results module
---------------------------------------
+pulse_adjoint.setup_parameters module
+-------------------------------------
 
-.. automodule:: pulse_adjoint.store_opt_results
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-pulse_adjoint.synthetic_data module
------------------------------------
-
-.. automodule:: pulse_adjoint.synthetic_data
+.. automodule:: pulse_adjoint.setup_parameters
     :members:
     :undoc-members:
     :show-inheritance:

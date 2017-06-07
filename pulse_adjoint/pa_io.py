@@ -2,9 +2,9 @@ import h5py, os, mpi4py, petsc4py, yaml
 import numpy as np
 import dolfin, dolfin_adjoint
 
-from utils import Text
-from adjoint_contraction_args import logger
-from numpy_mpi import *
+from .utils import Text
+from .adjoint_contraction_args import logger
+from .numpy_mpi import *
 
 parallel_h5py = h5py.h5.get_config().mpi
 
@@ -365,9 +365,9 @@ def test_store():
 
 
     from mesh_generation.mesh_utils import load_geometry_from_h5
-    from setup_optimization import make_solver_params, setup_adjoint_contraction_parameters, setup_general_parameters
-    from forward_runner import PassiveForwardRunner
-    from run_optimization import load_targets
+    from .setup_optimization import make_solver_params, setup_adjoint_contraction_parameters, setup_general_parameters
+    from .forward_runner import PassiveForwardRunner
+    from .run_optimization import load_targets
     
 
     setup_general_parameters()

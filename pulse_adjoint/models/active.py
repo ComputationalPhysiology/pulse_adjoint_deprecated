@@ -86,7 +86,7 @@ class ActiveStress(ActiveModel):
         gamma = self.get_activation()
         
         if diff == 0:
-            return Constant(0.5)*gamma*(I4f-1)
+            return df.Constant(0.5)*gamma*(I4f-1)
 
         elif diff == 1:
             return gamma

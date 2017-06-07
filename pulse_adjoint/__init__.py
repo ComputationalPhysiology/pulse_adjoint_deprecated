@@ -1,3 +1,9 @@
+from patient_data import Patient, FullPatient, LVTestPatient, BiVTestPatient
+import patient_data
+import patient_data.load
+import patient_data.utils
+import patient_data.patient
+
 import adjoint_contraction_args as args
 
 import forward_runner
@@ -12,6 +18,7 @@ import optimal_control
 
 import models
 import postprocess
+import unloading
 
 from iterate import iterate
 from adjoint_contraction_args import logger
