@@ -5,5 +5,5 @@ import utils
 import load
 import vtk_utils
 from cardiac_work import *
-from postprocess import Postprocess
+from postprocess import PostProcess
 

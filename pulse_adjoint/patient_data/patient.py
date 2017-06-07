@@ -21,7 +21,7 @@ import os, argparse, math, yaml
 from numpy_mpi import *
 
 from .utils import logger
-import .load, utils
+import load, utils
 
 mesh_types = ["lv","biv"]
 patient_types =  [ "full", "lv", "biv", "pah", "work", "test"]
