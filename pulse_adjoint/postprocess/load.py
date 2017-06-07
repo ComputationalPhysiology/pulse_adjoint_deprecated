@@ -26,7 +26,7 @@ This will be included later.
 import os
 import numpy as np
 from .args import *
-import .utils
+import utils
 
 
 attributes = ["pressure", "volume", "RVP", "RVV",
