@@ -39,7 +39,7 @@ def get_constant(value_size, value_rank, val):
         c = Constant([val]*value_size)
     return c
     
-def run_unloaded_optimization(params, patient, initial_guess = 30.0):
+def run_unloaded_optimization(params, patient):
 
 
     # Run an inital optimization as we are used to
@@ -56,12 +56,6 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
                "end-diastolic geometry as reference.")
         logger.warning(msg)
         estimate_initial_guess = False
-        
-
-    # if params["Patient_parameters"]["geometry_index"] == "-1":
-        # initial_guess = 1.0
-    # else:
-    initial_guess = 30.0
 
 
     # Interpolation of displacement does not work with dolfin-adjoint
@@ -103,15 +97,11 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
             params, rd, opt_result = solve_oc_problem(params, rd, paramvec,
                                                       return_solution = True,
                                                       store_solution = True)
-        else:
-            c = get_constant(paramvec.value_size(), paramvec.value_rank(), initial_guess)
-            paramvec.assign(c)
-        
+
 
     params["unload"] = True
-    params["h5group"] = h5group
+    params["h5group"] = ""
     
-    from unloading import UnloadedMaterial
     pfd = patient.passive_filling_duration
     geo_idx = int(params["Patient_parameters"]["geometry_index"])
     geo_idx = geo_idx if geo_idx >= 0 else pfd-1
@@ -123,13 +113,15 @@ def run_unloaded_optimization(params, patient, initial_guess = 30.0):
     else:
         pressures = patient.pressure[:pfd]
         volumes = patient.volume[:pfd]
-        
+
+    from unloading import UnloadedMaterial
     estimator =  UnloadedMaterial(geo_idx, pressures, volumes,
-                                  params, paramvec,**unload_params)    
+                                  params, paramvec,
+                                  optimize_matparams = params["optimize_matparams"],
+                                  **unload_params)    
     estimator.unload_material(patient)
-    
     params["volume_approx"] = vol_approx
- 
+    params["h5group"] = ""
     
     
 def run_passive_optimization(params, patient):
@@ -146,7 +138,7 @@ def run_passive_optimization(params, patient):
       setup_general_parameters()
       params = setup_adjoint_contraction_parameter()
       params['phase'] = 'passive_inflation'
-      patient = initialize_patient_data(param['Patient_parameters'], False)
+      patient = initialize_patient_data(param['Patient_parameters'])
       run_passive_optimization(params, patient)
 
 
@@ -342,10 +334,10 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
 
     """
     
-    
+
     #Get initial guess for gamma
     if params["active_contraction_iteration_number"] == 0:
-        
+
         zero = get_constant(gamma.value_size(), gamma.value_rank(), 0.0)
         gamma.assign(zero)
 
@@ -360,16 +352,17 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
             
         gamma.assign(g_temp)
             
+
     # Load targets
     optimization_targets, bcs = load_targets(params, solver_parameters, measurements)
-   
+
     for_run = ActiveForwardRunner(solver_parameters,
                                   pressure,
                                   bcs,
                                   optimization_targets,
                                   params,
                                   gamma)
- 
+
     # Update weights so that the initial value of the
     # functional is 0.1
     if params["adaptive_weights"]:
@@ -439,7 +432,12 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False, store_soluti
         rd(x)
         rd.for_res["initial_control"] = rd.initial_paramvec,
         rd.for_res["optimal_control"] = rd.paramvec
-        store(params, rd, {})
+
+        if store_solution:
+            store(params, rd, {})
+            
+        if return_solution:
+            return params, rd, {}
 
     
     else:
@@ -658,6 +656,7 @@ def get_optimization_targets(params, solver_parameters):
 
     """
     
+    logger.debug("Get optimization targets")
 
     p = params["Optimization_targets"]
     mesh = solver_parameters["mesh"]
@@ -673,28 +672,38 @@ def get_optimization_targets(params, solver_parameters):
     targets = {"regularization": Regularization(mesh,spacestr, reg_par)}
 
     if p["volume"]:
-        
+        logger.debug("Load volume target")
+
         if solver_parameters["markers"].has_key("ENDO_LV"):
-            marker = "ENDO_LV"
+            marker = solver_parameters["markers"]["ENDO_LV"][0]
         else:
-            marker = "ENDO"
+            marker = solver_parameters["markers"]["ENDO"][0]
             
+
+        logger.debug("Make surface meausure for LV endo with marker {}".format(marker))
         dS = Measure("exterior_facet",
                      subdomain_data = solver_parameters["facet_function"],
-                     domain = mesh)(solver_parameters["markers"][marker][0])
+                     domain = mesh)(marker)
         
+        logger.debug("Load VolumeTarget")
         targets["volume"] = VolumeTarget(mesh,dS, "LV", approx = params["volume_approx"])
 
     if p["rv_volume"]:
             
+        logger.debug("Load RV volume target")
+
+        marker = solver_parameters["markers"]["ENDO_RV"][0]
+        logger.debug("Make surface meausure for LV endo with marker {}".format(marker))
         dS = Measure("exterior_facet",
                      subdomain_data = solver_parameters["facet_function"],
-                     domain = mesh)(solver_parameters["markers"]["ENDO_RV"][0])
+                     domain = mesh)(marker)
         
+        logger.debug("Load VolumeTarget")
         targets["rv_volume"] = VolumeTarget(mesh,dS, "RV", approx = params["volume_approx"])
 
     if p["regional_strain"]:
 
+        logger.debug("Load regional strain target")
         dX = Measure("dx",
                      subdomain_data = solver_parameters["mesh_function"],
                      domain = mesh)
@@ -708,7 +717,7 @@ def get_optimization_targets(params, solver_parameters):
             # We need to recompute strains wrt reference as diastasis
          
             
-
+            logger.debug("Load displacment for recomputing strain with respect to different reference")
             if params["strain_reference"] == "0":
                 group = "1"
             else:
@@ -721,7 +730,9 @@ def get_optimization_targets(params, solver_parameters):
 
             family, degree = solver_parameters["state_space"].split(":")[0].split("_")
             u = Function(VectorFunctionSpace(solver_parameters["mesh"], family, int(degree)))
-            
+
+
+            logger.debug("Load displacement from state number {}.".format(group))
             with HDF5File(mpi_comm_world(), params["sim_file"], 'r') as h5file:
         
                 # Get previous state
@@ -735,8 +746,10 @@ def get_optimization_targets(params, solver_parameters):
 
                 V = VectorFunctionSpace(solver_parameters["mesh"], "CG", 1)
                 if params["strain_approx"] == "project":
+                    logger.debug("Project displacement")
                     u = project(u, V)
                 else:
+                    logger.debug("Interpolate displacement")
                     u = interpolate(u, V)
                     
                 
@@ -744,8 +757,10 @@ def get_optimization_targets(params, solver_parameters):
                 
 
         else:
+            logger.debug("Do not recompute strains with respect than difference reference")
             F_ref = Identity(3)
 
+        logger.debug("Get RegionalStrainTarget")
         targets["regional_strain"] = \
             RegionalStrainTarget(mesh,
                                  solver_parameters["crl_basis"],
@@ -773,7 +788,7 @@ def load_targets(params, solver_parameters, measurements):
 
     """
     
-    
+    logger.debug(Text.blue("Load optimization targets"))
     #Solve calls are not registred by libajoint
     logger.debug(Text.yellow("Stop annotating"))
     parameters["adjoint"]["stop_annotating"] = True
@@ -781,11 +796,11 @@ def load_targets(params, solver_parameters, measurements):
     
     # Load optimization targets
     optimization_targets = get_optimization_targets(params, solver_parameters)
-
+    
     # Load target data
     optimization_targets, bcs = \
         load_target_data(measurements, params, optimization_targets)
-
+    
     
     
     

@@ -168,7 +168,7 @@ class BasicForwardRunner(object):
        
         if phase == "active":
             # Add regulatization term to the functional
-            m = phm.solver.parameters['material'].gamma
+            m = phm.solver.parameters['material'].get_gamma()
             
         else:
 
@@ -287,6 +287,7 @@ class BasicForwardRunner(object):
 
 class ActiveForwardRunner(BasicForwardRunner):
     """
+
     The active forward runner 
 
     Parameters
@@ -313,7 +314,7 @@ class ActiveForwardRunner(BasicForwardRunner):
           params = setup_adjoint_contraction_parameter()
           params['phase'] = 'active_contraction'
           # Initialize patient data
-          patient = initialize_patient_data(param['Patient_parameters'], False)
+          patient = initialize_patient_data(param['Patient_parameters'])
 
           # Start with the first point with active contraction.
           # Make sure to run the passive inflation first!
@@ -345,13 +346,8 @@ class ActiveForwardRunner(BasicForwardRunner):
 
 
 
-        # Store file with information about passive phase
-        self.h5filepath = params["sim_file"]
-        self.outdir = params["outdir"]
         self.active_contraction_iteration_number = params["active_contraction_iteration_number"]
         self.gamma_previous = gamma_previous
-        
-        
         
         BasicForwardRunner.__init__(self,
                                     solver_parameters,
@@ -368,7 +364,7 @@ class ActiveForwardRunner(BasicForwardRunner):
         
         
 
-        self.solver_parameters['material'].gamma.assign(gamma_previous, annotate = True)
+        self.solver_parameters['material'].get_gamma().assign(gamma_previous, annotate = True)
 
         self.cphm = ActiveHeartProblem(self.bcs,
                                        self.solver_parameters,
@@ -405,7 +401,7 @@ class ActiveForwardRunner(BasicForwardRunner):
             self.cphm.solver.reinit(w_old)
             # Assign the old gamma
             logger.info("Gamma old = {}".format(gather_broadcast(gamma_old.vector().array())))
-            self.cphm.solver.parameters['material'].gamma.assign(gamma_old)
+            self.cphm.solver.parameters['material'].get_gamma().assign(gamma_old)
             self.gamma_previous.assign(gamma_old)
 
            
@@ -429,7 +425,7 @@ class ActiveForwardRunner(BasicForwardRunner):
             self.cphm.solver.get_state().assign(w, annotate=annotate)
             
             # Now we make the final solve
-            self.cphm.solver.parameters['material'].gamma.assign(m)
+            self.cphm.solver.parameters['material'].get_gamma().assign(m)
                         
             w = self.cphm.get_state()
                       
@@ -456,7 +452,7 @@ class PassiveForwardRunner(BasicForwardRunner):
           params = setup_adjoint_contraction_parameter()
           params['phase'] = 'passive_inflation'
           # Initialize patient data
-          patient = initialize_patient_data(param['Patient_parameters'], False)
+          patient = initialize_patient_data(param['Patient_parameters'])
 
           #Load patient data, and set up the simulation
           measurements, solver_parameters, pressure, paramvec = setup_simulation(params, patient)
@@ -528,16 +524,14 @@ class PassiveForwardRunner(BasicForwardRunner):
     def assign_material_parameters(self, m):
 
         self.paramvec.assign(m)
-        npassive = sum([ not self.params["Optimization_parameters"][k] \
-                     for k in ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]])
-    
+        npassive = sum([not v for v in self.params["Fixed_parameters"].values()])
 
-        lst = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
+        lst = self.params["Fixed_parameters"].keys()
 
         
         if npassive == 1:
-            fixed_idx = np.nonzero([not self.params["Optimization_parameters"][k] for k in lst])[0][0]
-            par = lst[fixed_idx].split("fix_")[-1]
+            fixed_idx = np.nonzero([not self.params["Fixed_parameters"][k] for k in lst])[0][0]
+            par = lst[fixed_idx]
             if self.params["matparams_space"] == "regional":
                 paramvec = project(self.paramvec.get_function(), self.paramvec.get_ind_space())
             else:
@@ -547,7 +541,7 @@ class PassiveForwardRunner(BasicForwardRunner):
             mat.assign(paramvec)
         else:
             paramvec_split = split(self.paramvec)
-            fixed_idx = np.nonzero([not self.params["Optimization_parameters"][k] for k in lst])[0]
+            fixed_idx = np.nonzero([not self.params["Fixed_parameters"][k] for k in lst])[0]
 
             
             for it, idx in enumerate(fixed_idx):

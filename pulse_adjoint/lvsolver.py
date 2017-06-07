@@ -15,10 +15,10 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-from dolfinimport import *
-from compressibility import get_compressibility
-from adjoint_contraction_args import logger
 from copy import deepcopy
+from .dolfinimport import *
+from .adjoint_contraction_args import logger
+from models.compressibility import get_compressibility
 
 class SolverDidNotConverge(Exception):
     pass
@@ -116,7 +116,7 @@ class LVSolver(object):
             return split(self._w)[0]
 
     def get_gamma(self):
-        return self.parameters["material"].gamma
+        return self.parameters["material"].get_gamma()
 
     def is_incompressible(self):
         return self._compressibility.is_incompressible()
@@ -233,6 +233,7 @@ class LVSolver(object):
         """
         material = self.parameters["material"]
         N =  self.parameters["facet_normal"]
+        X = SpatialCoordinate(self.parameters["mesh"])
         ds = Measure("exterior_facet", subdomain_data \
                      = self.parameters["facet_function"])
         self._bcs = []
@@ -246,11 +247,10 @@ class LVSolver(object):
         self._I = Identity(dim)
         
         # Deformation gradient
-        self._F = grad(u) + self._I
+        self._F = variable(grad(u) + self._I)
         self._C = self._F.T * self._F
         self._E = 0.5*(self._C - self._I)
         J = det(self._F)
-        
                 
         # Internal energy
         self._strain_energy = material.strain_energy(self._F)
@@ -274,13 +274,14 @@ class LVSolver(object):
         if self.parameters["bc"].has_key("neumann"):
             for neumann_bc in self.parameters["bc"]["neumann"]:
                 pressure, marker = neumann_bc
-                self._G += inner(J*pressure*dot(inv(self._F).T, N), du)*ds(marker)
-
+                n = cofac(self._F) * N
+                self._G += inner(pressure*du, n)*ds(marker)
+         
+                
         # Other body forces
-        if self.parameters["bc"].has_key("body_force"):
-           
-            self._G += -derivative(inner(self.parameters["bc"]["body_force"], u)*dx, u, v)
-          
+        if self.parameters["bc"].has_key("body_force"):           
+            self._G += -derivative(inner(self.parameters["bc"]["body_force"], u)*dx, u, du)
+
         
         # Robin BC
         if self.parameters["bc"].has_key("robin"):
@@ -482,7 +483,7 @@ class Postprocess(object):
 
         """
 
-        f0 = self.solver.parameters["material"].f0
+        f0 = self.solver.parameters["material"].get_component("fiber")
         f =  self._F*f0
         
         return inner((self.chaucy_stress()*f)/f**2, f)

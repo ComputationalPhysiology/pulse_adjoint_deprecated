@@ -32,7 +32,9 @@ except:
 
 def save_logger(params):
 
-    logfile = params["outdir"] + "/output.log"    
+    import os
+    outdir = os.path.dirname(params["sim_file"])
+    logfile = outdir + "/output.log"    
     logging.basicConfig(filename=logfile,
                         filemode='a',
                         format='%(message)s',

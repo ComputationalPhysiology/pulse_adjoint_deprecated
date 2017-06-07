@@ -30,14 +30,15 @@ def main_try():
             assert outfile == params["sim_file"]
             
             if not keep:
-                params["outdir"] = "."
+
                 params["sim_file"] = os.path.basename(params["sim_file"])
             
                 # Assume mesh is copied to current directory
                 params["Patient_parameters"]["mesh_path"] = os.path.basename(params["Patient_parameters"]["mesh_path"])
                 params["Patient_parameters"]["pressure_path"] = os.path.basename(params["Patient_parameters"]["pressure_path"])
 
-            shutil.copy(infile, params["outdir"] + "/input.yml")
+            outdir = os.path.dirname(params["sim_file"])
+            shutil.copy(infile, outdir + "/input.yml")
             main(params)
 
         except Exception as ex:
@@ -64,14 +65,14 @@ def main2():
     assert outfile == params["sim_file"]
             
     if not keep:
-        params["outdir"] = "."
+
         params["sim_file"] = os.path.basename(params["sim_file"])
         # Assume mesh is copied to current directory
         params["Patient_parameters"]["mesh_path"] = os.path.basename(params["Patient_parameters"]["mesh_path"])
         params["Patient_parameters"]["pressure_path"] = os.path.basename(params["Patient_parameters"]["pressure_path"])
 
-    
-    shutil.copy(infile, params["outdir"] + "/input.yml")
+    outdir = os.path.dirname(params["sim_file"])
+    shutil.copy(infile, outdir + "/input.yml")
     main(params)
 
 

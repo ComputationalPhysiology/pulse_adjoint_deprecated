@@ -18,7 +18,7 @@ from dolfinimport import *
 from utils import list_sum
 import numpy as np
 from numpy_mpi import *
-
+from adjoint_contraction_args import logger
 
 __all__ = ["RegionalStrainTarget", "FullStrainTarget",
            "VolumeTarget", "Regularization"]
@@ -148,8 +148,9 @@ class RegionalStrainTarget(OptimizationTarget):
     """Class for regional strain optimization
     target
     """                                  
-    def __init__(self, mesh, crl_basis, dmu, weights=None, nregions = None,
-                 tensor="gradu", F_ref = None, approx = "original",
+    def __init__(self, mesh, crl_basis, dmu, weights=None,
+                 nregions = None,tensor="gradu",
+                 F_ref = None, approx = "original",
                  map_strain = False):
         """
         Initialize regional strain target
@@ -174,6 +175,8 @@ class RegionalStrainTarget(OptimizationTarget):
         
         """
         self._name = "Regional Strain"
+
+        assert tensor in ["gradu", "E"]
         self._tensor = tensor
         self.approx = approx
         self._map_strain = map_strain
@@ -184,20 +187,33 @@ class RegionalStrainTarget(OptimizationTarget):
         dim = mesh.geometry().dim()
         self.dim = dim
         self._F_ref = F_ref if F_ref is not None else Identity(dim)
-
-
+        
+        
+        logger.debug("Load local basis.")
+        logger.debug("Map local basis to new reference: {}".format(map_strain))
         self.crl_basis = []
         for l in ["circumferential", "radial", "longitudinal"]:
+            msg = "{} : ".format(l)
+
             if crl_basis.has_key(l):
+                msg += "True"
+                logger.debug(msg)
 
                 if map_strain:
-                    e_ = project(self._F_ref * crl_basis[l],
-                                 crl_basis[l].function_space())
+                    
+                    Fe = self._F_ref * crl_basis[l]
+                    logger.debug("Project")
+                    e_ = project(Fe)
+                    logger.debug("Normalize")
                     e = normalize_vector_field(e_)
                 else:
                     e = crl_basis[l]
                     
                 self.crl_basis.append(e)
+                
+            else:
+                msg += "False"
+                logger.debug(msg)
 
         self.nbasis = len(self.crl_basis)
 
@@ -211,10 +227,7 @@ class RegionalStrainTarget(OptimizationTarget):
         else:
             self.weights_arr = weights
 
-        
-        # self._F_ref = Identity(dim)
-
-        
+             
         self.target_space = VectorFunctionSpace(mesh, "R", 0, dim = self.nbasis)
         self.weight_space = TensorFunctionSpace(mesh, "R", 0)
         self.dmu = dmu
@@ -341,22 +354,29 @@ class RegionalStrainTarget(OptimizationTarget):
             
         I = Identity(self.dim)
         F = (grad(u_int) + I)*inv(self._F_ref)
+        J = det(F)
         # Compute the strains
         if self._tensor == "gradu":
-            tensor = F - Identity(self.dim)
+            tensor = pow(J, -float(1)/self.dim)*F - I
         elif self._tensor == "E":
-            C = F.T * F
-            tensor = 0.5*(C-I)
+            C = pow(J, -float(2)/self.dim) * F.T * F
+            # C = F.T * F
+            tensor = 0.5 * (C - I)
+
+
+        if len(self.crl_basis) > 0:
+            
+            tensor_diag = as_vector([inner(tensor*e, e) for e in self.crl_basis])
+
 
         
-        if len(self.crl_basis) > 0:
-            tensor_diag = as_vector([inner(e,tensor*e) for e in self.crl_basis])
-
             # Make a project for dolfin-adjoint recording
             for i, r in enumerate(self.regions):
+                
                 solve(inner(self._trial, self._test)*self.dmu(int(r)) == \
-                      inner(tensor_diag, self._test)*self.dmu(int(r)), \
-                      self.simulated_fun[i], solver_parameters={"linear_solver": "gmres"})
+                      inner(self._test, tensor_diag)*self.dmu(int(r)), \
+                      self.simulated_fun[i],
+                      solver_parameters={"linear_solver": "gmres"})
         else:
             from adjoint_contraction_args import logger
             logger.warning("No local basis exist. Regional strain cannot be computed")
@@ -674,6 +694,8 @@ if __name__ == "__main__":
     V = VectorFunctionSpace(geo.mesh, "CG", 2)
     u0 = Function(V)
     u1 = Function(V, "../tests/data/inflate_mesh_simple_1.xml")
+
+
 
     V0 = VectorFunctionSpace(geo.mesh, "CG", 1)
     

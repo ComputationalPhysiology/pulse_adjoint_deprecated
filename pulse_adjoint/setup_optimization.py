@@ -15,12 +15,28 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-from dolfinimport import *
 import numpy as np
-from utils import Object, Text, print_line, print_head
-from adjoint_contraction_args import *
-from numpy_mpi import *
-from setup_parameters import *
+from .dolfinimport import *
+from .utils import Object, Text, print_line, print_head
+from .adjoint_contraction_args import *
+from .numpy_mpi import *
+from .setup_parameters import *
+
+def get_material_model(material_model):
+
+    if material_model == "holzapfel_ogden":
+        from models.material import HolzapfelOgden
+        Material = HolzapfelOgden
+
+    elif material_model == "guccione":
+        from models.material import Guccione
+        Material = Guccione
+        
+    elif material_model == "neo_hookean":
+        from models.material import NeoHookean
+        Material = NeoHookean
+
+    return Material
 
 def update_unloaded_patient(params, patient):
 
@@ -40,7 +56,7 @@ def update_unloaded_patient(params, patient):
     return patient
 
     
-def initialize_patient_data(patient_parameters, *args):
+def initialize_patient_data(patient_parameters):
     """
     Make an instance of patient from :py:module`patient_data`
     baed on th given parameters
@@ -58,12 +74,12 @@ def initialize_patient_data(patient_parameters, *args):
     **Example of usage**::
     
       params = setup_patient_parameters()
-      patient = initialize_patient_data(params, False)
+      patient = initialize_patient_data(params)
 
     """
     
     logger.info("Initialize patient data")
-    from patient_data import Patient
+    from .patient_data import Patient
     
     patient = Patient(**patient_parameters)
 
@@ -107,16 +123,18 @@ def check_patient_attributes(patient):
                 rename_attribute(patient, att, 'fiber')
 
     # Sheets
-    if not hasattr(patient, 'sheet') and hasattr(patient, 'e_s'):
-        rename_attribute(patient, 'e_s', 'sheet')
-    else:
-        setattr(patient, 'sheet', None)
+    if not hasattr(patient, 'sheet'):
+        if hasattr(patient, 'e_s'):
+            rename_attribute(patient, 'e_s', 'sheet')
+        else:
+            setattr(patient, 'sheet', None)
 
     # Cross-sheet
-    if not hasattr(patient, 'sheet_normal') and hasattr(patient, 'e_sn'):
-        rename_attribute(patient, 'e_sn', 'sheet_normal')
-    else:
-        setattr(patient, 'sheet_normal', None)
+    if not hasattr(patient, 'sheet_normal'):
+        if hasattr(patient, 'e_sn'):
+            rename_attribute(patient, 'e_sn', 'sheet_normal')
+        else:
+            setattr(patient, 'sheet_normal', None)
 
 
     ## Local basis
@@ -228,15 +246,14 @@ def make_solver_parameters(params, patient, matparams,
                            gamma = Constant(0.0),
                            paramvec = None, measurements = None):
 
-    ##  MateRial
-    from material import HolzapfelOgden
-    
-    material = HolzapfelOgden(patient.fiber, gamma,
-                              matparams,
-                              params["active_model"],
-                              s0 = patient.sheet,
-                              n0 = patient.sheet_normal,
-                              T_ref = params["T_ref"])
+    ##  Material
+    Material = get_material_model(params["material_model"])
+    material = Material(patient.fiber, gamma,
+                        matparams,
+                        params["active_model"],
+                        s0 = patient.sheet,
+                        n0 = patient.sheet_normal,
+                        T_ref = params["T_ref"])
     
         
     if measurements is None:
@@ -402,10 +419,13 @@ def make_control(params, patient):
         paramvec_ = Function(matparams_space, name = "matparam vector")
 
 
+
+    # If we want to estimate more than one parameter
+    
+    
+        
     # Number of passive parameters to optimize
-    fixed_matparams_keys = ["fix_a", "fix_a_f", "fix_b", "fix_b_f"]
-    npassive = sum([ not params["Optimization_parameters"][k] \
-                     for k in fixed_matparams_keys])
+    npassive = sum([not v for v in params["Fixed_parameters"].values()])
 
         
     if npassive <= 1:
@@ -442,7 +462,7 @@ def make_control(params, patient):
     for par, val in matparams.iteritems():
 
         # Check if material parameter should be fixed
-        if not params["Optimization_parameters"]["fix_{}".format(par)]:
+        if not params["Fixed_parameters"][par]:
             # If not, then we need to put the parameter into some dolfin function
 
             
@@ -524,7 +544,7 @@ def get_measurements(params, patient):
 
     elif params["phase"] == PHASES[1]:
         # We need just the points from the active phase
-        start = patient.passive_filling_duration -1
+        start = patient.passive_filling_duration-1
         end = patient.num_points
         
         pvals = params["Active_optimization_weigths"]
@@ -643,14 +663,45 @@ def get_measurements(params, patient):
 
     return measurements
 
-def get_volume_offset(patient, params, chamber = "lv"):
 
-    if params["unload"]:
+def get_volume(patient, unload = False, chamber = "lv", u = None):
+
+    if unload:
         mesh = patient.original_geometry
         ffun = MeshFunction("size_t", mesh, 2, mesh.domains())
     else:
         mesh = patient.mesh
         ffun = patient.ffun
+
+    if chamber == "lv":
+        if patient.markers.has_key("ENDO_LV"):
+            endo_marker = patient.markers["ENDO_LV"][0]
+        else:
+            endo_marker = patient.markers["ENDO"][0]
+        
+    else:
+        endo_marker = patient.markers["ENDO_RV"][0]
+    
+    
+    
+    ds = Measure("exterior_facet",
+                 subdomain_data = ffun,
+                 domain = mesh)(endo_marker)
+    
+    X = SpatialCoordinate(mesh)
+    N = FacetNormal(mesh)
+    if u is None:
+        vol_form = (-1.0/3.0)*dot(X,N) 
+    else:
+        F = grad(u) + Identity(3)
+        J = det(F)
+        vol_form = (-1.0/3.0)*dot(X + u, J*inv(F).T*N)
+
+    vol = assemble(vol_form*ds)
+    return vol
+    
+
+def get_volume_offset(patient, params, chamber = "lv"):
 
     if params["Patient_parameters"]["geometry_index"] == "-1":
         idx = patient.passive_filling_duration-1
@@ -658,28 +709,12 @@ def get_volume_offset(patient, params, chamber = "lv"):
         idx = int(params["Patient_parameters"]["geometry_index"])
 
     if chamber == "lv":
-    
-        if patient.markers.has_key("ENDO_LV"):
-            endo_marker = patient.markers["ENDO_LV"][0]
-        else:
-            endo_marker = patient.markers["ENDO"][0]
-
         volume = patient.volume[idx]
-        
     else:
-        endo_marker = patient.markers["ENDO_RV"][0]
         volume = patient.RVV[idx]
         
-    
     logger.info("Measured = {}".format(volume))
-    ds = Measure("exterior_facet",
-                 subdomain_data = ffun,
-                 domain = mesh)(endo_marker)
-    
-    X = SpatialCoordinate(mesh)
-    N = FacetNormal(mesh)
-    vol = assemble((-1.0/3.0)*dot(X,N)*ds)
-    
+    vol = get_volume(patient, params["unload"], chamber)
     return volume - vol
 
 def setup_simulation(params, patient):

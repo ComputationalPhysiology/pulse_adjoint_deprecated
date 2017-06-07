@@ -15,8 +15,22 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-from adjoint_contraction_args import  logger, PHASES
 from pprint import pformat
+from .adjoint_contraction_args import  logger, PHASES
+
+
+
+
+def get_dimesion(u):
+    from dolfin import DOLFIN_VERSION_MAJOR
+    from ufl.domain import find_geometric_dimension
+    
+    if DOLFIN_VERSION_MAJOR > 1.6:
+        dim = find_geometric_dimension(u)
+    else:
+        dim = u.geometric_dimension()
+
+    return dim
 
 
 class UnableToChangePressureExeption(Exception):
@@ -71,7 +85,7 @@ def print_line(for_res, it = None, grad_norm = None, func_value = None):
 
 def passive_inflation_exists(params):
     import h5py, os
-    from adjoint_contraction_args import PASSIVE_INFLATION_GROUP
+    from .adjoint_contraction_args import PASSIVE_INFLATION_GROUP
 
     if not os.path.exists(params["sim_file"]):
         return False
@@ -110,7 +124,7 @@ def check_group_exists(h5name, h5group):
 def contract_point_exists(params):
     import h5py, os
     import numpy as np
-    from adjoint_contraction_args import ACTIVE_CONTRACTION, CONTRACTION_POINT, PASSIVE_INFLATION_GROUP, PHASES
+    from .adjoint_contraction_args import ACTIVE_CONTRACTION, CONTRACTION_POINT, PASSIVE_INFLATION_GROUP, PHASES
     
     if not os.path.exists(params["sim_file"]):
         logger.info(Text.red("Run passive inflation before systole"))
@@ -165,7 +179,7 @@ def get_simulated_pressure(params):
     
 
     import h5py, numpy
-    from adjoint_contraction_args import ACTIVE_CONTRACTION, CONTRACTION_POINT, PASSIVE_INFLATION_GROUP, PHASES
+    from .adjoint_contraction_args import ACTIVE_CONTRACTION, CONTRACTION_POINT, PASSIVE_INFLATION_GROUP, PHASES
     
     key1 = ACTIVE_CONTRACTION
     key2  = CONTRACTION_POINT.format(params["active_contraction_iteration_number"])
