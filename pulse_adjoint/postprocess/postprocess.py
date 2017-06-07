@@ -19,14 +19,12 @@ and plot the results easily.
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-
-__all__ = ['PostProcess', 'PostProcessFiberSensitivity', 'PostProcessBiv']
-from args import *
-from pulse_adjoint.setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, RegionalParameter
-import load, plot, utils, latex_utils, tables, vtk_utils
 from scipy import stats
 import os, yaml
+from ..setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, RegionalParameter
+from .args import *
 
+import load, plot, utils, latex_utils, tables, vtk_utils
 
 
 
@@ -1612,83 +1610,3 @@ class PostProcess(object):
             outdir = "/".join([main_outdir, patient_name, feature])
             vtk_utils.make_snapshots(fs, us, feature_space, outdir, params)
             
-    
-
-
-class PostProcessFiberSensitivity(PostProcess):
-    def _setup_compute(self, f):
-
-        self._label_key = r"\theta"
-
-        params = self._params
-        simdir = self._simdir
-        mesh_path = self._mesh_path
-        pressure_path = self._pressure_path
-
-        logger.info("\nProcess data for fiber angle endo = {0}, epi = -{0}".format(f))
-            
-        patient_name = "Impact_p9_i49"
-        
-        params["Patient_parameters"]["patient"] = patient_name
-        params["Patient_parameters"]["mesh_path"] = mesh_path
-        params["Patient_parameters"]["pressure_path"] = pressure_path
-        params["Patient_parameters"]["fiber_angle_epi"] = -int(f)
-        params["Patient_parameters"]["fiber_angle_endo"] = int(f)
-        from patient_data import Patient
-        patient_tmp = Patient(**params["Patient_parameters"])
-        params["sim_file"] = "/".join([simdir.format(f), "result.h5"])
-
-        if params["unload"]:
-            patient_tmp = load.update_unloaded_patient(params, patient_tmp)
-            
-        patient = {"geometry": load.load_geometry_and_microstructure_from_results(params),
-                   "data": load.load_measured_strain_and_volume(patient_tmp, params)}
-
-        params = self._set_matparams(patient, f)
-
-        return params, patient_tmp, patient 
-
-class PostProcessBiv(PostProcess):
-    def _setup_compute(self, patient_name):
-
-        self._label_key = r"Patient"
-        
-        # params = self._params
-        # simdir = self._simdir
-        # mesh_path = self._mesh_path
-        # pressure_path = self._pressure_path
-        # echo_path = self._echo_path
-        
-        # logger.info("\nProcess data for patient {}".format(patient_name))
-            
-
-        # params["Patient_parameters"]["patient"] = patient_name
-        # params["Patient_parameters"]["mesh_path"] = mesh_path.format(patient_name)
-        # params["Patient_parameters"]["mesh_type"] = "biv"
-        # params["Patient_parameters"]["subsample"] = True
-        # params["Patient_parameters"]["pressure_path"] = pressure_path.format(patient_name)
-        # from patient_data import Patient
-        # patient_tmp = Patient(**params["Patient_parameters"])
-        # params["sim_file"] = "/".join([simdir.format(patient_name), "result.h5"])
-        # # Temporary hack
-        # if params["unload"]:
-        #     patient_tmp = load.update_unloaded_patient(params, patient_tmp)
-            
-        # patient = {"geometry": load.load_geometry_and_microstructure_from_results(params),
-        #            "data": load.load_measured_strain_and_volume(patient_tmp, geo, params)}
-
-        
-
-        # params = self._set_matparams(patient, patient_name)
-        logger.info("\nProcess data for patient {}".format(patient_name))
-
-        self._params = load.load_parameters(self._pname, patient_name)
-        patient = load.load_patient_data(self._geoname, patient_name)        
-        params = self._set_matparams(patient, patient_name)
-        patient = load.load_measured_strain_and_volume(patient, params)
-        
-        return params, patient 
-        
-         
-        return params, patient 
-    

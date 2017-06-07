@@ -7,7 +7,7 @@ There are still some results that are not loaded yet.
 This included timings and convergence details. 
 This will be included later. 
 """
-# Copyright (C) 2016 Henrik Finsberg
+# Copyright (C) 2017 Henrik Finsberg
 #
 # This file is part of PULSE-ADJOINT.
 #
@@ -25,8 +25,8 @@ This will be included later.
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 import os
 import numpy as np
-from args import *
-import utils
+from .args import *
+import .utils
 
 
 attributes = ["pressure", "volume", "RVP", "RVV",
@@ -129,7 +129,7 @@ def load_parameters(fname, key=None):
 
 def load_patient_data(h5name, h5group):
     from mesh_generation import load_geometry_from_h5
-    from patient_data import FullPatient
+    from ..patient_data import FullPatient
 
     patient = FullPatient(init=False)
 
@@ -297,7 +297,7 @@ def flatten_dict(d, toint = True):
 
 def get_patient_geometry_from_results(params, has_unloaded = False):
 
-    from pulse_adjoint.setup_optimization import initialize_patient_data, update_unloaded_patient
+    from ..setup_optimization import initialize_patient_data, update_unloaded_patient
     patient_params = get_relative_paths(params["Patient_parameters"])
     patient = initialize_patient_data(patient_params, False)
 
@@ -827,9 +827,6 @@ def load_measured_strain_and_volume(patient, params, num_points = None):
     params["phase"] = "all"
     
     data = get_measurements(params, patient)
-
-    from IPython import embed; embed()
-    exit()
     
     # Some indices
     passive_filling_duration = patient.passive_filling_duration

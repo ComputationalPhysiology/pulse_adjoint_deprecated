@@ -174,8 +174,7 @@ def plot_gamma_mean_std(means, stds, path, labels = None, valve_times = None):
 
     ax.legend(loc = "best")
     # ax.set_rasterized(True)
-    # from IPython import embed; embed()
-    # exit()
+
     fig.savefig(path)#, rasterized = True)
     
     
@@ -623,8 +622,7 @@ def plot_strain_scatter(data, path, labels = None, split = 0):
     ax.set_ylabel("Simulated strain")
     ax.set_xlabel("Measured strain")
 
-    # from IPython import embed; embed()
-    # exit()
+
     if split == 0:
         color = get_colormap(1)
         assert np.all(np.sort(data.keys()) == \

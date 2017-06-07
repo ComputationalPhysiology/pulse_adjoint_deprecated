@@ -1,6 +1,20 @@
-from args import *
-from pulse_adjoint.utils import list_sum
-
+# Copyright (C) 2017 Henrik Finsberg
+#
+# This file is part of PULSE-ADJOINT.
+#
+# PULSE-ADJOINT is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Lesser General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# PULSE-ADJOINT is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
+from .args import *
 
 
 class CardiacWork(object):
@@ -162,6 +176,7 @@ class CardiacWork(object):
         self._power.append(P.copy())
         
         # The work is just the cumulative sum
+        from ..utils import list_sum
         self._work.append(list_sum(self._power))
 
     

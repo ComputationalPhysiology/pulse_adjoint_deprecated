@@ -244,8 +244,7 @@ def make_canvas_snap_shot(lst, times, name, heatmap_name = "", heatmap_label = r
 
 if __name__ == "__main__":
 
-    # from IPython import embed; embed()
-    # exit()
+
     lst = range(3,26, 2)
     lst2 = [ r"{:.0f} $\%$".format(i) for i in np.linspace(0,100, len(lst))]
     for i in lst2: print i 

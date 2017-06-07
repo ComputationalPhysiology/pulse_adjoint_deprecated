@@ -3,7 +3,7 @@
 This script includes different functionlality that is needed
 to compute the different features that we want to visualise.
 """
-# Copyright (C) 2016 Henrik Finsberg
+# Copyright (C) 2017 Henrik Finsberg
 #
 # This file is part of PULSE-ADJOINT.
 #
@@ -19,7 +19,7 @@ to compute the different features that we want to visualise.
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-from args import *
+from .args import *
 
     
 def asint(s):
@@ -1480,7 +1480,7 @@ def make_simulation(params, features, outdir, patient):
 
 def save_displacements(params, features, outdir):
 
-    from patient_data import FullPatient
+    from ..patient_data import FullPatient
     import vtk_utils
     
     patient = FullPatient(**params["Patient_parameters"])

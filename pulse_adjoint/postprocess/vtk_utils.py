@@ -1,5 +1,6 @@
-from args import *
 import shutil
+from .args import *
+
 
 def getColorCorrespondingTovalue(val, min_val, max_val, hue = "blue_white_red"):
 
@@ -169,8 +170,8 @@ def make_snapshots(fs, us, spacestr, outdir, params):
     if not os.path.exists(outdir):
         os.makedirs(outdir)
             
-    from patient_data import FullPatient
-    from utils import asint
+    from ..patient_data import FullPatient
+    from .utils import asint
     
     patient = FullPatient(**params["Patient_parameters"])
     # Mesh
