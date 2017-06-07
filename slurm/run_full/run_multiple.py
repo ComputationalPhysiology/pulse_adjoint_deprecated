@@ -156,7 +156,6 @@ def main():
         if not os.path.exists(outdir):
             os.makedirs(outdir)
 
-        params["outdir"] = outdir
         params["sim_file"] = "/".join([outdir, "result.h5"])
 
         # Dump paramters to yaml
