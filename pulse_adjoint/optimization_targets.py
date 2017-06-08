@@ -13,12 +13,12 @@ with::
     volume_target_form = volume_target.get_form()
 
 """
-
-from dolfinimport import *
-from utils import list_sum
 import numpy as np
-from numpy_mpi import *
-from adjoint_contraction_args import logger
+
+from .dolfinimport import *
+from .utils import list_sum
+from .numpy_mpi import *
+from .adjoint_contraction_args import logger
 
 __all__ = ["RegionalStrainTarget", "FullStrainTarget",
            "VolumeTarget", "Regularization"]
@@ -115,10 +115,12 @@ class OptimizationTarget(object):
 
         :param target: new target
         """
+        logger.debug("Assign target for {}".format(self._name))
         self.target_fun.assign(target, annotate=annotate)
         
 
     def assign_functional(self):
+        logger.debug("Assign functional for {}".format(self._name))
         solve(self._trial_r*self._test_r*dx == \
             self._test_r*self._form*dx, \
             self.functional)
@@ -330,6 +332,7 @@ class RegionalStrainTarget(OptimizationTarget):
         :type target: list of :py:class:`dolfin.Function`
         """
 
+        logger.debug("Assign target for {}".format(self._name))
         for fun, target in zip(self.target_fun, target):
             fun.assign(target, annotate = annotate)
 
@@ -340,7 +343,7 @@ class RegionalStrainTarget(OptimizationTarget):
         :type u: :py:class:`dolfin.Function`
         """
 
-
+        logger.debug("Assign simulated for {}".format(self._name))
         if self.approx == "interpolate":
             u_int = interpolate(project(u, self._disp_space),
                                 self._interpolation_space)
@@ -378,12 +381,13 @@ class RegionalStrainTarget(OptimizationTarget):
                       self.simulated_fun[i],
                       solver_parameters={"linear_solver": "gmres"})
         else:
-            from adjoint_contraction_args import logger
+            
             logger.warning("No local basis exist. Regional strain cannot be computed")
 
     
     def assign_functional(self):
-        
+
+        logger.debug("Assign functional for {}".format(self._name))
         for i, r in enumerate(self.regions):
             solve(self._trial_r*self._test_r/self.meshvol*dx == \
                   self._test_r*self._form[i]/self.meshvols[i]*self.dmu(int(r)), \
@@ -495,7 +499,7 @@ class VolumeTarget(OptimizationTarget):
 
         :param u: New displacement
         """
-
+        logger.debug("Assign simulated for {}".format(self._name))
         if u is None:
             vol = (-1.0/3.0)*dot(self._X,self._N)
             

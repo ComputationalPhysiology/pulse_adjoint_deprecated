@@ -182,6 +182,7 @@ class BasicForwardRunner(object):
         for it, p in enumerate(self.bcs["pressure"][1:], start=1):
         
             sol = phm.next()
+            self.states.append(phm.solver.get_state().copy(True))
 
         
             if self.params["passive_weights"] == "all" \
@@ -209,7 +210,7 @@ class BasicForwardRunner(object):
      
                 functional_values.append(assemble(functional))
                 
-            self.states.append(phm.solver.get_state().copy(True))
+                
             
         forward_result = self._make_forward_result(functional_values,
                                                    functionals_time)
