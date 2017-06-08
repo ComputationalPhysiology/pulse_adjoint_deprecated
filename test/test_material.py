@@ -100,7 +100,7 @@ def run(active_model, material_model, matparams_space):
 
     solver_parameters["material"] = material
     solver = LVSolver(solver_parameters)
-    solver.parameters["solve"]["snes_solver"]["report"] = True
+    solver.parameters["solve"]["newton_solver"]["report"] = True
 
     from pulse_adjoint.iterate import iterate
 

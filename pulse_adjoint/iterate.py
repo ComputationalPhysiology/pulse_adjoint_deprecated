@@ -51,9 +51,9 @@ def get_current_control_value(solver, p_expr, control):
     
     elif control == "pressure":
         if p_expr.has_key("p_rv"):
-            return (p_expr["p_lv"].t, p_expr["p_rv"].t)
+            return (float(p_expr["p_lv"]), float(p_expr["p_rv"]))
         else:
-            return p_expr["p_lv"].t
+            return float(p_expr["p_lv"])
 
 def assign_new_control(solver, p_expr, control, new_control):
 
@@ -62,11 +62,11 @@ def assign_new_control(solver, p_expr, control, new_control):
         
     elif control == "pressure":
         if p_expr.has_key("p_rv"):
-            p_expr["p_lv"].t = new_control[0]
-            p_expr["p_rv"].t = new_control[1]
+            p_expr["p_lv"].assign(new_control[0])
+            p_expr["p_rv"].assign(new_control[1])
         else:
             
-            p_expr["p_lv"].t = new_control
+            p_expr["p_lv"].assign(new_control)
     else:
         raise ValueError("Unknown control mode {}".format(control_mode))
 

@@ -18,7 +18,7 @@
 import numpy as np
 import os, argparse, math, yaml
 
-from numpy_mpi import *
+from ..numpy_mpi import *
 
 from .utils import logger
 import load, utils
@@ -304,7 +304,7 @@ class LVTestPatient(TestPatient):
         self._mesh_type = "lv"
         
         self.paths = {"mesh_path":
-                       os.path.join(curdir, "example_meshes/{}.h5".format(name))}
+                       os.path.join(curdir, "../example_meshes/{}.h5".format(name))}
         TestPatient.__init__(self, **kwargs)
         
 
@@ -321,7 +321,7 @@ class BiVTestPatient(TestPatient):
         self.RVV = np.array([27.387594]*6)
 
         self.paths = {"mesh_path":
-                      os.path.join(curdir, "example_meshes/biv_test_mesh.h5")}
+                      os.path.join(curdir, "../example_meshes/biv_test_mesh.h5")}
 
         TestPatient.__init__(self, **kwargs)
         self.pressure =  np.linspace(0,2,6)

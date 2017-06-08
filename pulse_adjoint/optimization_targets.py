@@ -618,12 +618,12 @@ class Regularization(object):
 
                 # Sum all the components to find the mean
                 expr_arr[0]="1"
-                m_sum = dot(self._m, Expression(tuple(expr_arr)))
+                m_sum = dot(self._m, Expression(tuple(expr_arr), degree=1))
                 expr_arr[0]="0"
                 
                 for i in range(1,self._m.value_size()):
                      expr_arr[i]="1"
-                     m_sum += dot(self._m, Expression(tuple(expr_arr)))
+                     m_sum += dot(self._m, Expression(tuple(expr_arr), degree=1))
                      expr_arr[i]="0"
 
                 # Compute the mean
@@ -631,12 +631,12 @@ class Regularization(object):
 
                 # Compute the variance
                 expr_arr[0]="1"
-                m_reg= (dot(self._m, Expression(tuple(expr_arr))) - m_avg)**2 \
+                m_reg= (dot(self._m, Expression(tuple(expr_arr), degree=1)) - m_avg)**2 \
                        /self._m.value_size()
                 expr_arr[0]="0"
                 for i in range(1,self._m.value_size()):
                      expr_arr[i]="1"
-                     m_reg += (dot(self._m, Expression(tuple(expr_arr))) - m_avg)**2\
+                     m_reg += (dot(self._m, Expression(tuple(expr_arr), degree=1)) - m_avg)**2\
                               /self._m.value_size()
                      expr_arr[i]="0"
 

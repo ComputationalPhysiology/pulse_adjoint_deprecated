@@ -24,13 +24,20 @@ try:
     import tabulate
     tabulate.LATEX_ESCAPE_RULES = {}
 except:
+    has_tabulate=False
+else:
+    has_tabulate=True
+
+def print_error():
     print "Warning tabulate module not found"
     print "To print tables please install tabulate"
     print "pip install tabulate"
+    raise ImportError
 
 import numpy as np
 
 def tabalize(caption, header, table, label, floatfmt=".2e"):
+    if not has_tabulate: print_error()
 
     tabular =  tabulate.tabulate(table, header,
                                  tablefmt="latex", floatfmt=floatfmt)

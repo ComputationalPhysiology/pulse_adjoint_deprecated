@@ -45,7 +45,7 @@ from pulse_adjoint.adjoint_contraction_args import PASSIVE_INFLATION_GROUP, PHAS
 from pulse_adjoint.run_optimization import solve_oc_problem, run_unloaded_optimization as unloaded
 
 
-
+from mesh_generation.mesh_utils import generate_fibers
 from mesh_generation.idealized_geometry import mark_strain_regions
 from mesh_generation.generate_mesh import setup_fiber_parameters
 from mesh_generation.strain_regions import make_crl_basis
@@ -261,11 +261,11 @@ def create_geometry(ndiv, fiber_params):
     e_rad = geo.radial
 
     basis = {"circumferential":e_circ, "longitudinal": e_long, "radial": e_rad}
-    fields = generate_fibers(mesh, fiber_params)
-    f0 = fields[0]
+    #fields = generate_fibers(mesh, fiber_params, geo.ffun)
+    #f0 = fields[0]
 
-    geo.fiber = f0
-
+    #geo.fiber = f0
+    f0 = geo.fiber
     return geo, basis, f0
 
 def create_unloaded_geometry(params, us, ap_params, fiber_params, control_regions, strain_regions):
@@ -289,14 +289,15 @@ def create_unloaded_geometry(params, us, ap_params, fiber_params, control_region
     # local basis
     c,r,l = make_crl_basis(mesh_img, foc)
     basis = {"circumferential":c, "longitudinal": l, "radial": r}
-    
-    
-    # fibers
-    fields = generate_fibers(mesh_img, fiber_params)
-    f0 = fields[0]
-    
+
     ffun_img = MeshFunction("size_t", mesh_img, 2)
     ffun_img.array()[:] = params["facet_function"].array()
+    
+    # fibers
+    fields = generate_fibers(mesh_img, fiber_params, ffun_img)
+    f0 = fields[0]
+    
+    
     
     
     geo_img = lambda : None
@@ -368,10 +369,10 @@ def get_matparams(material_model, isotropic = True):
 def get_expr(phase):
     
     if phase == "passive":
-        expr = Expression("x[2]-x[1]+x[0]+10.0")
+        expr = Expression("x[2]-x[1]+x[0]+10.0", degree=1)
         
     else:
-        expr =  Expression("0.1*(1.0+0.3*(x[2]+x[1]+x[0]))")
+        expr =  Expression("0.1*(1.0+0.3*(x[2]+x[1]+x[0]))", degree=1)
 
     return expr
 
@@ -489,9 +490,9 @@ def generate_data(expr, params, ap_params, pressure_expr, phase,
     params["material"] = material
 
 
-    
+
     solver = LVSolver(params)
-    solver.parameters["solve"]["snes_solver"]["report"] = False
+    solver.parameters["solve"]["newton_solver"]["report"] = True
     solver.solve()
     
     if phase == "active":
@@ -508,7 +509,8 @@ def generate_data(expr, params, ap_params, pressure_expr, phase,
     V_cg1 = VectorFunctionSpace(params["mesh"], "CG", 1)
     for pres in pressures:
 
-        pressure_expr["p_lv"].t = pres
+
+        pressure_expr["p_lv"].assign(pres)
         solver.solve()
         w = solver.get_state()
         u,p = w.split(deepcopy=True)

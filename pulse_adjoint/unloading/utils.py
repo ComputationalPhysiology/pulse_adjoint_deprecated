@@ -14,7 +14,7 @@
 __author__ = "Henrik Finsberg (henriknf@simula.no)"
 import os, h5py
 import dolfin as df
-from numpy_mpi import *
+from ..numpy_mpi import *
 
 
 

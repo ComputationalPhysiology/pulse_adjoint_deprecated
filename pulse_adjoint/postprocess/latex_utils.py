@@ -22,15 +22,8 @@ and move the pdf to the desired location
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 import os, shutil
 import numpy as np
-try:
-    import tabulate
-    tabulate.LATEX_ESCAPE_RULES = {}
-except:
-    print "Warning tabulate module not found"
-    print "To print tables please install tabulate"
-    print "pip install tabulate"
+from .tables import tabalize
 
-__all__=["make_canvas_snap_shot", "tabalize", "make_canvas_strain"]
 
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
@@ -125,20 +118,6 @@ strain_tab=r"""\documentclass[tightpage, 26pt]{{standalone}}
 """
 
 
-def tabalize(caption, header, table, label, floatfmt=".2e"):
-
-    tabular =  tabulate.tabulate(table, header,
-                                 tablefmt="latex", floatfmt=floatfmt)
-    T = \
-        r"""
-\begin{{table}}
-\caption{{{}}}
-{}
-\label{{{}}}
-\end{{table}}
-""".format(*[caption, tabular, label])
-        
-    return T
 
 def make_canvas_strain(paths, name = None):
 

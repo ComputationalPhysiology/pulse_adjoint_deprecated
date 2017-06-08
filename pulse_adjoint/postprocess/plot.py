@@ -27,15 +27,21 @@ import matplotlib as mpl
 from matplotlib import pyplot as plt, rcParams, cbook, ticker, cm
 from matplotlib.ticker import MultipleLocator, FormatStrFormatter
 import warnings, os
-import seaborn as sns
+
 import numpy as np
 from scipy import stats
 
+
+try:
+    import seaborn as sns
+except:
+    has_seaborn = False
+else:
+    has_seaborn = True
+
+    
 # Color map
 cmap = plt.get_cmap('gist_rainbow')
-color3 = [sns.xkcd_rgb["pale red"],
-          sns.xkcd_rgb["medium green"],
-          sns.xkcd_rgb["denim blue"]]
 
 def get_colormap(ncolors, transparent = False):
 
@@ -87,9 +93,10 @@ def cm2inch(*tupl):
 def setup_plot():
     
     # Plotting options
-    sns.set_palette("husl")
-    sns.set_style("white")
-    sns.set_style("ticks")
+    if has_seaborn:
+        sns.set_palette("husl")
+        sns.set_style("white")
+        sns.set_style("ticks")
     mpl.rcParams.update({'figure.autolayout': True})
 
   
@@ -403,8 +410,9 @@ def plot_strains(simulated_strains, measured_strains, outdir, dirs = None,
 
     
     paths = []
-    sns.set_style("ticks")
-    sns.set_context("paper")
+    if has_seaborn:
+        sns.set_style("ticks")
+        sns.set_context("paper")
    
     ## Put the strain dictionaries in arrays
     
@@ -602,7 +610,8 @@ def plot_strains(simulated_strains, measured_strains, outdir, dirs = None,
         fig.tight_layout(w_pad = 0.0)
      
         # Remove top and right axis
-        sns.despine()
+        if has_seaborn:
+            sns.despine()
         path = "{}/simulated_{}_{}.pdf".format(outdir, name, direction)
         paths.append(path)
         fig.savefig(path,

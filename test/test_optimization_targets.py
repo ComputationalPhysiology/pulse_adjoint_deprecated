@@ -1,7 +1,7 @@
 
 import dolfin as df
 
-from patient_data import LVTestPatient
+from pulse_adjoint import LVTestPatient
 
 
 from pulse_adjoint.setup_parameters import (setup_adjoint_contraction_parameters,

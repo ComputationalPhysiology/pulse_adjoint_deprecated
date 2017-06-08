@@ -267,12 +267,13 @@ def make_solver_parameters(params, patient, matparams,
     # Neumann BC
     neuman_bc = []
 
-    V_real = FunctionSpace(patient.mesh, "R", 0)
-    p_lv = Expression("t", t = p_lv_, name = "LV_endo_pressure", element = V_real.ufl_element())
-    
+    #V_real = FunctionSpace(patient.mesh, "R", 0)
+    #p_lv = Expression("t", t = p_lv_, name = "LV_endo_pressure", element = V_real.ufl_element())
+    p_lv = Constant(p_lv_, name = "LV_endo_pressure")
 
     if patient.markers.has_key("ENDO_LV"):
-        p_rv = Expression("t", t = p_rv_, name = "RV_endo_pressure", element = V_real.ufl_element())
+        #p_rv = Expression("t", t = p_rv_, name = "RV_endo_pressure", element = V_real.ufl_element())
+        p_rv = Constant(p_rv_, name = "RV_endo_pressure")
         
         neumann_bc = [[p_lv, patient.markers["ENDO_LV"][0]],
                      [p_rv, patient.markers["ENDO_RV"][0]]]
@@ -284,8 +285,8 @@ def make_solver_parameters(params, patient, matparams,
     
 
 
-    pericard = Function(V_real, name = "pericardium_spring")
-    pericard.assign(Constant(params["pericardium_spring"]))
+    #pericard = Function(V_real, name = "pericardium_spring")
+    pericard = Constant(params["pericardium_spring"])
     robin_bc = [[pericard, patient.markers["EPI"][0]]]
 
 
@@ -351,8 +352,8 @@ def make_solver_parameters(params, patient, matparams,
     
         
         # Apply a linear sprint robin type BC to limit motion
-        base_spring = Function(V_real, name = "base_spring")
-        base_spring.assign(Constant(params["base_spring_k"]))
+        #base_spring = Function(V_real, name = "base_spring")
+        base_spring = Constant(params["base_spring_k"])
         robin_bc += [[base_spring,patient.markers["BASE"][0]]]
 
 

@@ -33,12 +33,12 @@ class BasicHeartProblem(collections.Iterator):
 
         self._init_pressures(bcs["pressure"], pressure["p_lv"], "lv")
 
-        self.p_lv.t = self.lv_pressure[0]
+        self.p_lv.assign(self.lv_pressure[0])
         
         if pressure.has_key("p_rv"):
             self.has_rv = True
             self._init_pressures(bcs["rv_pressure"], pressure["p_rv"], "rv")
-            self.p_rv.t = self.rv_pressure[0]
+            self.p_rv.assign(self.rv_pressure[0])
         else:
             self.has_rv = False
 

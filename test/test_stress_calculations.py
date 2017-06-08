@@ -19,7 +19,7 @@ from pulse_adjoint.iterate import iterate_gamma, iterate
 from pulse_adjoint.utils import QuadratureSpace
 
 dev_iso_splits = [True, False]
-material_models = ["neo_hookean", "holzapfel_ogden", "guccione"]
+material_models = ["neo_hookean", "holzapfel_ogden", "guccione"][:2]
 
 N = 3
 mesh = UnitCubeMesh(N,N,N)
@@ -52,9 +52,9 @@ N = FacetNormal(mesh)
 # Fibers
 V_f = QuadratureSpace(mesh, 4)
 
-f0 = interpolate(Expression(("1.0", "0.0", "0.0")), V_f)
-s0 = interpolate(Expression(("0.0", "1.0", "0.0")), V_f)
-n0 = interpolate(Expression(("0.0", "0.0", "1.0")), V_f)
+f0 = interpolate(Expression(("1.0", "0.0", "0.0"), degree=1), V_f)
+s0 = interpolate(Expression(("0.0", "1.0", "0.0"), degree=1), V_f)
+n0 = interpolate(Expression(("0.0", "0.0", "1.0"), degree=1), V_f)
 
 
 def test_active_stress(dev_iso_split=True, material_model ="holzapfel_ogden"):
@@ -69,7 +69,7 @@ def test_active_stress(dev_iso_split=True, material_model ="holzapfel_ogden"):
     active_value = 20.0
     
     # Pressure
-    pressure = Expression("-t", t = active_value)
+    pressure = Expression("-t", t = active_value, degree=1)
 
     # Dirichlet BC
     def make_dirichlet_bcs(W):
@@ -164,7 +164,7 @@ def test_active_strain(dev_iso_split=False, material_model ="guccione"):
 
     
     # Pressure
-    pressure = Expression("-t", t = 0)
+    pressure = Expression("-t", t = 0, degree=1)
 
 
 

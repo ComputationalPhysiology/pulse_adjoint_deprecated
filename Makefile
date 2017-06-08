@@ -1,5 +1,5 @@
 
-PREFIX=/usit/abel/u1/henriknf/mypackages
+PREFIX=/home/finsberg/local
 DOC=./doc/
 
 default: install docs
