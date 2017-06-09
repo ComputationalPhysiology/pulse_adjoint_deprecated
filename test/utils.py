@@ -89,6 +89,11 @@ def setup_params(phase, space = "CG_1", mesh_type = "lv",
         params["matparams_space"] = "R_0"
         params["gamma_space"] = space
 
+    if active_model == "active_strain":
+        params["T_ref"] = 0.7
+    else:
+        params["T_ref"] = 200.0
+        
     params["active_model"] = active_model
     params["adaptive_weights"] = False
         
@@ -107,6 +112,8 @@ def setup_params(phase, space = "CG_1", mesh_type = "lv",
 
 
 def my_taylor_test(Jhat, m0_fun):
+
+    
     m0 = gather_broadcast(m0_fun.vector().array())
       
     Jm0 = Jhat(m0)
