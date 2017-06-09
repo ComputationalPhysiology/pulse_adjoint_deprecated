@@ -97,7 +97,9 @@ class Material(object):
                    
                 setattr(self, k, Function(v.get_ind_space(), name = k))
                 mat = getattr(self, k)
-                mat.assign(project(v.get_function(), v.get_ind_space()))
+                matfun = v.get_function()
+                ind_space = v.get_ind_space()
+                mat.assign(project(matfun, ind_space))
                 
             else:
                 setattr(self, k, v)
