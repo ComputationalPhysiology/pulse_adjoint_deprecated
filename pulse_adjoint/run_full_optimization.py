@@ -15,20 +15,22 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-from setup_optimization import setup_adjoint_contraction_parameters, setup_general_parameters, initialize_patient_data, save_patient_data_to_simfile, update_unloaded_patient
-from run_optimization import run_passive_optimization, run_active_optimization, run_unloaded_optimization
-
-from utils import  Text, pformat
-from pa_io import passive_inflation_exists, contract_point_exists
 from dolfin_adjoint import adj_reset
-from adjoint_contraction_args import *
+from .setup_optimization import (setup_adjoint_contraction_parameters,
+                                 setup_general_parameters,
+                                 initialize_patient_data,
+                                 save_patient_data_to_simfile,
+                                 update_unloaded_patient)
 
-try:
-    from unloading import UnloadedMaterial
-    has_unload = True
-except:
-    has_unload = False
+from .run_optimization import (run_passive_optimization,
+                               run_active_optimization,
+                               run_unloaded_optimization)
 
+from .utils import  Text, pformat
+from .io import passive_inflation_exists, contract_point_exists
+
+from .adjoint_contraction_args import *
+from .unloading import UnloadedMaterial
 
 def save_logger(params):
 
@@ -76,7 +78,7 @@ def main(params):
     params["phase"] =  PHASES[0]
     if not passive_inflation_exists(params):
 
-        if has_unload and params["unload"]:
+        if params["unload"]:
             
             run_unloaded_optimization(params, patient)
            

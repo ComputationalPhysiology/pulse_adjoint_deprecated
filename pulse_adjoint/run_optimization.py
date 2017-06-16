@@ -15,18 +15,23 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
-from dolfinimport import *
-from setup_optimization import setup_simulation, logger, MyReducedFunctional, get_measurements
-from utils import Text, Object, pformat, print_line, print_head, get_spaces,  UnableToChangePressureExeption, get_simulated_pressure, check_group_exists
-from forward_runner import ActiveForwardRunner, PassiveForwardRunner
-from optimization_targets import *
-from numpy_mpi import *
-from adjoint_contraction_args import *
-from scipy.optimize import minimize as scipy_minimize
-from scipy.optimize import minimize_scalar as scipy_minimize_1d
-from pa_io import write_opt_results_to_h5, contract_point_exists
-from optimal_control import OptimalControl
-from lvsolver import SolverDidNotConverge
+from .dolfinimport import *
+from .setup_optimization import (setup_simulation,
+                                logger, MyReducedFunctional,
+                                get_measurements)
+
+from .utils import (Text, Object, pformat, print_line,
+                    print_head, get_spaces,
+                    UnableToChangePressureExeption,
+                    get_simulated_pressure, check_group_exists)
+from .forward_runner import (ActiveForwardRunner,
+                             PassiveForwardRunner)
+from .optimization_targets import *
+from .numpy_mpi import *
+from .adjoint_contraction_args import *
+from .io import write_opt_results_to_h5
+from .optimal_control import OptimalControl
+from .lvsolver import SolverDidNotConverge
 
 
 def get_constant(value_size, value_rank, val):
@@ -223,7 +228,7 @@ def run_active_optimization(params, patient):
 
     """
     
-    
+    from .io import contract_point_exists
     logger.info(Text.blue("\nRun Active Optimization"))
 
     #Load patient data, and set up the simulation

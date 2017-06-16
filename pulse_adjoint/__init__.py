@@ -1,8 +1,5 @@
-from patient_data import Patient, FullPatient, LVTestPatient, BiVTestPatient
-import patient_data
-import patient_data.load
-import patient_data.utils
-import patient_data.patient
+
+
 
 import adjoint_contraction_args as args
 
@@ -10,15 +7,23 @@ import forward_runner
 import setup_optimization
 import run_optimization
 import utils
-import pa_io
 import numpy_mpi
 import heart_problem
 import lvsolver
 import optimal_control
 
+
+# Subpackages
 import models
 import postprocess
 import unloading
+import io
+import patient_data
+
+from patient_data import (Patient,
+                          FullPatient,
+                          LVTestPatient,
+                          BiVTestPatient)
 
 from iterate import iterate
 from adjoint_contraction_args import logger

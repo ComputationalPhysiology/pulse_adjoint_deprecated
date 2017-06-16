@@ -31,7 +31,7 @@ that can be used to solve the optimal control problem
   rd, opt_result = oc_problem.solve()
 
 """
-# Copyright (C) 2016 Henrik Finsberg
+# Copyright (C) 2017 Henrik Finsberg
 #
 # This file is part of PULSE-ADJOINT.
 #
@@ -49,8 +49,11 @@ that can be used to solve the optimal control problem
 # along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
 import numpy as np
 from dolfin import Timer
-from adjoint_contraction_args import logger
-from utils import print_line, print_head
+from .adjoint_contraction_args import logger
+from .utils import print_line, print_head
+from .adjoint_contraction_args import *
+from .numpy_mpi import gather_broadcast, assign_to_vector
+
 
 try:
     import scipy
@@ -84,8 +87,6 @@ except:
 
 opt_import = [has_scipy, has_moola, has_pyOpt, has_pyipopt]
 
-from adjoint_contraction_args import *
-from numpy_mpi import gather_broadcast, assign_to_vector
 
 class MyCallBack(object):
     """pass a custom callback function
