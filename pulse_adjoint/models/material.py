@@ -190,10 +190,14 @@ class Material(object):
     def CauchyStress(self, F, p=None, deviatoric = False):
 
         I = Identity(3)
-        F = variable(F)
+        C = F.T*F
+        E = variable(0.5 * (C - I))
+        # F = variable(F)
         
 
-        P = diff(self.strain_energy(F), F)
+        # P = diff(self.strain_energy(F), F)
+        S = diff(self.strain_energy(F), E)
+        P = F*S
         T = InversePiolaTransform(P, F)
 
         if deviatoric:
@@ -202,7 +206,7 @@ class Material(object):
             return deviatoric(T)
         
         if p is None:
-            logger.deebug("Return Cauchy stress without hydrostatic component")
+            logger.debug("Return Cauchy stress without hydrostatic component")
             return T
             
         else:
@@ -324,6 +328,7 @@ class HolzapfelOgden(Material):
             return 0
 
         if diff == 0:
+            # return a/(2.0*b) * (exp(b*pow(I_4 - 1, 2)) - 1)
             return a/(2.0*b) * heaviside(I_4 - 1) * (exp(b*pow(I_4 - 1, 2)) - 1)
         
         elif diff == 1:
@@ -415,9 +420,7 @@ class Guccione(Material) :
         
         return Wpassive + Wactive 
 
-
-
-
+    
 class NeoHookean(Material):
     """
     Class for Neo Hookean material
@@ -426,7 +429,7 @@ class NeoHookean(Material):
 
     @staticmethod
     def default_parameters():
-        return {"mu": 0.385}
+        return {"mu": 15.0}
 
     def W_1(self, I_1, diff = 0, dim = 3, *args, **kwargs):
         
@@ -442,6 +445,68 @@ class NeoHookean(Material):
     def W_4(self, *args, **kwargs):
         return 0
 
+
+class LinearElastic(Material):
+    """
+    Class for linear elastic material
+    """
+    _model = "linear_elastic"
+
+    @staticmethod
+    def default_parameters():
+        return {"mu": 100.0,
+                "lmbda": 1.0}
+
+    def strain_energy(self, F_):
+
+
+        F = self.active.Fe(F_)
+
+        dim = get_dimesion(F)
+        gradu = F - Identity(dim)
+        epsilon = Constant(0.5) * (gradu + gradu.T)
+        W = self.lmbda/2*(tr(epsilon)**2) + self.mu*tr(epsilon*epsilon)
+
+        # Active stress
+        Wactive = self.active.Wactive(F, diff = 0)
+        
+        return W + Wactive
+
+class StVenantKirchhoff(Material):
+    """
+    Class for linear elastic material
+    """
+    _model = "linear_elastic"
+
+    @staticmethod
+    def default_parameters():
+        return {"mu": 300.0,
+                "lmbda": 1.0}
+
+    def strain_energy(self, F_):
+
+        F = self.active.Fe(F_)
+        
+        dim = get_dimesion(F)
+
+        I = Identity(3)
+        J = det(F)
+        dim = get_dimesion(F)
+        if self.active.is_isochoric():
+            F_bar = pow(J, -float(1)/dim)*F
+        else:
+            F_bar = F
+
+        
+        C_bar = F_bar.T*F_bar
+        E = 0.5*(C_bar - I)
+        
+        W = self.lmbda/2*(tr(E)**2) + self.mu*tr(E*E)
+
+        # Active stress
+        Wactive = self.active.Wactive(F, diff = 0)
+        
+        return W + Wactive
 
 
 if __name__ == "__main__":

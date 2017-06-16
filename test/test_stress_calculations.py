@@ -19,7 +19,7 @@ from pulse_adjoint.iterate import iterate_gamma, iterate
 from pulse_adjoint.utils import QuadratureSpace
 
 dev_iso_splits = [True, False]
-material_models = ["neo_hookean", "holzapfel_ogden", "guccione"][:2]
+material_models = ["neo_hookean", "holzapfel_ogden", "guccione"]
 
 N = 3
 mesh = UnitCubeMesh(N,N,N)
@@ -69,7 +69,8 @@ def test_active_stress(dev_iso_split=True, material_model ="holzapfel_ogden"):
     active_value = 20.0
     
     # Pressure
-    pressure = Expression("-t", t = active_value, degree=1)
+    pressure = Constant(-active_value)
+    # pressure = Constant(0.0)
 
     # Dirichlet BC
     def make_dirichlet_bcs(W):
@@ -78,6 +79,8 @@ def test_active_stress(dev_iso_split=True, material_model ="holzapfel_ogden"):
         return no_base_x_tran_bc
 
     # Contraction parameter
+    # V = FunctionSpace(mesh, "R", 0)
+    # gamma = Function(V)
     gamma = Constant(1.0)
     T_ref = active_value
  
@@ -114,6 +117,8 @@ def test_active_stress(dev_iso_split=True, material_model ="holzapfel_ogden"):
     solver = LVSolver(params)
     solver.solve()
 
+    # iterate("pressure", solver, active_value, {"p_lv":pressure})
+    # iterate("gamma", solver, 1.0, gamma)
     u,p = solver.get_state().split(deepcopy = True)
 
     
@@ -132,26 +137,34 @@ def test_active_stress(dev_iso_split=True, material_model ="holzapfel_ogden"):
     Tf_dg = project(Tf, V_dg)
 
     tol = 1e-10
-    
-    assert all(abs(Tf_dg.vector().array() - active_value) < tol)
-    assert all(abs(u.vector().array()) < tol)
-
-    if not dev_iso_split:
-        if material_model == "guccione":
-            assert all(abs(p.vector().array()) < tol)
-        elif material_model == "holzapfel_ogden":
-            assert all(abs(p.vector().array() - matparams["a"]) < tol)
-        else:
-            assert all(abs(p.vector().array() - matparams["mu"]) < tol)
-
-    else:
-        assert all(abs(p.vector().array()) < tol)
-
 
     
+
     # plot(Tf_dg, title="Tf_df")
     # plot(p, title ="hydrostatic pressure")
     # plot(u,mode="displacement", interactive=True)
+    # exit()
+
+    
+    assert all(abs(u.vector().array()) < tol)
+
+    if not dev_iso_split:
+        
+        if material_model == "guccione":
+            assert all(abs(p.vector().array()) < tol)
+            assert all(abs(Tf_dg.vector().array()) < tol)
+            
+        elif material_model == "holzapfel_ogden":
+            assert all(abs(p.vector().array() - matparams["a"]) < tol)
+            assert all(abs(Tf_dg.vector().array()  + matparams["a"]) < tol)
+        else:
+            assert all(abs(p.vector().array() - matparams["mu"]) < tol)
+            assert all(abs(Tf_dg.vector().array() + matparams["mu"]) < tol)
+
+    else:
+        assert all(abs(p.vector().array()) < tol)
+        assert all(abs(Tf_dg.vector().array()) < tol)
+
 
 
 
@@ -214,7 +227,7 @@ def test_active_strain(dev_iso_split=False, material_model ="guccione"):
     solver.solve()
     u,p = solver.get_state().split(deepcopy = True)
 
-    
+    logger
     F = solver._F
     dim = 3
     f = F*f0
@@ -222,31 +235,41 @@ def test_active_strain(dev_iso_split=False, material_model ="guccione"):
     I = Identity(dim)
     J = det(F)
 
+    
     T = material.CauchyStress(F, p)
+    
     V_dg = FunctionSpace(mesh, "DG", 1)
 
     
     Tf = inner(T*f/f**2, f)
     Tf_dg = project(Tf, V_dg)
 
+     
+   
 
     #We have to be kind with the tolerance here
     tol = 1e-4
     
-    assert all(abs(Tf_dg.vector().array()) < tol)
-   
+
     
     if not dev_iso_split:
+        
+        
         if material_model == "guccione":
             assert all(abs(p.vector().array()) < tol)
+            assert all(abs(Tf_dg.vector().array()) < tol)
         elif material_model == "holzapfel_ogden":
             assert all(abs(p.vector().array() - matparams["a"]) < tol)
+            assert all(abs(Tf_dg.vector().array() + matparams["a"]) < tol)
         else:
             assert all(abs(p.vector().array() - matparams["mu"]) < tol)
+            assert all(abs(Tf_dg.vector().array() + matparams["mu"]) < tol)
 
     else:
-        assert all(abs(p.vector().array()) < tol)
 
+        assert all(abs(p.vector().array()) < tol)
+        assert all(abs(Tf_dg.vector().array()) < tol)
+       
 
     # plot(Tf_dg, title="Tf_df")
     # plot(p, title ="hydrostatic pressure")
@@ -257,6 +280,7 @@ def test_all():
 
 
     # Active strain
+    print "active strain"
     for dev_iso_split in dev_iso_splits:
         print dev_iso_split
         for material_model in material_models:
@@ -265,6 +289,7 @@ def test_all():
             
 
     # Active stress
+    print "active stress"
     for dev_iso_split in dev_iso_splits:
         print dev_iso_split
         for material_model in material_models:
