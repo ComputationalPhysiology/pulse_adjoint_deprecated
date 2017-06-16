@@ -183,7 +183,7 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     # Load targets
     optimization_targets, bcs = load_targets(params, solver_parameters, measurements)
 
-           
+
     #Initialize the solver for the Forward problem
     for_run = PassiveForwardRunner(solver_parameters, 
                                    pressure, 
@@ -673,8 +673,9 @@ def get_optimization_targets(params, solver_parameters):
         spacestr = params["gamma_space"]
 
     
-
-    targets = {"regularization": Regularization(mesh,spacestr, reg_par)}
+    
+    targets = {"regularization": Regularization(mesh,spacestr, reg_par,
+                                                mshfun = solver_parameters["mesh_function"])}
 
     if p["volume"]:
         logger.debug("Load volume target")

@@ -182,6 +182,7 @@ class BasicForwardRunner(object):
         for it, p in enumerate(self.bcs["pressure"][1:], start=1):
         
             sol = phm.next()
+            self.states.append(phm.solver.get_state().copy(True))
 
         
             if self.params["passive_weights"] == "all" \
@@ -199,17 +200,18 @@ class BasicForwardRunner(object):
 
                 if phase == "active":
                     # There is only on step, so we are done
+                    functionals_time.append(functional*dt[START_TIME])
                     adj_inc_timestep(1, True)
-                    functionals_time.append(functional*dt[1])
+                    
                 else:
                     # Check if we are done with the passive phase
-                    
+                    functionals_time.append(functional*dt[it])
                     adj_inc_timestep(it, it == len(self.bcs["pressure"])-1)
-                    functionals_time.append(functional*dt[it+1])
+                    
      
-                functional_values.append(assemble(functional))
+                functional_values.append(dolfin.assemble(functional))
                 
-            self.states.append(phm.solver.get_state().copy(True))
+                
             
         forward_result = self._make_forward_result(functional_values,
                                                    functionals_time)
