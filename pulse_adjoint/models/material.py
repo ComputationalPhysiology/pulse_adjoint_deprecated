@@ -190,20 +190,16 @@ class Material(object):
     def CauchyStress(self, F, p=None, deviatoric = False):
 
         I = Identity(3)
-        C = F.T*F
-        E = variable(0.5 * (C - I))
-        # F = variable(F)
-        
-
-        # P = diff(self.strain_energy(F), F)
-        S = diff(self.strain_energy(F), E)
-        P = F*S
+                
+        # First Piola Kirchoff
+        P = diff(self.strain_energy(F), F)
+        # Cauchy stress
         T = InversePiolaTransform(P, F)
 
         if deviatoric:
-            from ufl.operators import dev as deviatoric
             logger.debug("Return deviatoric Cauchy stress")
-            return deviatoric(T)
+            return T - (1.0/3.0) * tr(T)*I
+
         
         if p is None:
             logger.debug("Return Cauchy stress without hydrostatic component")
