@@ -90,7 +90,7 @@ def cm2inch(*tupl):
         return tuple(i/inch for i in tupl)
 
     
-def setup_plot():
+def setup_plot(fontsize=7,dpi=300):
     
     # Plotting options
     if has_seaborn:
@@ -103,8 +103,8 @@ def setup_plot():
     
     mpl.rcParams['font.family']= 'times'
     mpl.rcParams['font.weight']= 'normal'
-    mpl.rcParams['font.size']= 7
-    mpl.rcParams['font.size']= 7
+    mpl.rcParams['font.size']= fontsize
+    mpl.rcParams['font.size']= fontsize
 
     # width in cm
 
@@ -130,14 +130,14 @@ def setup_plot():
     
     
 
-    mpl.rcParams['xtick.labelsize'] = 7
-    mpl.rcParams['ytick.labelsize'] = 7
-    mpl.rcParams['legend.fontsize'] = 7
-    mpl.rcParams['axes.titlesize'] = 7
-    mpl.rcParams['axes.labelsize'] = 7
+    mpl.rcParams['xtick.labelsize'] = fontsize
+    mpl.rcParams['ytick.labelsize'] = fontsize
+    mpl.rcParams['legend.fontsize'] = fontsize
+    mpl.rcParams['axes.titlesize'] = fontsize
+    mpl.rcParams['axes.labelsize'] = fontsize
 
     # mpl.rcParams['figure.dpi'] = 30
-    mpl.rcParams['savefig.dpi'] = 300
+    mpl.rcParams['savefig.dpi'] = dpi
     mpl.rcParams['savefig.format'] = "png"
     mpl.rcParams['text.usetex'] = True
     mpl.rcParams['text.latex.unicode']=True

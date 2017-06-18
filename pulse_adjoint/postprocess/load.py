@@ -299,7 +299,7 @@ def get_patient_geometry_from_results(params, has_unloaded = False):
 
     from ..setup_optimization import initialize_patient_data, update_unloaded_patient
     patient_params = get_relative_paths(params["Patient_parameters"])
-    patient = initialize_patient_data(patient_params, False)
+    patient = initialize_patient_data(patient_params)
 
     if params["unload"] and has_unloaded:
         patient = update_unloaded_patient(params, patient)
