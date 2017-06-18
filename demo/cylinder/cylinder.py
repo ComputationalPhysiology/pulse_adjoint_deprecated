@@ -13,7 +13,7 @@ from pulse_adjoint.postprocess.utils import (smooth_from_points,
                                              localproject,
                                              remove_extreme_outliers)
 
-from paraview import fun_to_xdmf
+# from paraview import fun_to_xdmf
 
 setup_general_parameters()
 
@@ -115,7 +115,7 @@ def create_fiberfield(mesh):
         dofs_x = V.tabulate_dof_coordinates().reshape((-1, mesh.geometry().dim()))
         f0 = make_unit_vector(V, VV, dofs_x, fill_coordinates_ec)
         
-        fun_to_xdmf(f0, "fiber")
+        # fun_to_xdmf(f0, "fiber")
         f = df.File(fiberfile)
         f << f0
 
@@ -151,7 +151,7 @@ def radial_vectorfield(mesh):
         dofs_x = V.tabulate_dof_coordinates().reshape((-1, mesh.geometry().dim()))
         f0 = make_unit_vector(V, VV, dofs_x, rad)
         
-        fun_to_xdmf(f0, "radial")
+        # fun_to_xdmf(f0, "radial")
         f = df.File(fiberfile)
         f << f0
 
@@ -179,7 +179,7 @@ def longitudinal_vectorfield(mesh):
         dofs_x = V.tabulate_dof_coordinates().reshape((-1, mesh.geometry().dim()))
         f0 = make_unit_vector(V, VV, dofs_x, longitudinal)
         
-        fun_to_xdmf(f0, "longitudinal")
+        # fun_to_xdmf(f0, "longitudinal")
         f = df.File(fiberfile)
         f << f0
 
@@ -248,9 +248,9 @@ def compute_stress(solver, r0, h5name):
     VV = df.FunctionSpace(mesh, fel)
 
     Tf = df.project(Tf_ufl, VV)
-    fun_to_xdmf(Tf, "{}_stress_quad".format(h5name))
+    # fun_to_xdmf(Tf, "{}_stress_quad".format(h5name))
     Ef = df.project(Ef_ufl, VV)
-    fun_to_xdmf(Ef, "{}_strain_quad".format(h5name))
+    # fun_to_xdmf(Ef, "{}_strain_quad".format(h5name))
 
     V = df.FunctionSpace(mesh, "DG", 1)
     Tf_dg = smooth_from_points(V, Tf)
