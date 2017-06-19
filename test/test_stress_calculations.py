@@ -146,25 +146,19 @@ def test_active_stress(dev_iso_split=True, material_model ="holzapfel_ogden"):
     # exit()
 
     
+    assert all(abs(Tf_dg.vector().array() - active_value) < tol)
     assert all(abs(u.vector().array()) < tol)
 
     if not dev_iso_split:
-        
         if material_model == "guccione":
             assert all(abs(p.vector().array()) < tol)
-            assert all(abs(Tf_dg.vector().array()) < tol)
-            
         elif material_model == "holzapfel_ogden":
             assert all(abs(p.vector().array() - matparams["a"]) < tol)
-            assert all(abs(Tf_dg.vector().array()  + matparams["a"]) < tol)
         else:
             assert all(abs(p.vector().array() - matparams["mu"]) < tol)
-            assert all(abs(Tf_dg.vector().array() + matparams["mu"]) < tol)
 
     else:
         assert all(abs(p.vector().array()) < tol)
-        assert all(abs(Tf_dg.vector().array()) < tol)
-
 
 
 
@@ -249,26 +243,19 @@ def test_active_strain(dev_iso_split=False, material_model ="guccione"):
 
     #We have to be kind with the tolerance here
     tol = 1e-4
-    
 
+    
     
     if not dev_iso_split:
-        
-        
         if material_model == "guccione":
             assert all(abs(p.vector().array()) < tol)
-            assert all(abs(Tf_dg.vector().array()) < tol)
         elif material_model == "holzapfel_ogden":
             assert all(abs(p.vector().array() - matparams["a"]) < tol)
-            assert all(abs(Tf_dg.vector().array() + matparams["a"]) < tol)
         else:
             assert all(abs(p.vector().array() - matparams["mu"]) < tol)
-            assert all(abs(Tf_dg.vector().array() + matparams["mu"]) < tol)
 
     else:
-
         assert all(abs(p.vector().array()) < tol)
-        assert all(abs(Tf_dg.vector().array()) < tol)
        
 
     # plot(Tf_dg, title="Tf_df")
