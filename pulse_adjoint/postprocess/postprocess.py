@@ -264,7 +264,35 @@ class PostProcess(object):
        
                  
         return val
-        
+
+    def get_meshvolumes(self, patient_name):
+        """
+        Return a dictionary with the volumes of each segement
+        in the mesh.
+
+        Parameters
+        ----------
+
+        patient_name : str
+            The key/name of patient in the results dictionary.
+
+        Returns
+        -------
+
+        meshvols : dict
+             A dictionary with the volumes of each segement in the mesh.
+
+        """
+        patient = load.load_patient_data(self._geoname, patient_name)
+     
+        dx = dolfin.Measure("dx", domain=patient.mesh, subdomain_data=patient.sfun)
+        meshvols = {}
+        for r in set(patient.sfun.array()):
+            meshvols[r] = dolfin.assemble(dolfin.Constant(1.0)*dx(int(r)))
+
+        return meshvols
+
+    
     def compute(self, *args):
         """
         Compute features that can be plotted later.
@@ -463,7 +491,8 @@ class PostProcess(object):
                         d = {"gamma_regional": utils.get_regional(dX, gamma,  gamma_lst, regions, params["T_ref"])}
                         self._save_tmp_results(patient_name, "gamma_regional", d)
                         data[patient_name].update(**d)
-             
+
+                        
                         
             if "geometric_distance" in args:
 
@@ -541,6 +570,11 @@ class PostProcess(object):
                     
 
         self._update_results(data)
+
+    def get_solver(self, patient_name, idx=0):
+
+        params, patient = self._setup_compute(patient_name)
+        # gamma = self._
         
   
     def plot_pv_loop(self, single=True, groups = None, chamber = "lv"):
@@ -1543,7 +1577,7 @@ class PostProcess(object):
             
         logger.info("#"*40+"\nMake simulation")
             
-        main_outdir = "/".join([self._outdir, "simulation3"])
+        main_outdir = "/".join([self._outdir, "simulation"])
         if not os.path.exists(main_outdir):
             os.makedirs(main_outdir)
 

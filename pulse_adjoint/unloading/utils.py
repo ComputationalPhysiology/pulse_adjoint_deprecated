@@ -15,40 +15,7 @@ __author__ = "Henrik Finsberg (henriknf@simula.no)"
 import os, h5py
 import dolfin as df
 from ..numpy_mpi import *
-
-
-
-
-def make_logger(name):
-    # import dolfin
-    import logging
-    level = logging.INFO
-
-    mpi_filt = lambda: None
-    def log_if_proc0(record):
-        if mpi_comm_world().rank == 0:
-            return 1
-        else:
-            return 0
-    mpi_filt.filter = log_if_proc0
-
-    logger = logging.getLogger(name)
-    logger.setLevel(level)
-    
-    ch = logging.StreamHandler()
-    ch.setLevel(10)
-    formatter = logging.Formatter('%(message)s') #'\n%(name)s - %(levelname)s - %(message)s\n'
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-    logger.addFilter(mpi_filt)
-
-    df.set_log_active(False)
-    df.set_log_level(df.WARNING)
-
-    return logger
-
-
-logger = make_logger("Unloading")
+from ..adjoint_contraction_args import logger
 
 
 class ResidualCalculator(object):

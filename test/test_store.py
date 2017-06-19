@@ -12,7 +12,7 @@ from pulse_adjoint.setup_optimization import (make_solver_params,
 
 from pulse_adjoint.forward_runner import PassiveForwardRunner
 from pulse_adjoint.run_optimization import load_targets
-from pulse_adjoint.pa_io import write_opt_results_to_h5
+from pulse_adjoint.io import write_opt_results_to_h5
 from pulse_adjoint import LVTestPatient
 
 

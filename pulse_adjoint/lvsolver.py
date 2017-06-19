@@ -18,6 +18,7 @@
 from copy import deepcopy
 from .dolfinimport import *
 from .adjoint_contraction_args import logger
+from .kinematics import *
 from models.compressibility import get_compressibility
 
 class SolverDidNotConverge(Exception):
@@ -274,8 +275,9 @@ class LVSolver(object):
         if self.parameters["bc"].has_key("neumann"):
             for neumann_bc in self.parameters["bc"]["neumann"]:
                 pressure, marker = neumann_bc
-                n = cofac(self._F) * N
-                self._G += inner(pressure*du, n)*ds(marker)
+                n = pressure*cofac(self._F) * N
+                
+                self._G += inner(du, n)*ds(marker)
          
                 
         # Other body forces
@@ -342,7 +344,7 @@ class Postprocess(object):
         """
         return self.solver._pi_int
 
-    def first_piola_stress(self):
+    def first_piola_stress(self, deviatoric=False):
         r"""
         First Piola Stress Tensor
 
@@ -359,7 +361,7 @@ class Postprocess(object):
            \mathbf{P} = \frac{\partial \psi}{\partial \mathbf{F}}
         
         """
-        return self.chaucy_stress()*inv(self._F.T)
+        return self.solver.parameters["material"].FirstPiolaStress(self._F, self._p, deviatoric)
         
 
     def second_piola_stress(self):
@@ -371,9 +373,10 @@ class Postprocess(object):
            \mathbf{S} =  \mathbf{F}^{-1} \sigma \mathbf{F}^{-T}
 
         """
-        return inv(self._F)*self.chaucy_stress()*inv(self._F.T)
+        return inv(self._F) * self.first_piola_stress()
 
-    def chaucy_stress(self):
+
+    def chaucy_stress(self, deviatoric=False):
         r"""
         Chaucy Stress Tensor
 
@@ -391,60 +394,14 @@ class Postprocess(object):
         
         """
         
-        return self.solver.parameters["material"].CauchyStress(self._F, self._p)
+        return self.solver.parameters["material"].CauchyStress(self._F, self._p, deviatoric)
 
     def deformation_gradient(self):
         return self._F
     
-    def work(self):
-        r"""
-        Compute Work
-
-        .. math::
-
-           W = \mathbf{S} : \mathbf{E},
-
-        with :math:`\mathbf{E}` being the Green-Lagrange strain tensor
-        and :math:`\mathbf{E}` the second Piola stress tensor
-        """
-        
-        return inner(self.GreenLagrange(), self.second_piola_stress())
-
-    
-        
-    def work_fiber(self):
-        r"""Compute Work in Fiber work
-
-        .. math::
-
-           W = \mathbf{S}_f : \mathbf{E}_f,
-        """
-        
-        # Fibers
-        f = self.solver.parameters["material"].f0
-
-        # Fiber strain
-        Ef = self.GreenLagrange()*f
-        # Fiber stress
-        Sf = self.second_piola_stress()*f
-
-        return inner(Ef, Sf)
-
 
     def J(self):
         return det(self._F)
-    
-    def I1(self):
-        """
-        Return first isotropic invariant
-        """
-        return self.solver.parameters["material"].I1(self._F)
-
-    def I4f(self):
-        """
-        Return the quasi-invariant in fiber direction
-        """
-        return self.solver.parameters["material"].I4f(self._F)
 
   
     def strain_energy(self):
@@ -453,8 +410,16 @@ class Postprocess(object):
         """
         return self.solver.parameters["material"].strain_energy(self._F)
     
-    def GreenLagrange(self):
-        return self._E
+    def GreenLagrange(self, F_ref = None):
+        
+        if F_ref is None:
+            F = self._F
+        else:
+            F = self._F*inv(F_ref)
+            
+        C = F.T*F
+        E = 0.5 * (C - self._I)
+        return E
 
     def fiber_strain(self):
         r"""Compute Fiber strain
@@ -484,15 +449,13 @@ class Postprocess(object):
         """
 
         f0 = self.solver.parameters["material"].get_component("fiber")
-        f =  self._F*f0
-        
-        return inner((self.chaucy_stress()*f)/f**2, f)
+        return self.cauchy_stress_component(f0)
     
-    def cauchy_stress_component(self, n0):
+    def cauchy_stress_component(self, n0, deviatoric=False):
 
         # Push forward to current configuration
         n = self._F*n0
-        return inner((self.chaucy_stress()*n)/n**2, n)
+        return inner((self.chaucy_stress(deviatoric)*n)/n**2, n)
 
     def piola2_stress_component(self, n0):
         
@@ -503,8 +466,8 @@ class Postprocess(object):
         return inner((self.first_piola_stress()*n0)/n0**2, n0)
 
 
-    def green_strain_component(self, n0):
-        return inner(self.GreenLagrange()*n0/n0**2, n0)
+    def green_strain_component(self, n0, F_ref=None):
+        return inner(self.GreenLagrange(F_ref)*n0/n0**2, n0)
 
     def deformation_gradient_component(self, n0):
         return inner(self._F*n0/n0**2, n0)
@@ -513,14 +476,5 @@ class Postprocess(object):
         return inner((self._F - self._I)*n0/n0**2, n0)
 
 
-    def _localproject(self, fun, V) :
-        a = inner(TestFunction(V), TrialFunction(V)) * dx
-        L = inner(TestFunction(V), fun) * dx
-        res = Function(V)
-    
-        solver = LocalSolver(a, L, to_annotate = False)
-        solver.solve_local(res.vector(), assemble(L), V.dofmap())
-        return res
-        
 
 

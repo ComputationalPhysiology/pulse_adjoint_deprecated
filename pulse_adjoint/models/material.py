@@ -59,24 +59,33 @@ class Material(object):
     """
     Initialize material model
     
-    :param f0: Fiber field
-    :type f0: :py:class`dolfin.Function`
-    :param gamma: Activation parameter
-    :type gamma: :py:class`dolfin.Function`
-    :param dict params: material parameters
-    :param str active_model: The active model. Possible values are
-    'active_stress', 'active_strain' and 
-                                 'active_strain_rossi'.
-    :param s0: Sheet field
-    :type s0: :py:class`dolfin.Function`
-    :param n0: Fiber-sheet field
-    :type n0: :py:class`dolfin.Function`
-    :param float T_ref: Scale factor for active parameter
+    Parameters
+    ----------
 
+    f0 : :py:class`dolfin.Function`
+        Fiber field
+    gamma : :py:class`dolfin.Function`
+        Activation parameter
+    params : dict
+        Material parameters
+    active_model : str
+        Active model - active strain or active stress
+    s0 : :py:class`dolfin.Function`
+        Sheets
+    n0 : :py:class`dolfin.Function`
+        Sheet - normal
+    T_ref : float
+        Scale factor for activation parameter (default = 1.0)
+    dev_iso_split : bool
+        Decouple deformation into deviatoric and isochoric deformations
+    eta : float
+        Fraction of transverse active tesion for active stress formulation.
+        0 = active only along fiber, 1 = equal forces in all directions (default=0.0).
     """
     def __init__(self, f0 = None, gamma = None, params = None,
                  active_model = "active_strain", s0 = None,
-                 n0 = None, T_ref = None, dev_iso_split = True):
+                 n0 = None, T_ref = None, dev_iso_split = True,
+                 eta = 0.0, *args, **kwargs):
 
 
         # Parameters
@@ -114,7 +123,7 @@ class Material(object):
                        T_ref, dev_iso_split)
         # Activation
         if active_model == "active_stress":
-            self.active = ActiveStress(*active_args)
+            self.active = ActiveStress(*active_args, eta = eta)
         else:
             self.active = ActiveStrain(*active_args)
 
@@ -190,26 +199,45 @@ class Material(object):
     def CauchyStress(self, F, p=None, deviatoric = False):
 
         I = Identity(3)
-        F = variable(F)
-        
-
+                
+        # First Piola Kirchoff
         P = diff(self.strain_energy(F), F)
+        # Cauchy stress
         T = InversePiolaTransform(P, F)
 
         if deviatoric:
-            from ufl.operators import dev as deviatoric
             logger.debug("Return deviatoric Cauchy stress")
-            return deviatoric(T)
+            return T - (1.0/3.0) * tr(T)*I
+
         
         if p is None:
-            logger.deebug("Return Cauchy stress without hydrostatic component")
+            logger.debug("Return Cauchy stress without hydrostatic component")
             return T
             
         else:
             logger.debug("Return total Cauchy stress")
             return T -  p*I
 
+    def FirstPiolaStress(self, F, p=None, deviatoric=False):
 
+        I = Identity(3)
+                
+        # First Piola Kirchoff
+        P = diff(self.strain_energy(F), F)
+        J = det(F)
+
+        if deviatoric:
+            logger.debug("Return deviatoric Cauchy stress")
+            return P - (1.0/3.0) * tr(P)*I
+
+        
+        if p is None:
+            logger.debug("Return Cauchy stress without hydrostatic component")
+            return P
+            
+        else:
+            logger.debug("Return total Cauchy stress")
+            return P -  p*J*inv(F).T
 
 class HolzapfelOgden(Material):
     r"""
@@ -324,6 +352,7 @@ class HolzapfelOgden(Material):
             return 0
 
         if diff == 0:
+            # return a/(2.0*b) * (exp(b*pow(I_4 - 1, 2)) - 1)
             return a/(2.0*b) * heaviside(I_4 - 1) * (exp(b*pow(I_4 - 1, 2)) - 1)
         
         elif diff == 1:
@@ -415,9 +444,7 @@ class Guccione(Material) :
         
         return Wpassive + Wactive 
 
-
-
-
+    
 class NeoHookean(Material):
     """
     Class for Neo Hookean material
@@ -426,7 +453,7 @@ class NeoHookean(Material):
 
     @staticmethod
     def default_parameters():
-        return {"mu": 0.385}
+        return {"mu": 15.0}
 
     def W_1(self, I_1, diff = 0, dim = 3, *args, **kwargs):
         
@@ -442,6 +469,68 @@ class NeoHookean(Material):
     def W_4(self, *args, **kwargs):
         return 0
 
+
+class LinearElastic(Material):
+    """
+    Class for linear elastic material
+    """
+    _model = "linear_elastic"
+
+    @staticmethod
+    def default_parameters():
+        return {"mu": 100.0,
+                "lmbda": 1.0}
+
+    def strain_energy(self, F_):
+
+
+        F = self.active.Fe(F_)
+
+        dim = get_dimesion(F)
+        gradu = F - Identity(dim)
+        epsilon = Constant(0.5) * (gradu + gradu.T)
+        W = self.lmbda/2*(tr(epsilon)**2) + self.mu*tr(epsilon*epsilon)
+
+        # Active stress
+        Wactive = self.active.Wactive(F, diff = 0)
+        
+        return W + Wactive
+
+class StVenantKirchhoff(Material):
+    """
+    Class for linear elastic material
+    """
+    _model = "saint_venant_kirchhoff"
+
+    @staticmethod
+    def default_parameters():
+        return {"mu": 300.0,
+                "lmbda": 1.0}
+
+    def strain_energy(self, F_):
+
+        F = self.active.Fe(F_)
+        
+        dim = get_dimesion(F)
+
+        I = Identity(3)
+        J = det(F)
+        dim = get_dimesion(F)
+        if self.active.is_isochoric():
+            F_bar = pow(J, -float(1)/dim)*F
+        else:
+            F_bar = F
+
+        
+        C_bar = F_bar.T*F_bar
+        E = 0.5*(C_bar - I)
+        
+        W = self.lmbda/2*(tr(E)**2) + self.mu*tr(E*E)
+
+        # Active stress
+        Wactive = self.active.Wactive(F, diff = 0)
+        
+        return W + Wactive
 
 
 if __name__ == "__main__":

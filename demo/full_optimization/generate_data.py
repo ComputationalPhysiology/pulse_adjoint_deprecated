@@ -20,7 +20,7 @@ import numpy as np
 from dolfin import *
 
 
-import pulse_adjoint.material as mat
+import pulse_adjoint.models.material as mat
 from pulse_adjoint.lvsolver import LVSolver
 from pulse_adjoint.utils import QuadratureSpace
 from pulse_adjoint.setup_optimization import (setup_general_parameters,
@@ -287,15 +287,12 @@ def generate_data(passive_expr, active_expr,  params, ap_params, pressure_expr,
     
     material = mat.HolzapfelOgden(params["f0"], gamma,
                                   params["material_parameters"],
-                                  T_ref = ap_params["T_ref"], 
-                                  active_model = ap_params["active_model"])
-
+                                  **ap_params)
     params["material"] = material
 
 
     
     solver = LVSolver(params)
-    solver.parameters["solve"]["snes_solver"]["report"] = True
     solver.solve()
 
     
@@ -304,16 +301,22 @@ def generate_data(passive_expr, active_expr,  params, ap_params, pressure_expr,
     ps = []
     ws = []
 
+    from pulse_adjoint.iterate import iterate
+
     V_cg1 = VectorFunctionSpace(params["mesh"], "CG", 1)
     for it, pres in enumerate(pressures):
 
+        
+        iterate("pressure", solver, pres, pressure_expr)
+
+
         if it == len(pressures)-1:
-            gamma.assign(act)
+            iterate("gamma", solver, act, gamma)
+            
             if not ap_params["gamma_space"] == "R_0":
                 ap_params["volume_approx"] = "project"
-            
-        pressure_expr["p_lv"].t = pres
-        solver.solve()
+
+                
         w = solver.get_state()
         u,p = w.split(deepcopy=True)
 

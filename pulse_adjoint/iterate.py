@@ -238,7 +238,8 @@ def get_delta(new_control, c0, c1):
         
         
 def iterate_pressure(solver, target, p_expr,
-                     continuation = True, max_adapt_iter = 8, adapt_step=True):
+                     continuation = True, max_adapt_iter = 8, adapt_step=True,
+                     max_nr_crash = MAX_CRASH, max_iters=MAX_ITERS):
     """
     Using the given solver, iterate control to given target. 
     
@@ -400,7 +401,8 @@ def get_max_diff(f1,f2):
     
 def iterate_gamma(solver, target, gamma,
                   continuation = True, max_adapt_iter = 8,
-                  adapt_step=True, old_states = [], old_gammas = []):
+                  adapt_step=True, old_states = [], old_gammas = [],
+                  max_nr_crash = MAX_CRASH, max_iters=MAX_ITERS):
     """
     Using the given solver, iterate control to given target. 
     
@@ -468,7 +470,7 @@ def iterate_gamma(solver, target, gamma,
     while not target_reached:
         
         niters += 1
-        if ncrashes > MAX_CRASH or niters > MAX_ITERS:
+        if ncrashes > max_nr_crash or niters > max_iters:
             solver.reinit(prev_states[0], annotate = annotate)
             gamma.assign(control_values[0], annotate=annotate)
             

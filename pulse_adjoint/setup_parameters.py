@@ -440,6 +440,13 @@ def setup_application_parameters(material_model = "holzapfel_ogden"):
     # For default values see material module
     params.add("T_ref", 0.0)
 
+    # Decouple deviatoric and isochoric strains
+    params.add("dev_iso_split", True)
+
+    # Fraction of transverse active tesion for active stress formulation.
+    # 0 = active only along fiber, 1 = equal force in all directions (default=0.0).
+    params.add("eta", 0.0)
+
     # If you want to use a zero initial guess for gamma (False),
     # or use gamma from previous iteration as initial guess (True)
     params.add("initial_guess", "previous", ["previous", "zero", "smooth"])

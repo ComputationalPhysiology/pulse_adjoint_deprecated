@@ -43,101 +43,6 @@ def get_fiber_field(patient):
     return e_f
     
     
-def get_solver(matparams, patient, gamma, params):
-
-    from pulse_adjoint.setup_optimization import make_solver_parameters
-    from pulse_adjoint.lvsolver import LVSolver
-
-    solver_parameters, pressure, paramvec= make_solver_parameters(params, patient,
-                                                                  matparams, gamma)
-    return LVSolver(solver_parameters), pressure
-
-    # def make_dirichlet_bcs(W):
-    #     '''Make Dirichlet boundary conditions where the base is allowed to slide
-    #     in the x = 0 plane.
-    #     '''
-    #     no_base_x_tran_bc = dolfin.DirichletBC(W.sub(0).sub(0), 0, patient.markers["BASE"][0])
-    #     return [no_base_x_tran_bc]
-
-    
-    # matparams = {"a": matparams["a"], 
-    #              "a_f": matparams["a_f"],
-    #              "b": matparams["b"], 
-    #              "b_f": matparams["b_f"]}
-
-
-    # e_f = get_fiber_field(patient)
-    
-    # material = HolzapfelOgden(f0 = e_f, 
-    #                           gamma = gamma, 
-    #                           params = matparams,
-    #                           active_model = active_model)
-
-    
-
-    # ffun = patient.ffun
-
-        
-    # solver_parameters = {"mesh": patient.mesh,
-    #                      "facet_function": ffun, 
-    #                      "facet_normal": dolfin.FacetNormal(patient.mesh),
-    #                      "state_space": "P_2:P_1",
-    #                      "compressibility":{"type": "incompressible",
-    #                                         "lambda":0.0},
-    #                      "material": material,
-    #                      "bc":{"dirichlet": make_dirichlet_bcs,
-    #                            "neumann":neumann, 
-    #                            "robin":[[-dolfin.Constant(1.0, 
-    #                                                name ="base_spring_constant"), patient.markers["BASE"][0]]]},
-    #                      "solve":setup_solver_parameters()}
-
-    # return LVSolver(solver_parameters)
-
-def get_calibrated_solver(state_arr, pressure, gamma_arr,
-                          patient, params, matparams, rv_pressure = None):
-
-    
-
-    # p_lv = dolfin.Expression("t", t=0)
-
-    # if rv_pressure is None:
-    #     neumann = [[p_lv, patient.markers["ENDO"][0]]]
-    # else:
-    #     p_rv = dolfin.Expression("t", t=0)
-    #     neumann = [[p_lv, patient.markers["ENDO_LV"][0]],
-    #                [p_rv, patient.markers["ENDO_RV"][0]]]
-    #     p_rv.t = rv_pressure
-
-    # p_lv.t = pressure
-        
-    if params["gamma_space"] == "regional":
-        gamma = RegionalParameter(patient.sfun)
-        gamma_tmp = RegionalParameter(patient.sfun)
-    else:
-        gamma_space = dolfin.FunctionSpace(patient.mesh, "CG", 1)
-        gamma_tmp = dolfin.Function(gamma_space, name = "Contraction Parameter (tmp)")
-        gamma = dolfin.Function(gamma_space, name = "Contraction Parameter")
-
-    solver, p_expr = get_solver(matparams, patient, gamma, params)
-
-    
-    gamma_tmp.vector()[:] = gamma_arr
-    gamma.assign(gamma_tmp)
-
-    p_lv = p_expr["p_lv"]
-    
-
-    
-    
-
-    w = dolfin.Function(solver.get_state_space())
-    w.vector()[:] = state_arr
-
-    solver.reinit(w)
-
-    
-    
-    return solver, p_lv
 
 def init_spaces(mesh, gamma_space = "CG_1"):
 
@@ -209,9 +114,9 @@ def get_regional(dx, fun, fun_lst, regions = range(1,18), T_ref=1.0):
 
     if fun.value_size() > 1:
         if len(fun_lst) == 1:
-            return fun_lst[0]
+            return T_ref*fun_lst[0]
         else:
-            return fun_lst
+            return np.multiply(T_ref, fun_lst)
 
     # if len(fun.vector()) == 1:
         # return fun.vector().array()[0]*np.ones(len(regions))
@@ -909,200 +814,6 @@ def compute_time_varying_elastance(patient, params, data):
     return d
     
     
-def copmute_mechanical_features(patient, params, val, path):
-    """Compute mechanical features such as stress, strain, 
-    works etc, save the output in dolfin vectors to a file, and 
-    return a dictionary with average scalar values.
-
-    :param patient: patient data
-    :param params: pulse_adjoin.adjoint_contraction_parameters
-    :param val: the data
-    :param path: path to where to save the output
-
-    """
-    
-    
-
-    outdir = os.path.dirname(path)
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
-    print path
-
-    spaces = get_feature_spaces(patient.mesh, params["gamma_space"])
-
-    dx = dolfin.Measure("dx",subdomain_data = patient.sfun,
-                        domain = patient.mesh)
-    regions = [int(r) for r in set(patient.sfun.array())]
-
-    meshvols = {"global": float(dolfin.assemble(dolfin.Constant(1.0)*dx))}
-    for i in regions:
-        meshvols[i] = float(dolfin.assemble(dolfin.Constant(1.0)*dx(i)))
-
-    
-    pressures = patient.pressure
-    rv_pressures = None if not hasattr(patient, "RVP") else patient.rv_pressure
-
-    
-    ed_point = str(patient.passive_filling_duration) if params["unload"]\
-               else str(patient.passive_filling_duration-1)
-
-    # Material parameter
-    matparams = {}
-    for k,v in val["material_parameters"].iteritems():
-        if np.isscalar(v):
-            matparams[k] = v
-        else:
-            if len(v) == 1:
-                matparams[k] = v[0]
-            else:
-                if params["matparams_space"] == "regional":
-                    assert len(v) == len(regions)
-                    par = RegionalParameter(patient.sfun)
-                    par.vector()[:] = v
-                    matparams[k] = par.get_function()
-
-                else:
-                    family, degree =  params["matparams_space"].split("_")
-                    V = dolfin.FunctionSpace(patient.mesh, family, int(degree))
-                    par = dolfin.Function(V)
-                    assert len(v) == len(par.vector())
-                    par.vector()[:] = v
-                    matparams[k] = par
-                
-    
-    states = val["states"]
-    gammas = val["gammas"]
-    times = sorted(states.keys(), key=asint)
-
-    features = {"green_fiber_strain": [],
-                "deform_fiber_strain": [],
-                "gradu_fiber_strain": [],
-                "green_longitudinal_strain": [],
-                "green_circumferential_strain_ed": [],
-                "gradu_longitudinal_strain": [],
-                "deform_longitudinal_strain": [],
-                "caucy_fiber_stress": [],
-                "piola1_fiber_stress":[],
-                "piola2_fiber_stress": [],
-                "caucy_longitudinal_stress": [],
-                "piola1_longitudinal_stress": [],
-                "piola2_longitudinal_stress": [],
-                "gamma": [],
-                "displacement": []}
-
-    features_scalar = {"green_fiber_strain":{str(r):[] for r in ["global"]+regions },
-                       "gradu_fiber_strain":{str(r):[] for r in ["global"]+regions },
-                       "deform_fiber_strain": {str(r):[] for r in ["global"]+regions },
-                       "green_longitudinal_strain":{str(r):[] for r in ["global"]+regions },
-                       "green_circumferential_strain_ed":{str(r):[] for r in ["global"]+regions },
-                       "deform_longitudinal_strain":{str(r):[] for r in ["global"]+regions },
-                       "gradu_longitudinal_strain":{str(r):[] for r in ["global"]+regions },
-                       "caucy_fiber_stress":{str(r):[] for r in ["global"]+regions },
-                       "piola1_fiber_stress":{str(r):[] for r in ["global"]+regions },
-                       "piola2_fiber_stress":{str(r):[] for r in ["global"]+regions },
-                       "caucy_longitudinal_stress": {str(r):[] for r in ["global"]+regions },
-                       "piola1_longitudinal_stress":{str(r):[] for r in ["global"]+regions },
-                       "piola2_longitudinal_stress":{str(r):[] for r in ["global"]+regions },
-                       "gamma": {str(r):[] for r in ["global"]+regions }}
-
-    print("Extracting the following features:")
-    print(features.keys())
-
-    if hasattr(patient, "longitudinal"):
-        e_long = patient.longitudinal
-        has_longitudinal = True
-    else:
-        has_longitudinal = False
-
-    if hasattr(patient, "circumferential"):
-        e_circ = patient.circumferential
-        has_circumferential = True
-    else:
-        has_circumferential = False
-
-        
-        
-    e_f = get_fiber_field(patient)
-    def get(feature, fun, space, project = True):
-
-        assert space in spaces.keys(), "Invalid space: {}".format(space)
-        assert feature in features.keys(), "Invalid feature: {}".format(feature)
-
-        if project:
-            f = dolfin.project(fun, spaces[space])
-        else:
-            f = fun
-            
-        features[feature].append(dolfin.Vector(f.vector()))
-
-        if feature != "displacement":
-
-            arr = f.vector().array()            
-            regional = get_regional(dx, f, [arr], regions)
-            scalar = get_global(dx, f, [arr], regions)
-            
-            for i,r in enumerate(regions):
-                features_scalar[feature][str(r)].append(regional[i])
-                
-            features_scalar[feature]["global"].append(scalar[0])
-        
-        
-    
-    for t in times:
-
-        print("\tTimepoint {}/{} ".format(t, len(times)-1))
-        state = states[t]
-        gamma = gammas[t]
-        pressure = pressures[int(t)]
-        rv_pressure = None if rv_pressures is None else rv_pressures[int(t)]
-        
-        solver, p_lv = get_calibrated_solver(state, pressure,
-                                             gamma,
-                                             patient,
-                                             params, 
-                                             matparams, rv_pressure)
-
-        u,p = solver.get_state().split(deepcopy=True)
-
-        post = solver.postprocess()
-
-        w_ed = dolfin.Function(solver.get_state().function_space())
-        w_ed.vector()[:] = states[ed_point]
-        u_ed, _ = w_ed.split(deepcopy=True)
-        F_ed = dolfin.Identity(3) + dolfin.grad(u_ed)
-        
-        F1 =  (dolfin.Identity(3) + dolfin.grad(u))*dolfin.inv(F_ed)
-        E = 0.5*(F1.T*F1 - dolfin.Identity(3))
-        Ec = dolfin.inner(E*e_circ, e_circ)
-
-        get("green_fiber_strain", post.green_strain_component(e_f), "stress_space")
-        get("deform_fiber_strain", post.deformation_gradient_component(e_f), "stress_space")
-        get("gradu_fiber_strain", post.gradu_component(e_f), "stress_space")
-
-        get("caucy_fiber_stress", post.cauchy_stress_component(e_f), "stress_space")
-        get("piola1_fiber_stress", post.piola1_stress_component(e_f), "stress_space")
-        get("piola2_fiber_stress", post.piola2_stress_component(e_f), "stress_space")
-
-        if has_longitudinal:
-            get("green_circumferential_strain_ed", Ec, "stress_space")
-            get("green_longitudinal_strain", post.green_strain_component(e_long), "stress_space")
-            get("deform_longitudinal_strain", post.green_strain_component(e_long), "stress_space")
-            get("gradu_longitudinal_strain", post.gradu_component(e_long), "stress_space")
-            get("caucy_longitudinal_stress", post.cauchy_stress_component(e_long), "stress_space")
-            get("piola1_longitudinal_stress", post.piola1_stress_component(e_long), "stress_space")
-            get("piola2_longitudinal_stress", post.piola2_stress_component(e_long), "stress_space")
-            
-        get("displacement", u, "displacement_space", False)
-        
-        gamma = solver.get_gamma()
-        gamma.vector()[:] = np.multiply(params["T_ref"], gamma.vector().array())
-        get("gamma", gamma, "gamma_space", False)
-
-        
-    from load import save_dict_to_h5
-    save_dict_to_h5(features, path)
-
-    return features_scalar
 
 
 def compute_cardiac_work_echo(stresses, strains, flip =False):
@@ -1324,6 +1035,8 @@ def get_feature_spaces(mesh, gamma_space = "CG_1"):
 
     from pulse_adjoint.utils import QuadratureSpace
     spaces["quad_space"] = QuadratureSpace(mesh, 4, dim = 3)
+    spaces["quad_space_1"] = QuadratureSpace(mesh, 4, dim = 1)
+    
 
     return spaces
 
@@ -1343,7 +1056,7 @@ def make_simulation(params, features, outdir, patient):
 
     if 0:
         name = params["Patient_parameters"]["patient"]
-        fname = "../DATA/transformation/{}.txt".format(name)
+        fname = "../DATA2/transformation/{}.txt".format(name)
         F = np.loadtxt(fname)
 
     else:
@@ -1445,14 +1158,6 @@ def make_simulation(params, features, outdir, patient):
         new_coords = np.linalg.inv(F).dot(old_coords.T).T
         moving_mesh.coordinates()[:] = new_coords[:,:3]
 
-        # if 0:
-        #     F = dolfin.grad(u) + dolfin.Identity(3)
-        #     f0 = patient.fiber
-        #     f = dolfin.project(F*f0, f0.function_space())
-        #     fiber.vector()[:] = f.vector()
-        #     from paraview import fiber_to_xdmf
-        #     fiber_to_xdmf(fiber, "/".join([outdir, "fiber_{}".format(i)]))
-        
         for f in functions.keys():
 
             if f == "gamma":
@@ -1533,3 +1238,382 @@ def compute_emax(patient, params, val, valve_times):
                                  matparams)
     else:
         return None
+
+
+
+def copmute_mechanical_features(patient, params, val, path):
+    """Compute mechanical features such as stress, strain, 
+    works etc, save the output in dolfin vectors to a file, and 
+    return a dictionary with average scalar values.
+
+    :param patient: patient data
+    :param params: pulse_adjoin.adjoint_contraction_parameters
+    :param val: the data
+    :param path: path to where to save the output
+
+    """
+    
+    
+
+    outdir = os.path.dirname(path)
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+    print path
+
+    spaces = get_feature_spaces(patient.mesh, params["gamma_space"])
+
+    dx = dolfin.Measure("dx",subdomain_data = patient.sfun,
+                        domain = patient.mesh)
+    regions = [int(r) for r in set(patient.sfun.array())]
+
+    meshvols = {"global": float(dolfin.assemble(dolfin.Constant(1.0)*dx))}
+    for i in regions:
+        meshvols[i] = float(dolfin.assemble(dolfin.Constant(1.0)*dx(i)))
+
+    
+    pressures = patient.pressure
+    rv_pressures = None if not hasattr(patient, "RVP") else patient.rv_pressure
+
+    
+    ed_point = str(patient.passive_filling_duration) if params["unload"]\
+               else str(patient.passive_filling_duration-1)
+
+    # Material parameter
+    matparams = {}
+    for k,v in val["material_parameters"].iteritems():
+        if np.isscalar(v):
+            matparams[k] = v
+        else:
+            if len(v) == 1:
+                matparams[k] = v[0]
+            else:
+                if params["matparams_space"] == "regional":
+                    assert len(v) == len(regions)
+                    par = RegionalParameter(patient.sfun)
+                    par.vector()[:] = v
+                    matparams[k] = par.get_function()
+
+                else:
+                    family, degree =  params["matparams_space"].split("_")
+                    V = dolfin.FunctionSpace(patient.mesh, family, int(degree))
+                    par = dolfin.Function(V)
+                    assert len(v) == len(par.vector())
+                    par.vector()[:] = v
+                    matparams[k] = par
+                
+    
+    states = val["states"]
+    gammas = val["gammas"]
+    times = sorted(states.keys(), key=asint)
+
+    from itertools import product
+    keys = [":".join(a) for a in product(["green_strain", "cauchy_stress", "cauchy_dev_stress"],
+                                             ["longitudinal", "fiber", "circumferential", "radial"])] + \
+                ["gamma:", "displacement:"]
+
+
+    features = {k.rstrip(":") : [] for k in keys}
+    scalar_dict = {str(r):[] for r in ["global"]+regions }
+    from copy import deepcopy
+    features_scalar = {k.rstrip(":"):deepcopy(scalar_dict) for k in keys}
+    
+
+
+    print("\nExtracting the following features:")
+    print("\n".join(keys))
+
+    
+    if hasattr(patient, "longitudinal"):
+        e_long = patient.longitudinal
+        has_longitudinal = True
+    else:
+        has_longitudinal = False
+
+    if hasattr(patient, "circumferential"):
+        e_circ = patient.circumferential
+        has_circumferential = True
+    else:
+        has_circumferential = False
+
+    if hasattr(patient, "radial"):
+        e_rad = patient.radial
+        has_radial = True
+    else:
+        has_radial = False
+
+        
+        
+    e_f = get_fiber_field(patient)
+    
+    def get(feature, fun, space, project = True):
+
+        assert space in spaces.keys(), "Invalid space: {}".format(space)
+        assert feature in features.keys(), "Invalid feature: {}".format(feature)
+
+        if project:
+            f_ = dolfin.project(fun, spaces["quad_space_1"])
+            remove_extreme_outliers(f_, 500.0, -100.0)
+            f = smooth_from_points(spaces[space], f_)
+        else:
+            f = fun
+            
+        features[feature].append(dolfin.Vector(f.vector()))
+
+        if feature != "displacement":
+
+            arr = f.vector().array()            
+            regional = get_regional(dx, f, [arr], regions)
+            scalar = get_global(dx, f, [arr], regions)
+            
+            for i,r in enumerate(regions):
+                features_scalar[feature][str(r)].append(regional[i])
+                
+            features_scalar[feature]["global"].append(scalar[0])
+        
+        
+    
+    for t in times:
+
+        print("\tTimepoint {}/{} ".format(t, len(times)-1))
+        state = states[t]
+        gamma = gammas[t]
+        pressure = pressures[int(t)]
+        rv_pressure = None if rv_pressures is None else rv_pressures[int(t)]
+        
+        solver, p_lv = get_calibrated_solver(state, pressure,
+                                             gamma,
+                                             patient,
+                                             params, 
+                                             matparams, rv_pressure)
+
+        u,p = solver.get_state().split(deepcopy=True)
+
+        post = solver.postprocess()
+
+        w_ed = dolfin.Function(solver.get_state().function_space())
+        w_ed.vector()[:] = states[ed_point]
+        u_ed, _ = w_ed.split(deepcopy=True)
+        F_ed = dolfin.Identity(3) + dolfin.grad(u_ed)
+        
+        
+        for k in keys:
+
+            k1, k2 = k.split(":")
+
+            if k1 == "displacement":
+                get("displacement", u, "displacement_space", False)
+                
+            if k1 == "gamma":
+                gamma = solver.get_gamma()
+                gamma.vector()[:] = np.multiply(params["T_ref"], gamma.vector().array())
+                get("gamma", gamma, "gamma_space", False)
+
+            else:
+
+                if k2 == "longitudinal":
+                    if not has_longitudinal: continue
+                    e = e_long
+                elif k2 == "radial":
+                    if not has_radial: continue
+                    e = e_rad
+                elif k2 == "circumferential":
+                    if not has_circumferential: continue
+                    e = e_circ
+                else:
+                    e = e_f
+
+                if k1 == "green_strain":
+                    get(k, post.green_strain_component(e, F_ref = F_ed), "stress_space")
+                elif k1 == "cauchy_stress":
+                    get(k, post.cauchy_stress_component(e), "stress_space")
+                elif k1 == "cauchy_dev_stress":
+                    get(k, post.cauchy_stress_component(e, deviatoric=True), "stress_space")
+
+
+        
+    from load import save_dict_to_h5
+    save_dict_to_h5(features, path)
+
+    return features_scalar
+
+
+def get_solver(matparams, patient, gamma, params):
+
+    from ..setup_optimization import make_solver_parameters
+    from ..lvsolver import LVSolver
+
+    solver_parameters, pressure, paramvec= make_solver_parameters(params, patient,
+                                                                  matparams, gamma)
+    return LVSolver(solver_parameters), pressure
+
+
+def get_calibrated_solver(state_arr, pressure, gamma_arr,
+                          patient, params, matparams, rv_pressure = None):
+
+    
+    if params["gamma_space"] == "regional":
+        gamma = RegionalParameter(patient.sfun)
+        gamma_tmp = RegionalParameter(patient.sfun)
+    else:
+        gamma_space = dolfin.FunctionSpace(patient.mesh, "CG", 1)
+        gamma_tmp = dolfin.Function(gamma_space, name = "Contraction Parameter (tmp)")
+        gamma = dolfin.Function(gamma_space, name = "Contraction Parameter")
+
+    solver, p_expr = get_solver(matparams, patient, gamma, params)
+
+    
+    gamma_tmp.vector()[:] = gamma_arr
+    gamma.assign(gamma_tmp)
+
+    p_lv = p_expr["p_lv"]
+    
+
+    w = dolfin.Function(solver.get_state_space())
+    w.vector()[:] = state_arr
+
+    solver.reinit(w)
+
+    
+    return solver, p_lv
+
+
+def remove_extreme_outliers(fun, ub=np.inf, lb=-np.inf):
+    """
+    Set all values that are larger than ub to ub, 
+    and set all values that are lower than lb to lb.
+
+    fun : dolfin.Function
+        The function from which you want to remove extreme outliers
+    ub : float
+        Upper bound
+    lb : float
+        Lower bound
+    
+    """
+    fun.vector()[fun.vector().array() > ub] = ub
+    fun.vector()[fun.vector().array() < lb] = lb
+
+    
+
+def smooth_from_points(V, f0, nsamples = 20) :
+    """
+    Smooth f0 by interpolating f0 into V by using radial basis functions
+    for interpolating scattered data using nsamples.
+    The higher values of nsamples, the more you smooth.
+    
+    This is very useful is e.g f0 is a function in a
+    quadrature space
+
+    Parameters
+    ----------
+
+    V : dolfin.FunctionSpace
+        The space for the function to be returned
+    f0 : dolfin.Function
+        The function you want to smooth
+    nsamples : int (optional)
+        For each degree of freedom in V, use nsamples to
+        build the radial basis function. Default = 20.
+
+    Returns
+    -------
+    f : dolfin.Function
+        The function f0 interpolated into V
+        using radial basis funcitions for interpolating 
+        scattered data
+
+    """
+
+    from scipy.spatial import cKDTree
+    from scipy.interpolate import Rbf
+    import numpy as np
+    # points for f0
+    V0 = f0.function_space()
+    # xyz = V0.dofmap().tabulate_all_coordinates(V0.mesh()).reshape(-1, 3)
+    xyz =  V0.tabulate_dof_coordinates().reshape((-1, 3))
+    f0val = f0.vector().array()
+    tree = cKDTree(xyz)
+
+    # coordinate of the dofs
+    # coords = V.dofmap().tabulate_all_coordinates(V.mesh()).reshape(-1, 3)
+    coords =  V.tabulate_dof_coordinates().reshape((-1, 3))
+    f = dolfin.Function(V)
+
+    
+    for idx in xrange(0, V.dim()) :
+        v = coords[idx,:]
+        samples_rad, samples_idx = tree.query(v, nsamples)
+        a =  xyz[samples_idx,:]
+        b = np.ascontiguousarray(a).view(np.dtype((np.void, a.dtype.itemsize * a.shape[1])))
+        _, inds = np.unique(b, return_index=True)
+        c = a[inds]
+        s_idx=samples_idx[inds]
+
+        
+        xx, yy, zz = np.split(c, 3, axis=1)
+        fvals = f0val[s_idx]
+        rbf = Rbf(xx, yy, zz, fvals, function='linear')
+        f.vector()[idx] = float(rbf(v[0], v[1], v[2]))
+        
+        
+    return f
+
+
+
+def localproject(fun, V) :
+    """
+    Cheaper way of projecting than regular projections.
+    This is useful if you have many degrees of freedom.
+    For more info, see dolfin.LocalSolver.
+
+    Parameters
+    ---------- 
+    fun : dolfin.Function
+        The function you want to project
+    V : dolfin.FunctionSpace
+        The you want to project into
+    
+    Returns
+    -------
+    res : dolfin.Function
+        fun projected into V
+    
+    """
+    a = dolfin.inner(dolfin.TestFunction(V), dolfin.TrialFunction(V)) * dolfin.dx
+    L = dolfin.inner(dolfin.TestFunction(V), fun) * dolfin.dx
+    res = dolfin.Function(V)
+    solver = dolfin.LocalSolver(a,L)
+    solver.solve_local_rhs(res)
+    return res
+
+
+def setup_bullseye_sim(bullseye_mesh, fun_arr):
+    V = FunctionSpace(bullseye_mesh, "DG", 0)
+    dm = V.dofmap()
+    sfun = MeshFunction("size_t", bullseye_mesh, 2, bullseye_mesh.domains())
+
+    funcs = []
+    for time in range(len(fun_arr)):
+
+        fun_tmp = Function(V)
+        arr = fun_arr[time]
+
+        for region in range(17):
+
+                vertices = []
+
+                for cell in cells(bullseye_mesh):
+
+                    if sfun.array()[cell.index()] == region+1:
+
+                        verts = dm.cell_dofs(cell.index())
+
+                        for v in verts:
+                            # Find the correct vertex index 
+                            if v not in vertices:
+                                vertices.append(v)
+
+                fun_tmp.vector()[vertices] = arr[region]
+        funcs.append(Vector(fun_tmp.vector()))
+    return funcs
+    
