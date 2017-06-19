@@ -5,6 +5,7 @@ from pulse_adjoint.setup_parameters import setup_general_parameters
 from pulse_adjoint import LVTestPatient
 from pulse_adjoint.models.material import *
 from pulse_adjoint.iterate import iterate
+from pulse_adjoint.utils import QuadratureSpace
 
 
 def demo_heart():
@@ -123,7 +124,7 @@ def demo_cube():
     # Dirichlet BC
     def make_dirichlet_bcs(W):
         V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-        no_base_x_tran_bc = DirichletBC(V.sub(0), 0, topbottom_marker)
+        no_base_x_tran_bc = DirichletBC(V, Constant((0.0, 0.0, 0.0)), ffun, left_marker)
         return no_base_x_tran_bc
 
     # Spring Constant for Robin Condition
@@ -133,7 +134,7 @@ def demo_cube():
     N = FacetNormal(mesh)
 
     # Pressure
-    pressure = Expression("t", t = 0.1)
+    pressure = Expression("-t", t = 1.0)
 
     # Fibers
     V_f = QuadratureSpace(mesh, 4)
@@ -142,20 +143,12 @@ def demo_cube():
     f0 = interpolate(Expression(("1.0", "0.0", "0.0")), V_f)
 
     # Contraction parameter
-    gamma = Constant(0.1)
+    gamma = Constant(2.0)
     
     # Set up material model
-    material = HolzapfelOgden(f0, gamma, active_model = "active_stress")
+    material = HolzapfelOgden(f0, gamma, active_model = "active_stress", T_ref = 1.0)
     
-    # Solver parameters
-    solver_parameters = setup_solver_parameters()
-    solver_parameters = {"snes_solver":{}}
-    solver_parameters["nonlinear_solver"] = "snes"
-    solver_parameters["snes_solver"]["method"] = "newtonls"
-    solver_parameters["snes_solver"]["maximum_iterations"] = 8
-    solver_parameters["snes_solver"]["absolute_tolerance"] = 1e-5
-    solver_parameters["snes_solver"]["linear_solver"] = "lu"
-
+    
     # Create parameters for the solver
     params= {"mesh": mesh,
             "facet_function": ffun,
@@ -165,9 +158,8 @@ def demo_cube():
                                 "lambda":0.0},
              "material": material,
              "bc":{"dirichlet": make_dirichlet_bcs,
-                   "neumann":[[pressure, left_marker]],
-                   "robin":[[spring, right_marker]]},
-             "solve":solver_parameters}
+                   "neumann":[[pressure, right_marker]],
+                   "robin":[[spring, topbottom_marker]]}}
 
     solver = LVSolver(params)
     
@@ -186,5 +178,5 @@ def demo_cube():
     interactive()
 
 if __name__ == "__main__":
-    # demo_cube()
-    demo_heart()
+    demo_cube()
+    # demo_heart()

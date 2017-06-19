@@ -196,11 +196,8 @@ def radial_average(solver, r0, rs):
     V = df.FunctionSpace(mesh, "DG", 1)
     Tf_dg = smooth_from_points(V, Tf)
 
-    r1 = 1.1
-    # r2 = 1.2
     if not os.path.exists("bmesh"):
         os.makedirs("bmesh")
-
 
     avg_stress = []
     for r in rs:
@@ -222,12 +219,12 @@ def radial_average(solver, r0, rs):
         V0 = df.FunctionSpace(cylmesh, "DG", 1)
         v = df.interpolate(Tf_dg, V0)
     
-        rdom = df.AutoSubDomain(lambda x, on_bnd: (x[1]**2 + x[2]**2 - (0.1)**2 > -df.DOLFIN_EPS) and on_bnd and x[0] < 1.0 - df.DOLFIN_EPS and x[0] > -1.0 + df.DOLFIN_EPS)
+        rdom = df.AutoSubDomain(lambda x, on_bnd: (x[1]**2 + x[2]**2 - (0.1)**2 > -df.DOLFIN_EPS) \
+                                and on_bnd and x[0] < 1.0 - df.DOLFIN_EPS and x[0] > -1.0 + df.DOLFIN_EPS)
     
         ffun = df.FacetFunction("size_t", cylmesh)
         ffun.set_all(0)
         rdom.mark(ffun, 1)
-        # df.plot(ffun, interactive=True)
         ds = df.Measure("ds", domain=cylmesh, subdomain_data=ffun)(1)
 
 
@@ -402,6 +399,8 @@ def compare_analytic_passive():
         rs = np.linspace(1.0, 2.0, 10)
         avg_circ_stress = radial_average(solver, f0, rs)
         avg_rad_stress = radial_average(solver, r0, rs)
+        print avg_circ_stress
+        print avg_rad_stress
         ax.plot(rs, avg_circ_stress, label="circ stress {}".format(matstr),
                 color = colors[i], linestyle = "-")
         ax.plot(rs, avg_rad_stress, label="radial stress {}".format(matstr),
@@ -421,7 +420,7 @@ def compare_analytic_passive():
     lgd = ax.legend(loc = "center left", bbox_to_anchor=(1, 0.5)) 
     fig.savefig("passive_stress_cylinder.png",
                 bbox_extra_artists=(lgd,), bbox_inches='tight')
-    plt.show()
+    # plt.show()
 
 def compare_analytic_active():
 
@@ -503,8 +502,8 @@ def compare_analytic_active():
     from analytic_stress import circ_stress, rad_stress
     c_stress = circ_stress(P, rs)
     r_stress = rad_stress(P, rs)
-    ax.plot(rs, c_stress, label="analtic circ stress",  color = colors[i], linestyle = "-")
-    ax.plot(rs, r_stress, label="analytic radial stress",  color = colors[i], linestyle = "-.")
+    ax.plot(rs, c_stress, label="analtic circ stress",  color = colors[-1], linestyle = "-")
+    ax.plot(rs, r_stress, label="analytic radial stress",  color = colors[-1], linestyle = "-.")
     # ax.legend(loc = "best")
     ax.set_ylabel("Average Stress (kPa)")
     ax.set_title("Cylinder radius 1-2, p = 10.0, {}, Tref = {}".format(active_model, T_ref))
@@ -512,11 +511,11 @@ def compare_analytic_active():
     lgd = ax.legend(loc = "center left", bbox_to_anchor=(1, 0.5)) 
     fig.savefig("active_stress_cylinder_{}.png".format(active_model),
                 bbox_extra_artists=(lgd,), bbox_inches='tight')
-    plt.show()
+    # plt.show()
     
     
 
 if __name__ == "__main__":
-    main()
+    # main()
     # compare_analytic_passive()
-    # compare_analytic_active()
+    compare_analytic_active()

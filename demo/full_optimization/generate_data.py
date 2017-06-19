@@ -295,7 +295,6 @@ def generate_data(passive_expr, active_expr,  params, ap_params, pressure_expr,
 
     
     solver = LVSolver(params)
-    solver.parameters["solve"]["snes_solver"]["report"] = True
     solver.solve()
 
     
@@ -312,7 +311,7 @@ def generate_data(passive_expr, active_expr,  params, ap_params, pressure_expr,
             if not ap_params["gamma_space"] == "R_0":
                 ap_params["volume_approx"] = "project"
             
-        pressure_expr["p_lv"].t = pres
+        pressure_expr["p_lv"].assign(pres)
         solver.solve()
         w = solver.get_state()
         u,p = w.split(deepcopy=True)
