@@ -344,7 +344,7 @@ class Postprocess(object):
         """
         return self.solver._pi_int
 
-    def first_piola_stress(self):
+    def first_piola_stress(self, deviatoric=False):
         r"""
         First Piola Stress Tensor
 
@@ -361,7 +361,7 @@ class Postprocess(object):
            \mathbf{P} = \frac{\partial \psi}{\partial \mathbf{F}}
         
         """
-        return self.chaucy_stress()*inv(self._F.T)
+        return self.solver.parameters["material"].FirstPiolaStress(self._F, self._p, deviatoric)
         
 
     def second_piola_stress(self):
@@ -373,8 +373,7 @@ class Postprocess(object):
            \mathbf{S} =  \mathbf{F}^{-1} \sigma \mathbf{F}^{-T}
 
         """
-        return PiolaTransform(self.cauchy_stress(), self._F)
-
+        return inv(self._F) * self.first_piola_stress()
 
 
     def chaucy_stress(self, deviatoric=False):
@@ -412,7 +411,15 @@ class Postprocess(object):
         return self.solver.parameters["material"].strain_energy(self._F)
     
     def GreenLagrange(self, F_ref = None):
-        return self._E
+        
+        if F_ref is None:
+            F = self._F
+        else:
+            F = self._F*inv(F_ref)
+            
+        C = F.T*F
+        E = 0.5 * (C - self._I)
+        return E
 
     def fiber_strain(self):
         r"""Compute Fiber strain
@@ -459,8 +466,8 @@ class Postprocess(object):
         return inner((self.first_piola_stress()*n0)/n0**2, n0)
 
 
-    def green_strain_component(self, n0):
-        return inner(self.GreenLagrange()*n0/n0**2, n0)
+    def green_strain_component(self, n0, F_ref=None):
+        return inner(self.GreenLagrange(F_ref)*n0/n0**2, n0)
 
     def deformation_gradient_component(self, n0):
         return inner(self._F*n0/n0**2, n0)

@@ -1306,42 +1306,23 @@ def copmute_mechanical_features(patient, params, val, path):
     gammas = val["gammas"]
     times = sorted(states.keys(), key=asint)
 
-    features = {"green_fiber_strain": [],
-                # "deform_fiber_strain": [],
-                # "gradu_fiber_strain": [],
-                "green_longitudinal_strain": [],
-                "green_circumferential_strain_ed": [],
-                # "gradu_longitudinal_strain": [],
-                # "deform_longitudinal_strain": [],
-                "caucy_fiber_stress": [],
-                "caucy_fiber_stress_dev": [],
-                # "piola1_fiber_stress":[],
-                # "piola2_fiber_stress": [],
-                "caucy_longitudinal_stress": [],
-                # "piola1_longitudinal_stress": [],
-                # "piola2_longitudinal_stress": [],
-                "gamma": [],
-                "displacement": []}
+    from itertools import product
+    keys = [":".join(a) for a in product(["green_strain", "cauchy_stress", "cauchy_dev_stress"],
+                                             ["longitudinal", "fiber", "circumferential", "radial"])] + \
+                ["gamma:", "displacement:"]
 
-    features_scalar = {"green_fiber_strain":{str(r):[] for r in ["global"]+regions },
-                       # "gradu_fiber_strain":{str(r):[] for r in ["global"]+regions },
-                       # "deform_fiber_strain": {str(r):[] for r in ["global"]+regions },
-                       "green_longitudinal_strain":{str(r):[] for r in ["global"]+regions },
-                       "green_circumferential_strain_ed":{str(r):[] for r in ["global"]+regions },
-                       # "deform_longitudinal_strain":{str(r):[] for r in ["global"]+regions },
-                       # "gradu_longitudinal_strain":{str(r):[] for r in ["global"]+regions },
-                       "caucy_fiber_stress":{str(r):[] for r in ["global"]+regions },
-                       "caucy_fiber_stress_dev":{str(r):[] for r in ["global"]+regions },
-                       # "piola1_fiber_stress":{str(r):[] for r in ["global"]+regions },
-                       # "piola2_fiber_stress":{str(r):[] for r in ["global"]+regions },
-                       "caucy_longitudinal_stress": {str(r):[] for r in ["global"]+regions },
-                       # "piola1_longitudinal_stress":{str(r):[] for r in ["global"]+regions },
-                       # "piola2_longitudinal_stress":{str(r):[] for r in ["global"]+regions },
-                       "gamma": {str(r):[] for r in ["global"]+regions }}
 
-    print("Extracting the following features:")
-    print(features.keys())
+    features = {k.rstrip(":") : [] for k in keys}
+    scalar_dict = {str(r):[] for r in ["global"]+regions }
+    from copy import deepcopy
+    features_scalar = {k.rstrip(":"):deepcopy(scalar_dict) for k in keys}
+    
 
+
+    print("\nExtracting the following features:")
+    print("\n".join(keys))
+
+    
     if hasattr(patient, "longitudinal"):
         e_long = patient.longitudinal
         has_longitudinal = True
@@ -1354,16 +1335,23 @@ def copmute_mechanical_features(patient, params, val, path):
     else:
         has_circumferential = False
 
+    if hasattr(patient, "radial"):
+        e_rad = patient.radial
+        has_radial = True
+    else:
+        has_radial = False
+
         
         
     e_f = get_fiber_field(patient)
+    
     def get(feature, fun, space, project = True):
 
         assert space in spaces.keys(), "Invalid space: {}".format(space)
         assert feature in features.keys(), "Invalid feature: {}".format(feature)
 
         if project:
-            f_ = localproject(fun, spaces["quad_space_1"])
+            f_ = dolfin.project(fun, spaces["quad_space_1"])
             remove_extreme_outliers(f_, 500.0, -100.0)
             f = smooth_from_points(spaces[space], f_)
         else:
@@ -1407,33 +1395,40 @@ def copmute_mechanical_features(patient, params, val, path):
         u_ed, _ = w_ed.split(deepcopy=True)
         F_ed = dolfin.Identity(3) + dolfin.grad(u_ed)
         
-        F1 =  (dolfin.Identity(3) + dolfin.grad(u))*dolfin.inv(F_ed)
-        E = 0.5*(F1.T*F1 - dolfin.Identity(3))
-        Ec = dolfin.inner(E*e_circ, e_circ)
-
-        get("green_fiber_strain", post.green_strain_component(e_f), "stress_space")
-        # get("deform_fiber_strain", post.deformation_gradient_component(e_f), "stress_space")
-        # get("gradu_fiber_strain", post.gradu_component(e_f), "stress_space")
-
-        get("caucy_fiber_stress", post.cauchy_stress_component(e_f), "stress_space")
-        # get("caucy_fiber_stress_dev", post.cauchy_stress_component(e_f, deviatoric=True), "stress_space")
-        # get("piola2_fiber_stress", post.piola2_stress_component(e_f), "stress_space")
-
-        if has_longitudinal:
-            get("green_circumferential_strain_ed", Ec, "stress_space")
-            get("green_longitudinal_strain", post.green_strain_component(e_long), "stress_space")
-            # get("deform_longitudinal_strain", post.green_strain_component(e_long), "stress_space")
-            # get("gradu_longitudinal_strain", post.gradu_component(e_long), "stress_space")
-            get("caucy_longitudinal_stress", post.cauchy_stress_component(e_long), "stress_space")
-            # get("caucy_longitudinal_stress", post.cauchy_stress_component(e_long), "stress_space")
-            # get("piola1_longitudinal_stress", post.piola1_stress_component(e_long), "stress_space")
-            # get("piola2_longitudinal_stress", post.piola2_stress_component(e_long), "stress_space")
-            
-        get("displacement", u, "displacement_space", False)
         
-        gamma = solver.get_gamma()
-        gamma.vector()[:] = np.multiply(params["T_ref"], gamma.vector().array())
-        get("gamma", gamma, "gamma_space", False)
+        for k in keys:
+
+            k1, k2 = k.split(":")
+
+            if k1 == "displacement":
+                get("displacement", u, "displacement_space", False)
+                
+            if k1 == "gamma":
+                gamma = solver.get_gamma()
+                gamma.vector()[:] = np.multiply(params["T_ref"], gamma.vector().array())
+                get("gamma", gamma, "gamma_space", False)
+
+            else:
+
+                if k2 == "longitudinal":
+                    if not has_longitudinal: continue
+                    e = e_long
+                elif k2 == "radial":
+                    if not has_radial: continue
+                    e = e_rad
+                elif k2 == "circumferential":
+                    if not has_circumferential: continue
+                    e = e_circ
+                else:
+                    e = e_f
+
+                if k1 == "green_strain":
+                    get(k, post.green_strain_component(e, F_ref = F_ed), "stress_space")
+                elif k1 == "cauchy_stress":
+                    get(k, post.cauchy_stress_component(e), "stress_space")
+                elif k1 == "cauchy_dev_stress":
+                    get(k, post.cauchy_stress_component(e, deviatoric=True), "stress_space")
+
 
         
     from load import save_dict_to_h5
