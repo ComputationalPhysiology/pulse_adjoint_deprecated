@@ -73,20 +73,26 @@ class ActiveStress(ActiveModel):
     _model = "active_stress"
     def __init__(self, *args, **kwargs):
 
-        
-        self._axial_stress = kwargs.pop("axial_stress", "uniaxial")
-        assert self._axial_stress in ["uniaxial", "biaxial"]
+        # Fraction of transverse stress
+        # (0 = active only along fiber, 1 = equal amout of tension in all directions)
+        self._eta = df.Constant(kwargs.pop("eta", 0.0))
+
         ActiveModel.__init__(self, *args, **kwargs)
+
+    def eta(self):
+        return self._eta
         
     def Wactive(self, F, diff = 0):
 
         C = F.T*F
         f0 = self.get_component("fiber")
         I4f = inner(C*f0, f0)
+        I1 = tr(C)
         gamma = self.get_activation()
+        eta = self.eta()
         
         if diff == 0:
-            return df.Constant(0.5)*gamma*(I4f-1)
+            return df.Constant(0.5)*gamma*( (I4f-1) + eta * ( (I1 - 3) - (I4f - 1)) )
 
         elif diff == 1:
             return gamma

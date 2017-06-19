@@ -52,7 +52,7 @@ params["matparams_space"] = "R_0"
 params["passive_weights"] = "all"
 
 # Estimate the unloaded geometry
-params["unload"] = True
+params["unload"] = False
 
 if params["unload"]:
     params["Unloading_parameters"]["maxiter"] = 10
@@ -86,8 +86,9 @@ for k, v in optweight_passive.iteritems():
 params["gamma_space"] = "R_0"
 
 # Active model
-params["active_model"]  = "active_strain"
-# params["active_model"]  = "active_stress"
+# params["active_model"]  = "active_strain"
+params["active_model"]  = "active_stress"
+
 
 # Use gamma from previous iteration as intial guess
 params["initial_guess"] ="previous"
@@ -100,10 +101,10 @@ params["Optimization_parameters"]["gamma_max"] = 1.0
 if params["active_model"] == "active_strain":
     
     params["T_ref"] = 0.5
-    
-else: 
-    params["T_ref"] = 100.0
 
+else: 
+    params["T_ref"] = 75.0
+    params["eta"] = 0.2
 
 # Weights on the functional
 optweight_active = {"volume":0.95, 

@@ -59,24 +59,33 @@ class Material(object):
     """
     Initialize material model
     
-    :param f0: Fiber field
-    :type f0: :py:class`dolfin.Function`
-    :param gamma: Activation parameter
-    :type gamma: :py:class`dolfin.Function`
-    :param dict params: material parameters
-    :param str active_model: The active model. Possible values are
-    'active_stress', 'active_strain' and 
-                                 'active_strain_rossi'.
-    :param s0: Sheet field
-    :type s0: :py:class`dolfin.Function`
-    :param n0: Fiber-sheet field
-    :type n0: :py:class`dolfin.Function`
-    :param float T_ref: Scale factor for active parameter
+    Parameters
+    ----------
 
+    f0 : :py:class`dolfin.Function`
+        Fiber field
+    gamma : :py:class`dolfin.Function`
+        Activation parameter
+    params : dict
+        Material parameters
+    active_model : str
+        Active model - active strain or active stress
+    s0 : :py:class`dolfin.Function`
+        Sheets
+    n0 : :py:class`dolfin.Function`
+        Sheet - normal
+    T_ref : float
+        Scale factor for activation parameter (default = 1.0)
+    dev_iso_split : bool
+        Decouple deformation into deviatoric and isochoric deformations
+    eta : float
+        Fraction of transverse active tesion for active stress formulation.
+        0 = active only along fiber, 1 = equal forces in all directions (default=0.0).
     """
     def __init__(self, f0 = None, gamma = None, params = None,
                  active_model = "active_strain", s0 = None,
-                 n0 = None, T_ref = None, dev_iso_split = True):
+                 n0 = None, T_ref = None, dev_iso_split = True,
+                 eta = 0.0, *args, **kwargs):
 
 
         # Parameters
@@ -114,7 +123,7 @@ class Material(object):
                        T_ref, dev_iso_split)
         # Activation
         if active_model == "active_stress":
-            self.active = ActiveStress(*active_args)
+            self.active = ActiveStress(*active_args, eta = eta)
         else:
             self.active = ActiveStrain(*active_args)
 
@@ -209,7 +218,26 @@ class Material(object):
             logger.debug("Return total Cauchy stress")
             return T -  p*I
 
+    def FirstPiolaStress(self, F, p=None, deviatoric=False):
 
+        I = Identity(3)
+                
+        # First Piola Kirchoff
+        P = diff(self.strain_energy(F), F)
+        J = det(F)
+
+        if deviatoric:
+            logger.debug("Return deviatoric Cauchy stress")
+            return P - (1.0/3.0) * tr(P)*I
+
+        
+        if p is None:
+            logger.debug("Return Cauchy stress without hydrostatic component")
+            return P
+            
+        else:
+            logger.debug("Return total Cauchy stress")
+            return P -  p*J*inv(F).T
 
 class HolzapfelOgden(Material):
     r"""
@@ -472,7 +500,7 @@ class StVenantKirchhoff(Material):
     """
     Class for linear elastic material
     """
-    _model = "linear_elastic"
+    _model = "saint_venant_kirchhoff"
 
     @staticmethod
     def default_parameters():

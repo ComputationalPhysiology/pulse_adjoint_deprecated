@@ -250,10 +250,9 @@ def make_solver_parameters(params, patient, matparams,
     Material = get_material_model(params["material_model"])
     material = Material(patient.fiber, gamma,
                         matparams,
-                        params["active_model"],
                         s0 = patient.sheet,
                         n0 = patient.sheet_normal,
-                        T_ref = params["T_ref"])
+                        **params)
     
         
     if measurements is None:
