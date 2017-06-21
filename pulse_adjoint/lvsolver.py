@@ -1,21 +1,31 @@
 #!/usr/bin/env python
-# Copyright (C) 2016 Henrik Finsberg
+# c) 2001-2017 Simula Research Laboratory ALL RIGHTS RESERVED
+# Authors: Henrik Finsberg
+# END-USER LICENSE AGREEMENT
+# PLEASE READ THIS DOCUMENT CAREFULLY. By installing or using this
+# software you agree with the terms and conditions of this license
+# agreement. If you do not accept the terms of this license agreement
+# you may not install or use this software.
+
+# Permission to use, copy, modify and distribute any part of this
+# software for non-profit educational and research purposes, without
+# fee, and without a written agreement is hereby granted, provided
+# that the above copyright notice, and this license agreement in its
+# entirety appear in all copies. Those desiring to use this software
+# for commercial purposes should contact Simula Research Laboratory AS: post@simula.no
 #
-# This file is part of PULSE-ADJOINT.
-#
-# PULSE-ADJOINT is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# PULSE-ADJOINT is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
+# IN NO EVENT SHALL SIMULA RESEARCH LABORATORY BE LIABLE TO ANY PARTY
+# FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES,
+# INCLUDING LOST PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE
+# "PULSE-ADJOINT" EVEN IF SIMULA RESEARCH LABORATORY HAS BEEN ADVISED
+# OF THE POSSIBILITY OF SUCH DAMAGE. THE SOFTWARE PROVIDED HEREIN IS
+# ON AN "AS IS" BASIS, AND SIMULA RESEARCH LABORATORY HAS NO OBLIGATION
+# TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+# SIMULA RESEARCH LABORATORY MAKES NO REPRESENTATIONS AND EXTENDS NO
+# WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
+# NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 from copy import deepcopy
+
 from .dolfinimport import *
 from .adjoint_contraction_args import logger
 from .kinematics import *
@@ -39,6 +49,7 @@ class LVSolver(object):
         
         self.parameters = params
 
+
         # Krylov solvers does not work
         self.iterative_solver = False
 
@@ -60,10 +71,16 @@ class LVSolver(object):
 
         self.relax_adjoint_solver = True if not params.has_key("relax_adjoint_solver") \
                                     else params["relax_adjoint_solver"]
-        
+
+        self._compressible_model = get_compressibility(self.parameters)
         self._init_spaces()
         self._init_forms()
 
+    def material(self):
+        return self.parameters["material"]
+
+    def compressibility(self):
+        return self._compressible_model
         
     def postprocess(self):
         return Postprocess(self)
@@ -219,13 +236,10 @@ class LVSolver(object):
         """
         Initialize function spaces
         """
-        
-        self._compressibility = get_compressibility(self.parameters)
-            
-        self._W = self._compressibility.W
-        self._w = self._compressibility.w
-        self._w_test = self._compressibility.w_test
-
+                    
+        self._W = self.compressibility().get_state_space()
+        self._w = self.compressibility().get_state()
+        self._w_test = self.compressibility().get_state_test()
 
     def _init_forms(self):
         r"""
@@ -242,7 +256,8 @@ class LVSolver(object):
         dim = self.parameters["mesh"].topology().dim()
         
         # Displacement
-        u = self._compressibility.get_displacement_variable()
+        u, p = split(self._w)
+        v, q = split(self._w_test)
 
         # Identity
         self._I = Identity(dim)
@@ -254,18 +269,17 @@ class LVSolver(object):
         J = det(self._F)
                 
         # Internal energy
-        self._strain_energy = material.strain_energy(self._F)
-        self._pi_int = self._strain_energy + self._compressibility(J)
+        self._pi_int =  material.strain_energy(self._F)  +\
+                        material.compressibility(p,J)
                        
-
-
-        # Testfunction for displacement
-        du = self._compressibility.u_test
-        dp = self._compressibility.p_test
-        p = self._compressibility.p
                 
-        ## Internal virtual work
-        self._G = derivative(self._pi_int*dx, self._w, self._w_test) 
+        # ## Internal virtual work
+        self._G = derivative(self._pi_int*dx, self._w, self._w_test)
+
+        # Alternative formualtion
+        # S, Je = material.SecondPiolaStress(self._F, p, return_J = True)
+        # P = self._F * S
+        # self._G = inner(P, grad(v))*dx - q*(Je-1)*dx
 
         
         ## External work
@@ -277,12 +291,12 @@ class LVSolver(object):
                 pressure, marker = neumann_bc
                 n = pressure*cofac(self._F) * N
                 
-                self._G += inner(du, n)*ds(marker)
+                self._G += inner(v, n)*ds(marker)
          
                 
         # Other body forces
         if self.parameters["bc"].has_key("body_force"):           
-            self._G += -derivative(inner(self.parameters["bc"]["body_force"], u)*dx, u, du)
+            self._G += -derivative(inner(self.parameters["bc"]["body_force"], u)*dx, u, v)
 
         
         # Robin BC
@@ -290,7 +304,7 @@ class LVSolver(object):
             for robin_bc in self.parameters["bc"]["robin"]:
                 if robin_bc is not None:
                     val, marker = robin_bc
-                    self._G += inner(val*u, du)*ds(marker)
+                    self._G += inner(val*u, v)*ds(marker)
         
        
         # Penalty term
@@ -335,7 +349,7 @@ class Postprocess(object):
         self._C = self.solver._C
         self._E = self.solver._E
         self._I = self.solver._I
-        self._p = self.solver._compressibility.p
+        self._p = self.solver.compressibility().p
 
 
     def internal_energy(self):
@@ -373,7 +387,7 @@ class Postprocess(object):
            \mathbf{S} =  \mathbf{F}^{-1} \sigma \mathbf{F}^{-T}
 
         """
-        return inv(self._F) * self.first_piola_stress()
+        return  self.solver.parameters["material"].SecondPiolaStress(self._F, self._p)
 
 
     def chaucy_stress(self, deviatoric=False):
@@ -454,8 +468,11 @@ class Postprocess(object):
     def cauchy_stress_component(self, n0, deviatoric=False):
 
         # Push forward to current configuration
-        n = self._F*n0
-        return inner((self.chaucy_stress(deviatoric)*n)/n**2, n)
+        n = project(self._F*n0, n0.function_space())
+        from pulse_adjoint.unloading.utils import normalize_vector_field
+        n_norm = normalize_vector_field(n)
+        return inner((self.chaucy_stress(deviatoric)*n_norm), n_norm)
+        # return inner((self.chaucy_stress(deviatoric)*n)/n**2, n)
 
     def piola2_stress_component(self, n0):
         

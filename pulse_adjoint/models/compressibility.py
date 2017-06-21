@@ -1,20 +1,29 @@
 #!/usr/bin/env python
-# Copyright (C) 2016 Gabriel Balaban
+# c) 2001-2017 Simula Research Laboratory ALL RIGHTS RESERVED
+# Authors: Henrik Finsberg
+# END-USER LICENSE AGREEMENT
+# PLEASE READ THIS DOCUMENT CAREFULLY. By installing or using this
+# software you agree with the terms and conditions of this license
+# agreement. If you do not accept the terms of this license agreement
+# you may not install or use this software.
+
+# Permission to use, copy, modify and distribute any part of this
+# software for non-profit educational and research purposes, without
+# fee, and without a written agreement is hereby granted, provided
+# that the above copyright notice, and this license agreement in its
+# entirety appear in all copies. Those desiring to use this software
+# for commercial purposes should contact Simula Research Laboratory AS: post@simula.no
 #
-# This file is part of PULSE-ADJOINT.
-#
-# PULSE-ADJOINT is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# PULSE-ADJOINT is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
+# IN NO EVENT SHALL SIMULA RESEARCH LABORATORY BE LIABLE TO ANY PARTY
+# FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES,
+# INCLUDING LOST PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE
+# "PULSE-ADJOINT" EVEN IF SIMULA RESEARCH LABORATORY HAS BEEN ADVISED
+# OF THE POSSIBILITY OF SUCH DAMAGE. THE SOFTWARE PROVIDED HEREIN IS
+# ON AN "AS IS" BASIS, AND SIMULA RESEARCH LABORATORY HAS NO OBLIGATION
+# TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+# SIMULA RESEARCH LABORATORY MAKES NO REPRESENTATIONS AND EXTENDS NO
+# WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
+# NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 from ..dolfinimport import *
 from ..adjoint_contraction_args import logger
 
@@ -39,20 +48,36 @@ def get_compressibility(parameters):
     
     elif parameters["compressibility"]["type"] == "hu_washizu":
         return Compressibility.HuWashizu(parameters)
+
+
+# class CardiacMechanicsProblem(object):
+
+
+def compressibility(model, *args, **kwargs):
+
+    if model == "incompressible":
+        return incompressible(*args, **kwargs)
+
+
+def incompressible(p,J):
+    return -p*(J-1.0)
+
+
+        
+    
         
 
 class Compressibility(object):
 
     class Incompressible(object):
+
+        
         def __init__(self, parameters):
             
             mesh = parameters["mesh"]
             
-            # V_str, Q_str = ("P_2", "P_1") if not parameters.has_key("state_space") \
-              # else parameters["state_space"].split(":")
-
-            element = "taylor_hood" if not parameters.has_key("elements") \
-                       else parameters["elements"]
+            element = "taylor_hood" if not parameters.has_key("element_type") \
+                       else parameters["element_type"]
 
             msg  = "Supported elements are 'taylor_hood' and 'mini'"
             assert element in ["taylor_hood", "mini"], msg
@@ -93,15 +118,6 @@ class Compressibility(object):
                 self._u_space = P2
                 self._p_space = P1
                 self.W = P2*P1
-                                    
-                # # Displacemet Space
-                # V = VectorFunctionSpace(mesh, V_str.split("_")[0], 
-                #                         int(V_str.split("_")[1]))
-
-                # # Lagrange Multiplier
-                # Q = FunctionSpace(mesh, Q_str.split("_")[0], 
-                #                   int(Q_str.split("_")[1]))
-                # self.W = MixedFunctionSpace([V, Q])
 
             
             self.w = Function(self.W, name = "displacement-pressure")
@@ -109,14 +125,22 @@ class Compressibility(object):
             self.u_test, self.p_test = split(self.w_test)
             self.u, self.p = split(self.w)
     
-        def __call__(self, J):
-            return -self.p*(J-1.0)
 
         def is_incompressible(self):
             return True
+
+        def get_state_space(self):
+            return self.W
+
+        def get_state(self):
+            return self.w
+
+        def get_state_test(self):
+            return self.w_test
         
         def get_displacement_space(self):
             return self.W.sub(0)
+        
         def get_u_space(self):
             return self._u_space
         def get_p_space(self):
@@ -158,7 +182,7 @@ class Compressibility(object):
         Mechanical Simulations"
         """
         def __init__(self, parameters):
-            super(type(self), self).__init__(parameters)
+            super(type(self), self).init_spaces(parameters)
 
             if parameters["compressibility"].has_key("lambda"):
                 self.lamda = Constant(parameters["compressibility"]["lambda"], name = "incomp_penalty")
