@@ -1,25 +1,37 @@
 #!/usr/bin/env python
-# Copyright (C) 2016 Henrik Finsberg
+# c) 2001-2017 Simula Research Laboratory ALL RIGHTS RESERVED
+# Authors: Henrik Finsberg
+# END-USER LICENSE AGREEMENT
+# PLEASE READ THIS DOCUMENT CAREFULLY. By installing or using this
+# software you agree with the terms and conditions of this license
+# agreement. If you do not accept the terms of this license agreement
+# you may not install or use this software.
+
+# Permission to use, copy, modify and distribute any part of this
+# software for non-profit educational and research purposes, without
+# fee, and without a written agreement is hereby granted, provided
+# that the above copyright notice, and this license agreement in its
+# entirety appear in all copies. Those desiring to use this software
+# for commercial purposes should contact Simula Research Laboratory AS: post@simula.no
 #
-# This file is part of PULSE-ADJOINT.
-#
-# PULSE-ADJOINT is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# PULSE-ADJOINT is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with PULSE-ADJOINT. If not, see <http://www.gnu.org/licenses/>.
+# IN NO EVENT SHALL SIMULA RESEARCH LABORATORY BE LIABLE TO ANY PARTY
+# FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES,
+# INCLUDING LOST PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE
+# "PULSE-ADJOINT" EVEN IF SIMULA RESEARCH LABORATORY HAS BEEN ADVISED
+# OF THE POSSIBILITY OF SUCH DAMAGE. THE SOFTWARE PROVIDED HEREIN IS
+# ON AN "AS IS" BASIS, AND SIMULA RESEARCH LABORATORY HAS NO OBLIGATION
+# TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+# SIMULA RESEARCH LABORATORY MAKES NO REPRESENTATIONS AND EXTENDS NO
+# WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
+# NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 from .active import *
+from .compressibility import compressibility
+
 from ..dolfinimport import *
 from ..setup_optimization import RegionalParameter
 from ..utils import get_dimesion
 from ..adjoint_contraction_args import logger
+
 
 
 def get_dimesion(F):
@@ -85,6 +97,7 @@ class Material(object):
     def __init__(self, f0 = None, gamma = None, params = None,
                  active_model = "active_strain", s0 = None,
                  n0 = None, T_ref = None, dev_iso_split = True,
+                 compressible_model = "incompressible",
                  eta = 0.0, *args, **kwargs):
 
 
@@ -126,6 +139,16 @@ class Material(object):
             self.active = ActiveStress(*active_args, eta = eta)
         else:
             self.active = ActiveStrain(*active_args)
+
+        self._compressible_model = compressible_model
+
+    def compressible_model(self):
+        return self._compressible_model
+
+    def compressibility(self, p, J):
+
+        model = self.compressible_model()
+        return compressibility(model, p, J)
 
     def get_active_model(self):
         return self.active.get_model_type()
@@ -195,50 +218,121 @@ class Material(object):
         
         return W
 
+    
+
+
 
     def CauchyStress(self, F, p=None, deviatoric = False):
 
         I = Identity(3)
-                
+
+
+        F = variable(F)
+
+        if p is None:
+            psi = self.strain_energy(F)
+        else:
+            J = det(F)
+            psi = self.strain_energy(F) - p*(J-1)
+
+
+       
+
+        fiber = self.active.get_component("fiber")
+        sheet = self.active.get_component("sheet")
+        cross_sheet = self.active.get_component("sheet_normal")
+
+
         # First Piola Kirchoff
-        P = diff(self.strain_energy(F), F)
+        S = self.SecondPiolaStress(F,p)
+        P = F*S
+                
         # Cauchy stress
         T = InversePiolaTransform(P, F)
+        
 
         if deviatoric:
             logger.debug("Return deviatoric Cauchy stress")
-            return T - (1.0/3.0) * tr(T)*I
+            return (T - (1.0/3.0) * tr(T)*I )
 
-        
-        if p is None:
-            logger.debug("Return Cauchy stress without hydrostatic component")
-            return T
-            
         else:
             logger.debug("Return total Cauchy stress")
-            return T -  p*I
+            return T
 
-    def FirstPiolaStress(self, F, p=None, deviatoric=False):
+    
+    def SecondPiolaStress(self, F, p, *args, **kwargs):
+
+        dim = get_dimesion(F)
+        I = Identity(dim)
+
+        f0 = self.active.get_component("fiber")
+        f0f0 = outer(f0,f0)
+        
+        I1  = variable(self.active.I1(F))
+        I4f = variable(self.active.I4(F))
+
+        Fe = self.active.Fe(F)
+        Ce = Fe.T*Fe
+
+        # Elastic volume ratio
+        J = variable(det(Fe))
+        
+
+        w1   = self.W_1(I1, diff = 1, dim = dim)
+        w4f  = self.W_4(I4f, diff = 1)
+
+        
+        
+        # Total Stress
+        S_bar = 2 * w1*I + 2 * w4f * f0f0 
+
+        if self.is_isochoric():
+
+            # Deviatoric
+            Dev_S_bar = S_bar - (1.0/3.0)*inner(S_bar, Ce)*inv(Ce)
+
+            S_mat = J**(-2.0/3.0)*Dev_S_bar
+        else:
+            S_mat = S_bar
+            
+
+        # Volumetric
+        psi_vol = self.compressibility(p,J)
+        S_vol = J*diff(psi_vol, J)*inv(Ce)
+
+        
+
+        # Active stress
+        wactive = self.active.Wactive(F, diff = 1)
+        eta = self.active.eta()
+        
+        S_active = wactive * ( f0f0 + eta * (I - f0f0))
+        
+
+        S = S_mat + S_vol + S_active
+        
+      
+        return S
+        
+        
+
+    def FirstPiolaStress(self, F, p=None, *args, **kwargs):
 
         I = Identity(3)
-                
-        # First Piola Kirchoff
-        P = diff(self.strain_energy(F), F)
-        J = det(F)
-
-        if deviatoric:
-            logger.debug("Return deviatoric Cauchy stress")
-            return P - (1.0/3.0) * tr(P)*I
-
         
-        if p is None:
-            logger.debug("Return Cauchy stress without hydrostatic component")
-            return P
-            
-        else:
-            logger.debug("Return total Cauchy stress")
-            return P -  p*J*inv(F).T
+        F = variable(F)        
+        # First Piola Kirchoff
+        psi_iso = self.strain_energy(F)
+        P_iso = diff(psi_iso, F)
+        
+        J = variable(det(F))
+        psi_vol = self.compressibility(p,J)
+        P_vol = J*diff(psi_vol, J)*inv(F).T
 
+        P = P_iso + P_vol
+        
+        return P
+        
 class HolzapfelOgden(Material):
     r"""
     Transversally isotropic version of the
@@ -279,6 +373,53 @@ class HolzapfelOgden(Material):
                 "b":9.726, "b_f":15.779}
 
 
+
+            
+
+        
+        
+
+    # def CauchyStress(self, F, p=None, deviatoric=False):
+
+    #     I1  = self.active.I1(F)
+    #     I4f = self.active.I4(F)
+
+    #     # Active stress
+    #     wactive = self.active.Wactive(F, diff = 1)
+        
+    #     dim = get_dimesion(F)
+    #     I = Identity(dim)
+    #     w1   = self.W_1(I1, diff = 1, dim = dim)
+    #     w4f  = self.W_4(I4f, diff = 1)
+
+        
+    #     Fe = self.active.Fe(F)
+    #     Be = Fe*Fe.T
+    #     B = F*F.T
+
+    #     fe = Fe*self.active.get_component("fiber")
+    #     f = F*self.active.get_component("fiber")
+
+    #     fefe = outer(fe, fe)
+    #     ff = outer(f,f)
+        
+        
+              
+    #     # T = 2*w1*Be + 2*w4f*fefe + wactive*ff
+    #     # T = 2*w4f*ff + wactive*ff  #2*w1*B
+    #     T = wactive*ff 
+    #     if deviatoric:
+    #         return T - tr(T)*I
+        
+        
+    #     if p is None:
+    #         return T
+
+    #     else:
+    #         return T - p*I
+            
+        
+        
     def W_1(self, I_1, diff=0, *args, **kwargs):
         r"""
         Isotropic contribution.
@@ -352,7 +493,6 @@ class HolzapfelOgden(Material):
             return 0
 
         if diff == 0:
-            # return a/(2.0*b) * (exp(b*pow(I_4 - 1, 2)) - 1)
             return a/(2.0*b) * heaviside(I_4 - 1) * (exp(b*pow(I_4 - 1, 2)) - 1)
         
         elif diff == 1:
@@ -386,6 +526,14 @@ class Guccione(Material) :
               'bfs' : 4.0 }
         return p
 
+    def SecondPiolaStress(self, F, p, *args, **kwargs):
+
+        P = self.FirstPiolaStress(F, p)
+        S = inv(F)*P
+        return S
+        
+
+        
     def is_isotropic(self) :
         """
         Return True if the material is isotropic.
@@ -403,19 +551,21 @@ class Guccione(Material) :
 
         # Elastic part of deformation gradient
         F = self.active.Fe(F_)
+        C = F.T*F
 
         I = Identity(3)
         J = det(F)
         dim = get_dimesion(F)
-        if self.active.is_isochoric():
-            F_bar = pow(J, -float(1)/dim)*F
+        
+        if self.is_isochoric():
+            C_bar = pow(J, -float(2)/dim)*C
+            E = 0.5*(C_bar - I)
+            
         else:
-            F_bar = F
+            
+            E = 0.5*(C - I)
 
         
-        C_bar = F_bar.T*F_bar
-        E = 0.5*(C_bar - I)
-
         CC  = Constant(params['C'], name='C')
         
         e1 = self.active.get_component("fiber")
@@ -435,9 +585,9 @@ class Guccione(Material) :
             E21, E22, E23 = inner(E*e2, e1), inner(E*e2, e2), inner(E*e2, e3)
             E31, E32, E33 = inner(E*e3, e1), inner(E*e3, e2), inner(E*e3, e3)
 
-            Q = bf*E11**2 + bt*(E22**2 + E33**2 + E23**2 + E32**2) \
-              + bfs*(E12**2 + E21**2 + E13**2 + E31**2)
-
+            Q = bf*E11**2 + bt*(E22**2 + E33**2 + 2*E23**2 ) \
+                + bfs*(2*E12**2 + 2*E13**2 )
+            
         # passive strain energy
         Wpassive = CC/2.0 * (exp(Q) - 1)
         Wactive = self.active.Wactive(F, diff = 0)        
