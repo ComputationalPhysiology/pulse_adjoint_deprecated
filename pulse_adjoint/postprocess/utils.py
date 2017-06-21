@@ -1274,6 +1274,7 @@ def copmute_mechanical_features(patient, params, val, path):
     pressures = patient.pressure
     rv_pressures = None if not hasattr(patient, "RVP") else patient.rv_pressure
 
+    W = dolfin.TensorFunctionSpace(patient.mesh, "DG", 0)
     
     ed_point = str(patient.passive_filling_duration) if params["unload"]\
                else str(patient.passive_filling_duration-1)
@@ -1307,9 +1308,15 @@ def copmute_mechanical_features(patient, params, val, path):
     times = sorted(states.keys(), key=asint)
 
     from itertools import product
-    keys = [":".join(a) for a in product(["green_strain", "cauchy_stress", "cauchy_dev_stress"],
-                                             ["longitudinal", "fiber", "circumferential", "radial"])] + \
-                ["gamma:", "displacement:"]
+
+    keys = [":".join(a) for a in product(["cauchy_stress"],
+                                         ["fiber"])] + \
+                                         ["gamma:", "displacement:"]
+
+    
+    # keys = [":".join(a) for a in product(["green_strain", "cauchy_stress", "cauchy_dev_stress"],
+    #                                      ["longitudinal", "fiber", "circumferential", "radial"])] + \
+    #             ["gamma:", "displacement:"]
 
 
     features = {k.rstrip(":") : [] for k in keys}
@@ -1352,8 +1359,11 @@ def copmute_mechanical_features(patient, params, val, path):
 
         if project:
             f_ = dolfin.project(fun, spaces["quad_space_1"])
-            remove_extreme_outliers(f_, 500.0, -100.0)
-            f = smooth_from_points(spaces[space], f_)
+            remove_extreme_outliers(f_, 300.0, -50.0)
+            f = smooth_from_points(spaces[space], f_, method ="average")
+
+            # f = dolfin.project(fun, spaces["stress_space"])
+            # remove_extreme_outliers(f, 500.0, -100.0)
         else:
             f = fun
             
@@ -1371,6 +1381,7 @@ def copmute_mechanical_features(patient, params, val, path):
             features_scalar[feature]["global"].append(scalar[0])
         
         
+    from pulse_adjoint.unloading.utils import normalize_vector_field
     
     for t in times:
 
@@ -1387,6 +1398,7 @@ def copmute_mechanical_features(patient, params, val, path):
                                              matparams, rv_pressure)
 
         u,p = solver.get_state().split(deepcopy=True)
+
 
         post = solver.postprocess()
 
@@ -1423,11 +1435,24 @@ def copmute_mechanical_features(patient, params, val, path):
                     e = e_f
 
                 if k1 == "green_strain":
-                    get(k, post.green_strain_component(e, F_ref = F_ed), "stress_space")
+
+                    E = dolfin.project(post.GreenLagrange(F_ref=F_ed), W)
+                    Ef = dolfin.inner(E*e, e)
+                    
+                    get(k, Ef, "stress_space")
+
+                    
+                    
                 elif k1 == "cauchy_stress":
-                    get(k, post.cauchy_stress_component(e), "stress_space")
+                    
+                    Tf = solver.postprocess().cauchy_stress_component(e, deviatoric=False)
+                    get(k, Tf, "stress_space")
+
+                    
                 elif k1 == "cauchy_dev_stress":
-                    get(k, post.cauchy_stress_component(e, deviatoric=True), "stress_space")
+
+                    Tf = solver.postprocess().cauchy_stress_component(e, deviatoric=True)
+                    get(k, Tf, "stress_space")
 
 
         
@@ -1495,7 +1520,7 @@ def remove_extreme_outliers(fun, ub=np.inf, lb=-np.inf):
 
     
 
-def smooth_from_points(V, f0, nsamples = 20) :
+def smooth_from_points(V, f0, nsamples = 20, method="interpolate") :
     """
     Smooth f0 by interpolating f0 into V by using radial basis functions
     for interpolating scattered data using nsamples.
@@ -1514,6 +1539,9 @@ def smooth_from_points(V, f0, nsamples = 20) :
     nsamples : int (optional)
         For each degree of freedom in V, use nsamples to
         build the radial basis function. Default = 20.
+    method : str (optional)
+        Method for smoothing. Either `interpolate` using
+        radial basis functions, or `average`, or `median`
 
     Returns
     -------
@@ -1552,8 +1580,24 @@ def smooth_from_points(V, f0, nsamples = 20) :
         
         xx, yy, zz = np.split(c, 3, axis=1)
         fvals = f0val[s_idx]
-        rbf = Rbf(xx, yy, zz, fvals, function='linear')
-        f.vector()[idx] = float(rbf(v[0], v[1], v[2]))
+
+        if method == "interpolate":
+            rbf = Rbf(xx, yy, zz, fvals, function='linear')
+            val = float(rbf(v[0], v[1], v[2]))
+
+        elif method == "average":
+            # Remove outliers (include only the values within 1 std)
+            fvals_ = fvals[abs(fvals - np.mean(fvals)) < 2 * np.std(fvals)]
+            if len(fvals_) > 0:
+                val = np.mean(fvals_)
+            else:
+                val = np.median(fvals)
+                
+        elif method == "median":
+            val = np.median(fvals)
+
+            
+        f.vector()[idx] = val
         
         
     return f
