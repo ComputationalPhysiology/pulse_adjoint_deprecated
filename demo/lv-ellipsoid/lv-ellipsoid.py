@@ -140,8 +140,9 @@ def create_fiberfield(mesh, ffun):
 
 def main():
     
-    
     mesh = load_mesh()
+    # df.plot(mesh, interactive=True)
+    # exit()
     ffun = mark_mesh(mesh)
     # df.plot(ffun, interactive=True)
 
@@ -157,7 +158,7 @@ def main():
     V = df.FunctionSpace(mesh, "R", 0)
     gamma = df.Function(V)
 
-    material = mat.HolzapfelOgden(f0, gamma, active_model = "active_stress", T_ref=100.0)
+    material = mat.HolzapfelOgden(f0, gamma, active_model = "active_strain", T_ref=0.3)
 
     spring = df.Constant(1.0, name ="spring_constant")
     
@@ -179,7 +180,8 @@ def main():
 
     df.parameters["adjoint"]["stop_annotating"] = True
     solver = LVSolver(params)
-    U = df.Function(solver.get_displacement(annotate=False).function_space(),
+    u,p = solver.get_state().split(deepcopy=True)
+    U = df.Function(u.function_space(),
                     name ="displacement")
     f = df.XDMFFile(df.mpi_comm_world(), "displacement.xdmf")
     

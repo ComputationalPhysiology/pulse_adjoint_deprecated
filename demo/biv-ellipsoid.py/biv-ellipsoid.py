@@ -214,7 +214,8 @@ def main():
 
     df.parameters["adjoint"]["stop_annotating"] = True
     solver = LVSolver(params)
-    U = df.Function(solver.get_displacement(annotate=False).function_space(),
+    u,p = solver.get_state().split(deepcopy=True)
+    U = df.Function(u.function_space(),
                     name ="displacement")
     f = df.XDMFFile(df.mpi_comm_world(), "displacement.xdmf")
     
