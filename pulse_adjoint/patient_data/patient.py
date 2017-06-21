@@ -1,20 +1,29 @@
-# Copyright (C) 2016 Henrik Finsberg
-#
-# This file is part of PATIENT_DATA.
-#
-# PATIENT_DATA is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# PATIENT_DATA is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with PATIENT_DATA. If not, see <http://www.gnu.org/licenses/>.
+#!/usr/bin/env python
+# c) 2001-2017 Simula Research Laboratory ALL RIGHTS RESERVED
+# Authors: Henrik Finsberg
+# END-USER LICENSE AGREEMENT
+# PLEASE READ THIS DOCUMENT CAREFULLY. By installing or using this
+# software you agree with the terms and conditions of this license
+# agreement. If you do not accept the terms of this license agreement
+# you may not install or use this software.
 
+# Permission to use, copy, modify and distribute any part of this
+# software for non-profit educational and research purposes, without
+# fee, and without a written agreement is hereby granted, provided
+# that the above copyright notice, and this license agreement in its
+# entirety appear in all copies. Those desiring to use this software
+# for commercial purposes should contact Simula Research Laboratory AS: post@simula.no
+#
+# IN NO EVENT SHALL SIMULA RESEARCH LABORATORY BE LIABLE TO ANY PARTY
+# FOR DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES,
+# INCLUDING LOST PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE
+# "PULSE-ADJOINT" EVEN IF SIMULA RESEARCH LABORATORY HAS BEEN ADVISED
+# OF THE POSSIBILITY OF SUCH DAMAGE. THE SOFTWARE PROVIDED HEREIN IS
+# ON AN "AS IS" BASIS, AND SIMULA RESEARCH LABORATORY HAS NO OBLIGATION
+# TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
+# SIMULA RESEARCH LABORATORY MAKES NO REPRESENTATIONS AND EXTENDS NO
+# WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
+# NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 import numpy as np
 import os, argparse, math, yaml
 
