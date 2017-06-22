@@ -17,14 +17,12 @@ In order to simply run the code you need
   -- http://fenicsproject.org
 * Dolfin-Adjoint version 2016.x
   -- http://www.dolfin-adjoint.org/en/latest/download/index.html
-```
-
-### Optional ###
-To get the most out of it you also need
-```
 * yaml
   -- Used for storing parameters
   -- pip install pyyaml
+* h5py
+  -- Used for storing parameters
+  -- pip install h5py
 * mesh_generation
   -- Used for loading the meshes in patient_data
   -- git clone git@bitbucket.org:finsberg/mesh_generation.git
