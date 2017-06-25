@@ -122,10 +122,10 @@ class LVSolver(object):
            
         
     def get_displacement(self, name = "displacement", annotate = True):
-        return self._compressibility.get_displacement(name, annotate)
+        return self.compressibility().get_displacement(name, annotate)
 
     def get_hydrostatic_pressue(self, name = "hydrostatic_pressure", annotate = True):
-        return self._compressibility.get_hydrostatic_pressue(name, annotate)
+        return self.compressibility().get_hydrostatic_pressue(name, annotate)
     
     def get_u(self):
         if self._W.sub(0).num_sub_spaces() == 0:
@@ -137,7 +137,7 @@ class LVSolver(object):
         return self.parameters["material"].get_gamma()
 
     def is_incompressible(self):
-        return self._compressibility.is_incompressible()
+        return self.compressibility().is_incompressible()
 
     def get_state(self):
         return self._w
@@ -325,7 +325,7 @@ class LVSolver(object):
 
     def _make_dirichlet_bcs(self):
         bcs = []
-        D = self._compressibility.get_displacement_space()
+        D = self.compressibility().get_displacement_space()
         for bc_spec in self.parameters["bc"]["dirichlet"]:
             if isinstance(bc_spec, DirichletBC):
                 bcs.append(bc_spec)
