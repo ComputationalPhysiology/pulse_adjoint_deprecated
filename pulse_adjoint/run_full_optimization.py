@@ -62,7 +62,7 @@ def save_logger(params):
     logger.info("Time: {}".format(time))
     
 
-def main(params):
+def main(params, passive_only=False):
 
     save_logger(params)   
     
@@ -97,6 +97,11 @@ def main(params):
         adj_reset()
 
     
+    if passive_only:
+        logger.info("Running passive optimization only. Terminate....")
+        import sys
+        sys.exit()
+
     if params["unload"]:
 
         patient = update_unloaded_patient(params, patient)
