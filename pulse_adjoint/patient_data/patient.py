@@ -330,7 +330,7 @@ class BiVTestPatient(TestPatient):
         self.RVV = np.array([27.387594]*6)
 
         self.paths = {"mesh_path":
-                      os.path.join(curdir, "../example_meshes/biv_test_mesh.h5")}
+                      os.path.join(curdir, "../example_meshes/biv_ellipsoid.h5")}
 
         TestPatient.__init__(self, **kwargs)
         self.pressure =  np.linspace(0,2,6)
