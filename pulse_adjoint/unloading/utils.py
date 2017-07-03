@@ -72,7 +72,7 @@ def save(obj, h5name, name, h5group = ""):
     file_mode = "a" if os.path.isfile(h5name) else "w"
 
     if os.path.isfile(h5name):
-        from ..pa_io import check_and_delete
+        from ..io.utils import check_and_delete
         check_and_delete(h5name, group)
         file_mode = "a"
     else:
@@ -103,10 +103,10 @@ def quad_to_xdmf(obj, h5name, h5group = "", file_mode = "w"):
     v = gather_broadcast(gy.vector().array())
     w = gather_broadcast(gz.vector().array())
     vecs = np.array([u,v,w]).T
-    from ..pa_io import open_h5py
+    from ..io.utils import open_h5py, parallel_h5py
     with open_h5py(h5name) as h5file:
 
-        if not pa_io.parallel_h5py:
+        if not parallel_h5py:
             if df.mpi_comm_world().rank == 0:
             
                 h5file.create_dataset("/".join([h5group, "coordinates"]), data=coords)
