@@ -627,6 +627,8 @@ def setup_unloading_parameters():
     unload_options = Parameters("unload_options")
     unload_options.add("maxiter", 10)
     unload_options.add("tol", 0.01)
+    unload_options.add("ub", 2.0)
+    unload_options.add("lb", 0.5)
     unload_options.add("regen_fibers", False)
     
     params.add(unload_options)

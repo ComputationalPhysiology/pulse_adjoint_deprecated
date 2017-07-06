@@ -59,8 +59,7 @@ def step(geometry, pressure, k, u, residual, big_res,
     U = df.Function(u.function_space())
     assign_to_vector(U.vector(), k*gather_broadcast(u.vector().array()))
     new_geometry = update_geometry(geometry, U, regen_fibers)
-    
-    
+
     matparams = update_material_parameters(material_parameters,
                                            new_geometry.mesh)
 
@@ -158,6 +157,8 @@ class MeshUnloader(object):
 
         return {"maxiter": 10,
                 "tol": 1e-4 ,
+                "lb": 0.5, 
+                "ub": 2.0,
                 "regen_fibers":False,
                 "solve_tries":20 }
 
@@ -237,12 +238,9 @@ class MeshUnloader(object):
         
         # Do an initial solve
         logger.info("\nDo an intial solve")
-        # params, p_expr  = setup_solver_parameters(self.geometry,
-        #                                           material_parameters = \
-        #                                           self.material_parameters)
 
         from ..setup_optimization import (make_solver_parameters,
-                                                      check_patient_attributes)
+                                          check_patient_attributes)
         check_patient_attributes(self.geometry)
         params, p_expr = make_solver_parameters(self.solver_parameters, self.geometry,
                                                 self.material_parameters, df.Constant(0.0))
@@ -326,6 +324,8 @@ class Raghavan(MeshUnloader):
        (2006): 1414-1419.
 
     """
+
+    
     def unload_step(self, u, residual, save = True):
 
         big_res = 100.0
@@ -342,7 +342,7 @@ class Raghavan(MeshUnloader):
 
 
         logger.info("\nStart iterating....")
-        res = minimize_scalar(iterate, method="bounded", bounds=(0.5,2.0),
+        res = minimize_scalar(iterate, method="bounded", bounds=(self.parameters["lb"],self.parameters["ub"]),
                               options={"xatol":self.parameters["tol"],
                                        "maxiter":self.parameters["maxiter"]})
 
