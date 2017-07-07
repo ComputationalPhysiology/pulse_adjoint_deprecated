@@ -411,6 +411,12 @@ class OptimalControl(object):
             tol = opt_params["passive_opt_tol"]
             max_iter = opt_params["passive_maxiter"]
 
+            if opt_params["fixed_matparams"] != "":
+                fixed = np.array(opt_params["fixed_matparams"].split(","),
+                         dtype=int)
+
+                for fi in fixed: lb[fi] = ub[fi] = x[fi]
+
         else:
 
             lb = np.array([opt_params["gamma_min"]]*nvar)
