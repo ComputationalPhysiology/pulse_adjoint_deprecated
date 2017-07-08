@@ -415,7 +415,33 @@ class OptimalControl(object):
                 fixed = np.array(opt_params["fixed_matparams"].split(","),
                          dtype=int)
 
+                if opt_params["fixed_matparams_values"] == "":
+                    msg = ("Fixed matparams will be fixed to the "+\
+                           "initial value. Please provide input " +\
+                           "to 'fixed_mataparams_values for more "+\
+                           "control".)
+                    logger.warning(msg)
+
+                else:
+                    try:
+                        fixed_values = np.array(opt_params["fixed_matparams_values"].split(","),
+                                         dtype=int)
+                    except:
+                        logger.warning("Wrong format for 'fixed_matparams_values'")
+                        fixed_values = np.zeros(len(fixed))
+                        for fi in fixed: fixed_values = x[fi]
+
+                    if not len(fixed_values) == len(fixed):
+                        msg = "Number of fixed values and fixed indices does not match"
+                        logger.warning(msg)
+                        fixed_values = np.zeros(len(fixed))
+                        for fi in fixed: fixed_values = x[fi]
+                        
+                        
+
                 for fi in fixed: lb[fi] = ub[fi] = x[fi]
+                logger.info("Upper bounds : {}".format(ub))
+                logger.info("Lower bounds : {}".format(lb))
 
         else:
 

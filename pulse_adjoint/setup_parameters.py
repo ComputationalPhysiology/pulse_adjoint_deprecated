@@ -577,9 +577,12 @@ def setup_optimization_parameters():
     params.add("adapt_scale", True)
     params.add("disp", False)
 
-    # Add idices seprated with comma,
+    # Add indices seprated with comma,
     # e.g fix first and third control "1,3"
     params.add("fixed_matparams", "")
+    # Add values seprated with comma,
+    # e.g fix first and third control "3.11,2.14"
+    params.add("fixed_matparams_values", "")
     
 
     return params
