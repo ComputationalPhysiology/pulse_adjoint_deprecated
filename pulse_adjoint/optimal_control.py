@@ -419,7 +419,7 @@ class OptimalControl(object):
                     msg = ("Fixed matparams will be fixed to the "+\
                            "initial value. Please provide input " +\
                            "to 'fixed_mataparams_values for more "+\
-                           "control".)
+                           "control.")
                     logger.warning(msg)
 
                 else:
@@ -435,11 +435,11 @@ class OptimalControl(object):
                         msg = "Number of fixed values and fixed indices does not match"
                         logger.warning(msg)
                         fixed_values = np.zeros(len(fixed))
-                        for fi in fixed: fixed_values = x[fi]
+                        for i, fi in enumerate(fixed): fixed_values[i] = x[fi]
                         
                         
 
-                for fi in fixed: lb[fi] = ub[fi] = x[fi]
+                for i, fi in enumerate(fixed): lb[fi] = ub[fi] = fixed_values[i]
                 logger.info("Upper bounds : {}".format(ub))
                 logger.info("Lower bounds : {}".format(lb))
 
