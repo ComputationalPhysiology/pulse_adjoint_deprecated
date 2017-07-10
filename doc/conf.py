@@ -81,7 +81,7 @@ MOCK_MODULES = ['dolfin', 'dolfin_adjoint',
                 "scipy", "scipy.optimize",
                 "yaml", "ufl", "ufl.domain",
                 "mesh_generation","mesh_generation.mesh_utils",
-                'pandas',
+                'pandas', "h5py", "mpi4py", "petsc4py",
                 "matplotlib","matplotlib.ticker"]
 
 # for mod_name in MOCK_MODULES:
