@@ -1,13 +1,6 @@
 pulse_adjoint.patient_data package
 ==================================
 
-Subpackages
------------
-
-.. toctree::
-
-    pulse_adjoint.patient_data.example_meshes
-
 Submodules
 ----------
 

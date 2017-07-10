@@ -6,6 +6,8 @@ Subpackages
 
 .. toctree::
 
+    pulse_adjoint.example_meshes
+    pulse_adjoint.io
     pulse_adjoint.models
     pulse_adjoint.patient_data
     pulse_adjoint.postprocess
@@ -90,14 +92,6 @@ pulse_adjoint.optimization_targets module
 -----------------------------------------
 
 .. automodule:: pulse_adjoint.optimization_targets
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-pulse_adjoint.pa_io module
---------------------------
-
-.. automodule:: pulse_adjoint.pa_io
     :members:
     :undoc-members:
     :show-inheritance:

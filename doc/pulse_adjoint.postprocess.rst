@@ -52,14 +52,6 @@ pulse_adjoint.postprocess.postprocess module
     :undoc-members:
     :show-inheritance:
 
-pulse_adjoint.postprocess.simulation module
--------------------------------------------
-
-.. automodule:: pulse_adjoint.postprocess.simulation
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 pulse_adjoint.postprocess.tables module
 ---------------------------------------
 

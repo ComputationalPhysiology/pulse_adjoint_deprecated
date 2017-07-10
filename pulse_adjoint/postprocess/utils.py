@@ -1512,7 +1512,7 @@ def get_calibrated_solver(state_arr, pressure, gamma_arr,
     return solver, p_lv
 
 
-def remove_extreme_outliers(fun, ub=np.inf, lb=-np.inf):
+def remove_extreme_outliers(fun, ub=None, lb=None):
     """
     Set all values that are larger than ub to ub, 
     and set all values that are lower than lb to lb.
@@ -1525,6 +1525,8 @@ def remove_extreme_outliers(fun, ub=np.inf, lb=-np.inf):
         Lower bound
     
     """
+    if lb is None: lb = -np.inf
+    if bb is None: ub = np.inf
     fun.vector()[fun.vector().array() > ub] = ub
     fun.vector()[fun.vector().array() < lb] = lb
 

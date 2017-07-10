@@ -24,7 +24,11 @@
 # SIMULA RESEARCH LABORATORY MAKES NO REPRESENTATIONS AND EXTENDS NO
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
-import yaml, h5py, os
+import yaml, os
+try:
+    import h5py
+except:
+    pass
 try:
     from mesh_generation import load_geometry_from_h5
     from mesh_generation.mesh_utils import list_fiber_angles

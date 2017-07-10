@@ -68,6 +68,9 @@ STRAIN_REGIONS = {1:"LVBasalAnterior",
                  16:"LVApicalLateral",
                  17:"LVApex"}
 
-dolfin.parameters["allow_extrapolation"] = True
+try:
+    dolfin.parameters["allow_extrapolation"] = True
+except:
+    pass
 work_pairs = ["SE", "PF", "pgradu", "strain_energy"]
 cases = ["full", "comp_fiber", "comp_long"]

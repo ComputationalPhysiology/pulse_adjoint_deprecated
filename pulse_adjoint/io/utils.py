@@ -87,9 +87,12 @@ def contract_point_exists(params):
         h5file.close()
         return False
 
-parallel_h5py = h5py.h5.get_config().mpi
 
-
+if has_h5py:
+    parallel_h5py = h5py.h5.get_config().mpi
+else:
+    parallel_h5py = False
+    
 def gather_dictionary(d):
 
     def gather_dict(a):

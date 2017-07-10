@@ -25,11 +25,16 @@
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 __author__ = "Henrik Finsberg (henriknf@simula.no)"
-import os, h5py
+import os
 import dolfin as df
 from ..numpy_mpi import *
 from ..adjoint_contraction_args import logger
 
+try:
+    import h5py
+    has_h5py=True
+except:
+    has_h5py=False
 
 class ResidualCalculator(object):
     def __init__(self, mesh):

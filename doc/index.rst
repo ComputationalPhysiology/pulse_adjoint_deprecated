@@ -32,6 +32,14 @@ Main authors:
 
   * Henrik Finsberg    (henriknf@simula.no)
 
+
+Demo
+----
+
+  * Demos will come here
+
+    
+
 API documentation:
 ------------------
 

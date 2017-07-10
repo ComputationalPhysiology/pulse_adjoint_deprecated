@@ -29,12 +29,38 @@ if on_rtd:
     os.system("sphinx-apidoc -f -o . ../")
 
 #No need to install 3rd party packages to generate the docs
-class Mock(object):
+# class Mock(object):
+#     __all__ = []
+#     def __init__(self, *args, **kwargs):
+#         pass
+#     def __call__(self, *args, **kwargs):
+#         return Mock()
+#     @classmethod
+#     def __getattr__(cls, name):
+#         if name in ('__file__', '__path__'):
+#             return '/dev/null'
+#         elif name[0] == name[0].upper():
+#             mockType = type(name, (Mock, ), {})
+#             mockType.__module__ = __name__
+#             return mockType
+#         else:
+#             return Mock()
+
+# MOCK_MODULES = ['dolfin']#,
+#                 'ufl',
+#                 'numpy 'on_rtd = os.environ.get('READTHEDOCS', None) == 'True' 
+             
+# ]
+
+
+from mock import Mock as MagicMock
+
+class Mock(MagicMock):
     __all__ = []
     def __init__(self, *args, **kwargs):
         pass
     def __call__(self, *args, **kwargs):
-        return Mock()
+        return MagicMock()
     @classmethod
     def __getattr__(cls, name):
         if name in ('__file__', '__path__'):
@@ -44,19 +70,29 @@ class Mock(object):
             mockType.__module__ = __name__
             return mockType
         else:
-            return Mock()
+            return MagicMock()
+        
+    @classmethod
+    def __getattr__(cls, name):
+            return MagicMock()
 
-# MOCK_MODULES = ['dolfin',
-#                 'ufl',
-#                 'numpy 'on_rtd = os.environ.get('READTHEDOCS', None) == 'True' 
-             
-# ]
+MOCK_MODULES = ['dolfin', 'dolfin_adjoint',
+                'numpy', "numpy.random", 
+                "scipy", "scipy.optimize",
+                "yaml",
+                "mesh_generation","mesh_generation.mesh_utils",
+                'pandas',
+                "matplotlib","matplotlib.ticker"]
+
 # for mod_name in MOCK_MODULES:
 #     try:
 #         importlib.import_module(mod_name)
 #     except:
 #         print "Generating mock module %s." % mod_name
 #         sys.modules[mod_name] = Mock()
+sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+
+
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.

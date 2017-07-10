@@ -24,7 +24,15 @@
 # SIMULA RESEARCH LABORATORY MAKES NO REPRESENTATIONS AND EXTENDS NO
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
-import h5py, os, mpi4py, petsc4py, yaml
+try:
+    import h5py
+    has_h5py=True
+except:
+    
+    print "Warning. Cannot import h5py"
+    has_h5py = False
+
+import  os, mpi4py, petsc4py, yaml
 import numpy as np
 import dolfin, dolfin_adjoint
 from ..utils import Text

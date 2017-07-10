@@ -43,8 +43,10 @@ from utils import *
 
 
 
-
-df.parameters["adjoint"]["stop_annotating"] = True
+try:
+    df.parameters["adjoint"]["stop_annotating"] = True
+except:
+    pass
 
 __all__ = ["FixedPoint", "Raghavan", "Hybrid"]
 
