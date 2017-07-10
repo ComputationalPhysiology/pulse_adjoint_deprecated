@@ -217,7 +217,7 @@ def plot_single_mean_gamma(gamma, path, valve_times = None):
         ax.set_xticks(vals)
         ax.set_xticklabels(keys)
         
-    fig.savefig(path)
+    fig.savefig(path, format="png")
 
 
 def plot_multiple_gamma(gammas, path, labels = None,
@@ -301,7 +301,8 @@ def plot_single_regional_gamma(gammas, path, valve_times = None,
         ax.set_xticklabels(keys)
 
         
-    fig.savefig(path, bbox_extra_artists=(lgd,), bbox_inches='tight')
+    fig.savefig(path, bbox_extra_artists=(lgd,),
+                bbox_inches='tight', format = "png")
     print("Saved to {}".format(path))
     
 def plot_single_pv_loop(v_sim, v_meas, pressure, path, unload =False):
@@ -318,7 +319,8 @@ def plot_single_pv_loop(v_sim, v_meas, pressure, path, unload =False):
     ax.set_xlabel("Volume (ml)")
     ax.set_ylabel(r"Pressure (kPa)")
     ax.legend()
-    fig.savefig(path)
+
+    fig.savefig(path, format="png")
     print("PV loop plot saved to {}".format(os.path.abspath(path)))
 
     

@@ -302,8 +302,7 @@ class ActiveForwardRunner(BasicForwardRunner):
 
     The active forward runner 
 
-    Parameters
-    ----------
+    *Parameters*
         
     solver_parameters : dict
         solver parameters coming from setup_optimization.make_solver_paramerters()

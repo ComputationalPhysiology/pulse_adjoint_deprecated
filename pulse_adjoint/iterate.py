@@ -93,8 +93,7 @@ def check_target_reached(solver, expr, control, target):
     elif control == "pressure":
         max_diff = np.max(abs(diff))
 
-    
-    reached = max_diff < DOLFIN_EPS_LARGE
+    reached = max_diff < 1e-6
     if reached:
         logger.info("Check target reached: YES!")
     else:
@@ -253,8 +252,7 @@ def iterate_pressure(solver, target, p_expr,
     Using the given solver, iterate control to given target. 
     
 
-    Parameters
-    ----------
+    *Parameters*
 
     solver (LVSolver)
         The solver
@@ -395,6 +393,130 @@ def iterate_pressure(solver, target, p_expr,
 
     return control_values, prev_states
 
+def iterate_expression(solver, expr, attr, target, continuation = True,
+                       max_adapt_iter = 8, adapt_step=True,
+                       max_nr_crash = MAX_CRASH, max_iters=MAX_ITERS,
+                       initial_number_of_steps=3, log_level=INFO):
+    """
+    Iterate expression with attribute attr to target. 
+    
+    Increment until expr.attr = target
+
+    """
+
+    old_level = logger.level
+    logger.setLevel(log_level)
+    logger.info("\nIterate Control")
+
+    assert isinstance(expr, Expression)
+    assert isinstance(target, (float, int))
+    if isinstance(target, int): target = float(target)
+
+    val = getattr(expr, attr)
+    step = abs(target - val) / float(initial_number_of_steps)
+
+    logger.info("Current value: {}".format(val))
+    control_values  = [float(val)]
+    prev_states = [solver.get_state().copy(True)]
+
+    ncrashes = 0
+    niters = 0
+
+    target_reached = (val == target)
+    
+    
+    while not target_reached:
+        niters += 1
+        if ncrashes > MAX_CRASH or niters > 2*MAX_ITERS:
+            raise SolverDidNotConverge
+
+        control_value_old = control_values[-1]
+        state_old = prev_states[-1]
+
+        first_step = len(prev_states) < 2
+
+        # Check if we are close
+        if step_too_large(control_value_old, target, step, "pressure"):
+            logger.info("Change step size for final iteration")
+            # Change step size so that target is reached in the next iteration
+            step = target-control_value_old
+
+        
+        val = getattr(expr, attr)
+        val += step
+        setattr(expr, attr, val)
+        logger.info("\nTry new control: {}".format(val))
+
+
+
+        # Prediction step (Make a better guess for newtons method)
+        # Assuming state depends continuously on the control
+        if not first_step and continuation:
+            logger.debug("\nContinuation step")
+            c0, c1 = control_values[-2:]
+            s0, s1 = prev_states[-2:]
+
+            delta = get_delta(val, c0, c1)
+            if not parameters["adjoint"]["stop_annotating"]:
+                w = Function(solver.get_state().function_space())
+                w.vector().zero()
+                w.vector().axpy(1.0-delta, s0.vector())
+                w.vector().axpy(delta, s1.vector())
+                solver.reinit(w, annotate = True)
+            else:
+                solver.get_state().vector().zero()
+                solver.get_state().vector().axpy(1.0-delta, s0.vector())
+                solver.get_state().vector().axpy(delta, s1.vector())
+                    
+        
+        try:
+            nliter, nlconv = solver.solve()
+            if not nlconv:
+                raise SolverDidNotConverge("Solver did not converge")
+        except SolverDidNotConverge as ex:
+            logger.info("\nNOT CONVERGING")
+            logger.info("Reduce control step")
+            ncrashes += 1
+
+            val = getattr(expr, attr)
+            val -= step
+            setattr(expr, attr, val)
+     
+            # Assign old state
+            logger.debug("Assign old state")
+            # solver.reinit(state_old)
+            solver.get_state().vector().zero()
+            solver.reinit(state_old)
+
+            # Assign old control value
+            logger.debug("Assign old control")
+          
+            # Reduce step size
+            step /= 2.0
+            
+            continue
+        
+        else:
+            ncrashes = 0
+            logger.info("\nSUCCESFULL STEP:")
+
+            val = getattr(expr, attr)
+            target_reached = (val == target)
+
+            if not target_reached:
+
+                if nliter < max_adapt_iter and adapt_step:
+                    step *= 1.5
+                    logger.info("Adapt step size. New step size: {}".format(step))
+
+                control_values.append(float(val))
+                
+                prev_states.append(solver.get_state().copy(True))
+      
+
+    logger.setLevel(old_level)
+    return control_values, prev_states
+
 
 def get_mean(f):
     return gather_broadcast(f.vector().array()).mean()
@@ -411,13 +533,12 @@ def get_max_diff(f1,f2):
 def iterate_gamma(solver, target, gamma,
                   continuation = True, max_adapt_iter = 8,
                   adapt_step=True, old_states = [], old_gammas = [],
-                  max_nr_crash = MAX_CRASH, max_iters=MAX_ITERS):
+                  max_nr_crash = MAX_CRASH, max_iters=MAX_ITERS, initial_number_of_steps=None):
     """
     Using the given solver, iterate control to given target. 
     
 
-    Parameters
-    ----------
+    *Parameters*
 
     solver (LVSolver)
         The solver
@@ -452,9 +573,14 @@ def iterate_gamma(solver, target, gamma,
     control_values  = [gamma.copy(deepcopy=True)]
     prev_states = [solver.get_state().copy(deepcopy=True)]
 
+    if initial_number_of_steps is None:
+        step, nr_steps = get_initial_step(solver, gamma, "gamma", target)
+    else:
+        nr_steps = initial_number_of_steps
+        diff = get_diff(gamma, target, "gamma")
+        step = Function(gamma.function_space(), name = "gamma_step")
+        step.vector().axpy(1.0/float(nr_steps), diff)
 
-    step, nr_steps = get_initial_step(solver, gamma, "gamma", target)
-    
    
     logger.debug("\tGamma:    Mean    Max   ")
     logger.debug("\tPrevious  {:.3f}  {:.3f}  ".format(get_mean(gamma), 
@@ -575,6 +701,10 @@ def iterate(control, *args, **kwargs):
 
     if control == "gamma":
         return iterate_gamma(*args, **kwargs)
+
+    if control == "expression":
+        return iterate_expression(*args, **kwargs)
+        
 
     
 

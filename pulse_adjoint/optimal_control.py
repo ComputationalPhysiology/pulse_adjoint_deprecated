@@ -135,8 +135,8 @@ def minimize_1d(f, x0, **kwargs):
     x0: float
         initial guess
 
-    Returns
-    -------
+    *Returns*
+
     res: dict
         Scipy results from the opimization
 
@@ -160,8 +160,8 @@ def get_ipopt_options(rd, lb, ub, tol, max_iter, **kwargs):
     max_iter : int
         Maximum number of iterations
 
-    Returns
-    -------
+    *Returns*
+
     nlp : ipopt instance
         A nonlinear ipopt problem
     """
@@ -258,8 +258,8 @@ def get_scipy_options(method, rd, lb, ub, tol, max_iter, **kwargs):
     max_iter : int
         Maximum number of iterations
 
-    Returns
-    -------
+    *Returns*
+    
     options : dict
         The options to be passed to the scipy optimization
 
@@ -317,8 +317,8 @@ def get_pyOpt_options(method, rd, lb, ub, tol, max_iter, **kwargs):
     max_iter : int
         Maximum number of iterations
 
-    Returns
-    -------
+    *Returns*
+
     opt : tuple
         The optimization solver and the options, (solver, options)
 

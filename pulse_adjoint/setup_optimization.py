@@ -70,13 +70,13 @@ def initialize_patient_data(patient_parameters):
     Make an instance of patient from :py:module`patient_data`
     baed on th given parameters
 
-    Parameters
-    ----------
+    *Parameters*
+
     patient_parameters: dict
         the parameters 
     
-    Returns
-    -------
+    *Returns*
+
     patient: :py:class`patient_data.Patient`
         A patient instance
 
@@ -740,8 +740,8 @@ class MyReducedFunctional(ReducedFunctional):
     """
     A modified reduced functional of the `dolfin_adjoint.ReducedFuctionl`
 
-    Parameters
-    ----------
+    *Parameters*
+    
     for_run: callable
         The forward model, which can be called with the control parameter
         as first argument, and a boolean as second, indicating that annotation is on/off.

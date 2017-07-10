@@ -1319,14 +1319,14 @@ def copmute_mechanical_features(patient, params, val, path):
 
     from itertools import product
 
-    keys = [":".join(a) for a in product(["cauchy_stress"],
-                                         ["fiber"])] + \
-                                         ["gamma:", "displacement:"]
+    # keys = [":".join(a) for a in product(["cauchy_stress"],
+                                         # ["fiber"])] + \
+                                         # ["gamma:", "displacement:"]
 
     
-    # keys = [":".join(a) for a in product(["green_strain", "cauchy_stress", "cauchy_dev_stress"],
-    #                                      ["longitudinal", "fiber", "circumferential", "radial"])] + \
-    #             ["gamma:", "displacement:"]
+    keys = [":".join(a) for a in product(["green_strain", "cauchy_stress", "cauchy_dev_stress"],
+                                         ["longitudinal", "fiber", "circumferential", "radial"])] + \
+                ["gamma:", "displacement:"]
 
 
     features = {k.rstrip(":") : [] for k in keys}

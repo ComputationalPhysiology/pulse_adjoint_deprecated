@@ -129,7 +129,7 @@ class Material(object):
 
         # Active model
         assert active_model in \
-            ["active_stress", "active_strain", "active_strain_rossi"], \
+            ["active_stress", "active_strain"], \
             "The active model '{}' is not implemented.".format(active_model)
         
         active_args = (gamma, f0, s0, n0,
@@ -274,10 +274,13 @@ class Material(object):
         Fe = self.active.Fe(F)
         Ce = Fe.T*Fe
 
+        
+
         # Elastic volume ratio
         J = variable(det(Fe))
         
-
+        Ce_bar = pow(J, -2.0/float(dim))*Ce
+        
         w1   = self.W_1(I1, diff = 1, dim = dim)
         w4f  = self.W_4(I4f, diff = 1)
 
@@ -289,7 +292,7 @@ class Material(object):
         if self.is_isochoric():
 
             # Deviatoric
-            Dev_S_bar = S_bar - (1.0/3.0)*inner(S_bar, Ce)*inv(Ce)
+            Dev_S_bar = S_bar - (1.0/3.0)*inner(S_bar, Ce_bar)*inv(Ce_bar)
 
             S_mat = J**(-2.0/3.0)*Dev_S_bar
         else:
@@ -510,11 +513,6 @@ class HolzapfelOgden(Material):
 class Guccione(Material) :
     """
     Guccione material model. 
-
-    .. note: 
-       
-        Only implemented for active stress model
-
 
     """
     _model = "guccione"

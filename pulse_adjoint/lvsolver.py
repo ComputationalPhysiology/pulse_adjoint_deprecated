@@ -40,8 +40,9 @@ class LVSolver(object):
     A Cardiac Mechanics Solver
     """
     
-    def __init__(self, params):
+    def __init__(self, params, use_snes = False):
 
+        self.use_snes = use_snes
         for k in ["mesh", "facet_function", "material", "bc"]:
             assert params.has_key(k), \
               "{} need to be in solver_parameters".format(k)
@@ -87,9 +88,12 @@ class LVSolver(object):
         
     def default_solver_parameters(self):
 
-        nsolver = "newton_solver"
+        nsolver = "snes_solver" if self.use_snes else "newton_solver"
 
-        prm = {"nonlinear_solver": "newton", "newton_solver":{}}
+        if self.use_snes:
+            prm = {"nonlinear_solver": "snes", "snes_solver":{}}
+        else:
+            prm = {"nonlinear_solver": "newton", "newton_solver":{}}
 
         prm[nsolver]['absolute_tolerance'] = 1E-8
         prm[nsolver]['relative_tolerance'] = 1E-12
@@ -247,10 +251,6 @@ class LVSolver(object):
 
         """
         material = self.parameters["material"]
-        N =  self.parameters["facet_normal"]
-        X = SpatialCoordinate(self.parameters["mesh"])
-        ds = Measure("exterior_facet", subdomain_data \
-                     = self.parameters["facet_function"])
         self._bcs = []
 
         dim = self.parameters["mesh"].topology().dim()
@@ -275,17 +275,30 @@ class LVSolver(object):
                 
         # ## Internal virtual work
         self._G = derivative(self._pi_int*dx, self._w, self._w_test)
+        
+
 
         # Alternative formualtion
+        
         # S, Je = material.SecondPiolaStress(self._F, p, return_J = True)
         # P = self._F * S
         # self._G = inner(P, grad(v))*dx - q*(Je-1)*dx
 
         
         ## External work
+        self._external_work(u,v)
+
+        self._dG = derivative(self._G, self._w, TrialFunction(self._W))
         
+        
+        
+    def _external_work(self, u,v):
+        
+        N =  self.parameters["facet_normal"]
+        ds = Measure("exterior_facet", domain = self.parameters["mesh"],
+                     subdomain_data = self.parameters["facet_function"])
+
         # Neumann BC
-        
         if self.parameters["bc"].has_key("neumann"):
             for neumann_bc in self.parameters["bc"]["neumann"]:
                 pressure, marker = neumann_bc
@@ -321,7 +334,7 @@ class LVSolver(object):
             else:
                 self._bcs = self._make_dirichlet_bcs()
 
-        self._dG = derivative(self._G, self._w, TrialFunction(self._W))
+        
 
     def _make_dirichlet_bcs(self):
         bcs = []
@@ -495,3 +508,68 @@ class Postprocess(object):
 
 
 
+
+
+
+class LVSolver3Field(LVSolver):
+    """
+    This class implements a three field variational form with 
+    u,p,pinner as the three field variables
+
+    """
+    def __init__(self, *args, **kwargs):
+
+        args[0]["compressibility"] = {"type":"threefieldlv"}
+        args[0].pop("solve", None)
+        LVSolver.__init__(self, *args, **kwargs)
+    
+    def _init_forms(self):
+        
+        material = self.parameters["material"]
+        
+        
+        
+        V0 = self.parameters["volume"]
+
+        ds = Measure("exterior_facet", domain = self.parameters["mesh"],
+                     subdomain_data = self.parameters["facet_function"])
+        dsendo = ds(self.parameters["markers"]["ENDO"][0])
+        self._bcs = []
+
+        dim = self.parameters["mesh"].topology().dim()
+        
+        # Displacement
+        u, p, pinn = split(self._w)
+        v, q, qinn = split(self._w_test)
+
+        # Identity
+        self._I = Identity(dim)
+        
+        # Deformation gradient
+        self._F = variable(grad(u) + self._I)
+        self._C = self._F.T * self._F
+        self._E = 0.5*(self._C - self._I)
+        J = det(self._F)
+
+
+        area = assemble( Constant(1.0) * dsendo)
+        N =  self.parameters["facet_normal"]
+        X = SpatialCoordinate(self.parameters["mesh"])
+        self._V_u = (-1.0/3.0)*dot((X+u), J*inv(self._F).T*N)    
+
+
+       
+        # Internal energ
+        self._pi_int =  (material.strain_energy(self._F)  -p*(J-1))*dx \
+                        + (Constant(1.0/area) * pinn * V0 * dsendo) \
+                        - (pinn * self._V_u *dsendo)
+                        
+                
+        # ## Internal virtual work
+        self._G = derivative(self._pi_int, self._w, self._w_test)
+
+        # External work
+        self._external_work(u,v)
+
+        self._dG = derivative(self._G, self._w, TrialFunction(self._W))
+        

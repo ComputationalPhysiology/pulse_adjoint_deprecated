@@ -35,7 +35,9 @@ def get_compressibility(parameters):
     assert parameters["compressibility"].has_key("type")
 
     assert parameters["compressibility"]["type"] in \
-      ["incompressible", "stabalized_incompressible", "penalty", "hu_washizu"]
+      ["incompressible", "threefieldlv",
+       "stabalized_incompressible",
+       "penalty", "hu_washizu"]
 
     if parameters["compressibility"]["type"] == "incompressible":
         return Compressibility.Incompressible(parameters)
@@ -49,9 +51,8 @@ def get_compressibility(parameters):
     elif parameters["compressibility"]["type"] == "hu_washizu":
         return Compressibility.HuWashizu(parameters)
 
-
-# class CardiacMechanicsProblem(object):
-
+    elif parameters["compressibility"]["type"] == "threefieldlv":
+        return Compressibility.ThreeFieldLV(parameters)
 
 def compressibility(model, *args, **kwargs):
 
@@ -299,3 +300,37 @@ class Compressibility(object):
     #    
     #    def calculate_max_multiplier(self, w, mesh):
     #        return max(self.K.vector().array())
+    class ThreeFieldLV(Incompressible):
+        def __init__(self, parameters):
+            mesh = parameters["mesh"]
+
+            V = VectorElement("P", mesh.ufl_cell(), 2)
+            self._u_space = FunctionSpace(mesh, V)
+            Q = FiniteElement("P", mesh.ufl_cell(), 1)
+            self._p_space = FunctionSpace(mesh, Q)
+            R = FiniteElement("Real", mesh.ufl_cell(), 0)
+            self._r_space = FunctionSpace(mesh, R)
+            vlist = [ V, Q, R ]
+            self.W = FunctionSpace(mesh, MixedElement(vlist))
+
+            self.w = Function(self.W, name = "displacement-pressure")
+            self.w_test = TestFunction(self.W)
+            self.u_test, self.p_test, self.pinn_test = split(self.w_test)
+            self.u, self.p, self.pinn = split(self.w)
+            
+        def get_pinn_variable(self):
+            return self.pinn
+
+        def get_pinn_space(self):
+            return self._r_space
+
+        def get_pinn(self, annotate=False, name="p_inner"):
+            D = self.get_pinn_space()
+            V = D.collapse()
+        
+            fa = FunctionAssigner(V, D)
+            u = Function(V, name = name)
+            fa.assign(u, self.w.split()[2], 
+                      annotate = annotate)
+            return u
+
