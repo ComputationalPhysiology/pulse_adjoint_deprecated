@@ -19,8 +19,44 @@
 import os
 import sys
 # sys.path.insert(0, os.path.abspath('.'))
-on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
 
+
+# Our Makefile calls sphinx-apidoc, but read-the-docs uses our config instead
+# (so it skips that step). Calling apidoc here instead if we're being built
+# there.
+on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+if on_rtd:
+    os.system("sphinx-apidoc -f -o . ../")
+
+#No need to install 3rd party packages to generate the docs
+class Mock(object):
+    __all__ = []
+    def __init__(self, *args, **kwargs):
+        pass
+    def __call__(self, *args, **kwargs):
+        return Mock()
+    @classmethod
+    def __getattr__(cls, name):
+        if name in ('__file__', '__path__'):
+            return '/dev/null'
+        elif name[0] == name[0].upper():
+            mockType = type(name, (Mock, ), {})
+            mockType.__module__ = __name__
+            return mockType
+        else:
+            return Mock()
+
+# MOCK_MODULES = ['dolfin',
+#                 'ufl',
+#                 'numpy 'on_rtd = os.environ.get('READTHEDOCS', None) == 'True' 
+             
+# ]
+# for mod_name in MOCK_MODULES:
+#     try:
+#         importlib.import_module(mod_name)
+#     except:
+#         print "Generating mock module %s." % mod_name
+#         sys.modules[mod_name] = Mock()
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
