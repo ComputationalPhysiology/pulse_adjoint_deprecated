@@ -79,7 +79,7 @@ class Mock(MagicMock):
 MOCK_MODULES = ['dolfin', 'dolfin_adjoint',
                 'numpy', "numpy.random", 
                 "scipy", "scipy.optimize",
-                "yaml",
+                "yaml", "ufl", "ufl.domain",
                 "mesh_generation","mesh_generation.mesh_utils",
                 'pandas',
                 "matplotlib","matplotlib.ticker"]
