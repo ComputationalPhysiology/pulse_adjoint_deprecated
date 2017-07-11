@@ -412,15 +412,19 @@ class OptimalControl(object):
             max_iter = opt_params["passive_maxiter"]
 
             if opt_params["fixed_matparams"] != "":
+                
                 fixed = np.array(opt_params["fixed_matparams"].split(","),
                          dtype=int)
 
                 if opt_params["fixed_matparams_values"] == "":
                     msg = ("Fixed matparams will be fixed to the "+\
                            "initial value. Please provide input " +\
-                           "to 'fixed_mataparams_values for more "+\
+                           "to 'fixed_mataparams_values' for more "+\
                            "control.")
                     logger.warning(msg)
+                    fixed_values = np.zeros(len(fixed))
+                    for i, fi in enumerate(fixed): fixed_values[i] = x[fi]
+                    
 
                 else:
                     try:
@@ -429,8 +433,8 @@ class OptimalControl(object):
                     except:
                         logger.warning("Wrong format for 'fixed_matparams_values'")
                         fixed_values = np.zeros(len(fixed))
-                        for fi in fixed: fixed_values = x[fi]
-
+                        for i, fi in enumerate(fixed): fixed_values[i] = x[fi]
+                        
                     if not len(fixed_values) == len(fixed):
                         msg = "Number of fixed values and fixed indices does not match"
                         logger.warning(msg)
@@ -438,7 +442,7 @@ class OptimalControl(object):
                         for i, fi in enumerate(fixed): fixed_values[i] = x[fi]
                         
                         
-
+                
                 for i, fi in enumerate(fixed): lb[fi] = ub[fi] = fixed_values[i]
                 logger.info("Upper bounds : {}".format(ub))
                 logger.info("Lower bounds : {}".format(lb))

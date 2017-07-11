@@ -1526,7 +1526,7 @@ def remove_extreme_outliers(fun, ub=None, lb=None):
     
     """
     if lb is None: lb = -np.inf
-    if bb is None: ub = np.inf
+    if ub is None: ub = np.inf
     fun.vector()[fun.vector().array() > ub] = ub
     fun.vector()[fun.vector().array() < lb] = lb
 
