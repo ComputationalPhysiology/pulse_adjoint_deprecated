@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<Xdmf Version="3.0">
+  <Domain Name="Mesh produced by DOLFIN">
+    <Grid Name="mesh" GridType="Uniform">
+      <Topology NumberOfElements="2185" TopologyType="Tetrahedron" NodesPerElement="4">
+        <DataItem Dimensions="2185 4" Format="HDF">lv_mesh.h5:/Mesh/mesh/topology</DataItem>
+      </Topology>
+      <Geometry GeometryType="XYZ">
+        <DataItem Dimensions="569 3" Format="HDF">lv_mesh.h5:/Mesh/mesh/geometry</DataItem>
+      </Geometry>
+    </Grid>
+  </Domain>
+</Xdmf>
