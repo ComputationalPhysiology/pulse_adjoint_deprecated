@@ -3,12 +3,12 @@
             <Domain>
             <Grid Name="time_0" GridType="Uniform">
              <Geometry GeometryType="XYZ">
-                  <DataItem Dimensions="33544 3" Format="HDF">fiber.h5:/fiber/coordinates</DataItem>
-                  </Geometry><Topology TopologyType="Polyvertex" NodesPerElement="33544">
+                  <DataItem Dimensions="33040 3" Format="HDF">fiber.h5:/fiber/coordinates</DataItem>
+                  </Geometry><Topology TopologyType="Polyvertex" NodesPerElement="33040">
 		           </Topology><Attribute Name="angle" AttributeType="Scalar" Center="Node">
-                          <DataItem Format="HDF" Dimensions="33544 1">fiber.h5:/fiber/scalar</DataItem>
+                          <DataItem Format="HDF" Dimensions="33040 1">fiber.h5:/fiber/scalar</DataItem>
                           </Attribute><Attribute Name="fiber" AttributeType="Vector" Center="Node">
-                          <DataItem Format="HDF" Dimensions="33544 3">fiber.h5:/fiber/vector</DataItem>
+                          <DataItem Format="HDF" Dimensions="33040 3">fiber.h5:/fiber/vector</DataItem>
                           </Attribute>
              </Grid>
 

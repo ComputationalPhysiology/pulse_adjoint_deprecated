@@ -9,7 +9,13 @@ from pulse_adjoint.iterate import iterate
 from pulse_adjoint.postprocess.utils import (smooth_from_points,
                                              localproject,
                                              remove_extreme_outliers)
+
+from mesh_generation.mesh_utils import load_geometry_from_h5, save_geometry_to_h5, get_markers
+from mesh_generation.idealized_geometry import mark_strain_regions
+
+
 setup_general_parameters()
+geo_file = "biv_ellipsoid.h5"
 
 base_x = 0.0
 
@@ -53,7 +59,7 @@ class EndoLV(df.SubDomain):
 
 class Base(df.SubDomain):
     def inside(self, x, on_boundary):
-        return x[0] > base_x - df.DOLFIN_EPS and on_boundary
+        return x[0] - base_x < df.DOLFIN_EPS and on_boundary
 
 class EndoRV(df.SubDomain):
     def inside(self, x, on_boundary):
@@ -77,8 +83,8 @@ def create_mesh():
 
 
     # The plane cutting the base
-    diam    = 10.0
-    box = mshr.Box(df.Point(base_x,-2,-2),df.Point(diam,diam,diam))
+    diam    = -10.0
+    box = mshr.Box(df.Point(base_x,2,2),df.Point(diam,diam,diam))
     # Generate mesh
 
 
@@ -174,42 +180,50 @@ def create_fiberfield(mesh, ffun):
 
 def main():
     
+    if os.path.isfile(geo_file):
+        geo = load_geometry_from_h5(geo_file)
+    else:
+            
+        mesh = load_mesh()
+        ffun = mark_mesh(mesh)
+        f0 = create_fiberfield(mesh, ffun)
+        sfun = mark_strain_regions(mesh, -1.0, [6,6,4,1])
+        markers = get_markers("biv")
+
+        save_geometry_to_h5(mesh, geo_file, "", markers, [f0])
+        geo = load_geometry_from_h5(geo_file)
+        
+
     
-    mesh = load_mesh()
-    ffun = mark_mesh(mesh)
-    # df.plot(ffun, interactive=True)
-
-    f0 = create_fiberfield(mesh, ffun)
-
     
     def make_dirichlet_bcs(W):
         V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-        no_base_x_tran_bc = df.DirichletBC(V.sub(0), df.Constant(0.0), ffun, base_marker)
+        no_base_x_tran_bc = df.DirichletBC(V.sub(0), df.Constant(0.0), geo.ffun, geo.markers["BASE"][0])
         return no_base_x_tran_bc 
 
    
-    V = df.FunctionSpace(mesh, "R", 0)
+    V = df.FunctionSpace(geo.mesh, "R", 0)
     gamma = df.Function(V)
 
-    material = mat.HolzapfelOgden(f0, gamma, active_model = "active_stress", T_ref=100.0)
+    material = mat.HolzapfelOgden(geo.fiber, gamma, active_model = "active_stress", T_ref=100.0)
 
     spring = df.Constant(1.0, name ="spring_constant")
     
     # Facet Normal
-    N = df.FacetNormal(mesh)
+    N = df.FacetNormal(geo.mesh)
 
     pressure_lv = df.Constant(0.0)
     pressure_rv = df.Constant(0.0)
 
 
-    params= {"mesh": mesh,
-             "facet_function": ffun,
+    params= {"mesh": geo.mesh,
+             "facet_function": geo.ffun,
              "facet_normal": N,
              "material": material,
              "bc":{"dirichlet": make_dirichlet_bcs,
-                   "neumann":[[pressure_lv, endolv_marker],
-                              [pressure_rv, endorv_marker]],
-                   "robin":[[spring, base_marker]]}}
+                   "neumann":[[pressure_lv, geo.markers["ENDO_LV"][0]],
+                              [pressure_rv, geo.markers["ENDO_RV"][0]]],
+                   "robin":[[spring, geo.markers["BASE"][0]]]}}
     
 
     df.parameters["adjoint"]["stop_annotating"] = True

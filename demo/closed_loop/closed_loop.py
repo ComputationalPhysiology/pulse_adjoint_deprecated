@@ -42,8 +42,9 @@ PETScOptions.set("mat_mumps_icntl_7", 6)
 ############
 ### MESH ###
 ############
-meshname = "benchmark"
-patient = LVTestPatient("benchmark")
+# meshname = "benchmark"
+meshname = "simple_ellipsoid"
+patient = LVTestPatient(meshname)
 mesh = patient.mesh
 X = SpatialCoordinate(mesh)
 N = FacetNormal(mesh)
@@ -80,7 +81,10 @@ V_ven = 3660
 V_art = 640
 
 # scale geometry to match hemodynamics parameters
-mesh.coordinates()[:] /= 4.0 
+if meshname == "benchmark":
+    mesh.coordinates()[:] /= 4.0
+elif meshname == "simple_ellipsoid":
+    mesh.coordinates()[:] *= 2.4
 
 
 ######################

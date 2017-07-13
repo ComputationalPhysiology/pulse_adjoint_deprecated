@@ -8,15 +8,15 @@ from pulse_adjoint.lvsolver import LVSolver
 from pulse_adjoint.setup_parameters import setup_general_parameters
 from pulse_adjoint.iterate import iterate
 from pulse_adjoint.setup_optimization import RegionalParameter
-
-from mesh_generation.idealized_geometry import mark_strain_regions
-
-
 from pulse_adjoint.postprocess.utils import (smooth_from_points,
                                              localproject,
                                              remove_extreme_outliers)
 
+from mesh_generation.mesh_utils import load_geometry_from_h5, save_geometry_to_h5, get_markers
+from mesh_generation.idealized_geometry import mark_strain_regions
+
 setup_general_parameters()
+geo_file = "lv_ellipsoid_inhomogeonous.h5"
 
 base_x = 0.0
 
@@ -147,27 +147,27 @@ def create_fiberfield(mesh, ffun):
 
 def main():
     
-    mesh = load_mesh()
-    # df.plot(mesh, interactive=True)
-    # exit()
-    ffun = mark_mesh(mesh)
-    # df.plot(ffun, interactive=True)
-    # exit()
-    sfun = mark_strain_regions(mesh, -1.0, [6,6,4,1])
+    if os.path.isfile(geo_file):
+        geo = load_geometry_from_h5(geo_file)
+    else:
+            
+        mesh = load_mesh()
+        ffun = mark_mesh(mesh)
+        f0 = create_fiberfield(mesh, ffun)
+        sfun = mark_strain_regions(mesh, -1.0, [6,6,4,1])
+        markers = get_markers("lv")
 
-
-    f0 = create_fiberfield(mesh, ffun)
+        save_geometry_to_h5(mesh, geo_file, "", markers, [f0])
+        geo = load_geometry_from_h5(geo_file)
 
     
     def make_dirichlet_bcs(W):
         V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-        no_base_x_tran_bc = df.DirichletBC(V.sub(0), df.Constant(0.0), ffun, base_marker)
+        no_base_x_tran_bc = df.DirichletBC(V.sub(0), df.Constant(0.0), geo.ffun, geo.markers["BASE"][0])
         return no_base_x_tran_bc 
 
-   
-    # V = df.FunctionSpace(mesh, "R", 0)
-    # gamma = df.Function(V)
-    gamma = RegionalParameter(sfun)
+  
+    gamma = RegionalParameter(geo.sfun)
 
     gamma_base = [1,1,1,1,0.5,0.6]
     gamma_mid =  [1,1,1,1,0.5,0.6]
@@ -181,29 +181,29 @@ def main():
     G = RegionalParameter(sfun)
     G.vector()[:] = gamma_arr
     G_ = df.project(G.get_function(), G.get_ind_space())
-    # G = gamma.g
+    
     f_gamma = df.XDMFFile(df.mpi_comm_world(), "activation.xdmf")
     f_gamma.write(G_)
     
 
-    material = mat.HolzapfelOgden(f0, gamma, active_model = "active_strain", T_ref=0.25)
+    material = mat.HolzapfelOgden(geo.fiber, gamma, active_model = "active_strain", T_ref=0.25)
 
     spring = df.Constant(1.0, name ="spring_constant")
     
     # Facet Normal
-    N = df.FacetNormal(mesh)
+    N = df.FacetNormal(geo.mesh)
 
     pressure = df.Constant(0.0)
 
 
 
-    params= {"mesh": mesh,
-             "facet_function": ffun,
+    params= {"mesh": geo.mesh,
+             "facet_function": geo.ffun,
              "facet_normal": N,
              "material": material,
              "bc":{"dirichlet": make_dirichlet_bcs,
-                   "neumann":[[pressure, endo_marker]],
-                   "robin":[[spring, base_marker]]}}
+                   "neumann":[[pressure, geo.markers["ENDO"][0]]],
+                   "robin":[[spring, geo.markers["BASE"][0]]]}}
     
 
     df.parameters["adjoint"]["stop_annotating"] = True
@@ -216,8 +216,6 @@ def main():
     solver.parameters["solve"]["newton_solver"]["report"] =True
     df.set_log_active(True)
     df.set_log_level(20)
-    # from IPython import embed; embed()
-    # exit()
     
     solver.solve()
 
