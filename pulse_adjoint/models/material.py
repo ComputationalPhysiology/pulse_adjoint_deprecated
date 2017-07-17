@@ -236,16 +236,15 @@ class Material(object):
             psi = self.strain_energy(F) - p*(J-1)
 
 
-       
-
         fiber = self.active.get_component("fiber")
         sheet = self.active.get_component("sheet")
         cross_sheet = self.active.get_component("sheet_normal")
 
 
         # First Piola Kirchoff
-        S = self.SecondPiolaStress(F,p)
-        P = F*S
+        # S = self.SecondPiolaStress(F,p)
+        # P = F*S
+        P = self.FirstPiolaStress(F, p)
                 
         # Cauchy stress
         T = InversePiolaTransform(P, F)
@@ -272,13 +271,16 @@ class Material(object):
         I4f = variable(self.active.I4(F))
 
         Fe = self.active.Fe(F)
+        Fa = self.active.Fa()
         Ce = Fe.T*Fe
 
-        
+        fe = Fe*f0
+        fefe = outer(fe,fe)
 
         # Elastic volume ratio
         J = variable(det(Fe))
-        
+        # Active volume ration
+        Ja = det(Fa)
         Ce_bar = pow(J, -2.0/float(dim))*Ce
         
         w1   = self.W_1(I1, diff = 1, dim = dim)
@@ -287,14 +289,14 @@ class Material(object):
         
         
         # Total Stress
-        S_bar = 2 * w1*I + 2 * w4f * f0f0 
+        S_bar = Ja * (2 * w1*I + 2 * w4f * f0f0 ) * inv(Fa).T
 
         if self.is_isochoric():
 
             # Deviatoric
-            Dev_S_bar = S_bar - (1.0/3.0)*inner(S_bar, Ce_bar)*inv(Ce_bar)
+            Dev_S_bar = S_bar  - (1.0/3.0)*inner(S_bar, Ce_bar)*inv(Ce_bar)
 
-            S_mat = J**(-2.0/3.0)*Dev_S_bar
+            S_mat = J**(-2.0/3.0)*Dev_S_bar 
         else:
             S_mat = S_bar
             

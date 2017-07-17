@@ -33,7 +33,8 @@ This will be included later.
 # SIMULA RESEARCH LABORATORY MAKES NO REPRESENTATIONS AND EXTENDS NO
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
-import os
+import os, h5py
+from copy import deepcopy
 import numpy as np
 from .args import *
 import utils
@@ -549,17 +550,21 @@ def get_data(params, patient=None):
     passive_group = "passive_inflation"
     active_group = "/".join([main_active_group, "contract_point_{}"])
     
+
+    opt_res = {"run_time":[],
+               "nit":[],
+               "nfev":[],
+               "njev":[],
+               "ncrash":[],
+               "func_vals": [],
+               "forward_times":[],
+               "backward_times":[]}
     
     data = {"states":[],
             "gammas":[],
             "displacements":[],
-            "timings":{"run_time":[],
-                       "nit":[],
-                       "nfev":[],
-                       "njev":[],
-                       "ncrash":[],
-                       "forward_times":[],
-                       "backward_times":[]}}
+            "passive_optimization_results":deepcopy(opt_res),
+            "active_optimization_results":{}}
 
     
 
@@ -741,6 +746,8 @@ def get_data(params, patient=None):
                                         patient.pressure[0])
 
     if not passive:
+        msg = "No passive data found. Return... "
+        print(msg)
         return data, patient
     
     pressures = passive["bcs"]["pressure"]
@@ -757,7 +764,22 @@ def get_data(params, patient=None):
             k += 1
         else:
             interpolation_points.append(i)
-  
+
+    with h5py.File(params["sim_file"], "r") as h5file:
+
+        for k in opt_res.keys():
+
+            if k in h5file[passive_group]["optimization_results"]:
+                data["passive_optimization_results"][k] = h5file[passive_group]["optimization_results"][k][:]
+
+        for p in range(len(active_keys)):
+                
+            if active_group.format(p) in h5file:
+                opt_res_ = deepcopy(opt_res)
+                for k in opt_res.keys():
+                    opt_res_[k] = h5file[active_group.format(p)]["optimization_results"][k][:]
+                
+                data["active_optimization_results"]["contract_point_{}".format(p)] = opt_res_
 
 
     with dolfin.HDF5File(dolfin.mpi_comm_world(), params["sim_file"], "r") as h5file:
@@ -775,7 +797,7 @@ def get_data(params, patient=None):
                 
         
         N = patient.passive_filling_duration+1 if params["unload"] else patient.passive_filling_duration
-        
+               
         for p in range(N):
             
             if not it in interpolation_points:

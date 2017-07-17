@@ -100,7 +100,7 @@ def cm2inch(*tupl):
         return tuple(i/inch for i in tupl)
 
     
-def setup_plot(fontsize=7,dpi=300):
+def setup_plot(fontsize=7,dpi=300,height=9.5, width=9.5):
     
     # Plotting options
     if has_seaborn:
@@ -119,17 +119,17 @@ def setup_plot(fontsize=7,dpi=300):
     # width in cm
 
     # minimal size
-    width = 3
-    # single column
-    width = 9
-    # 1.5 column
-    width = 14
-    # full width
-    width = 19
+    # width = 3
+    # # single column
+    # width = 9
+    # # 1.5 column
+    # width = 14
+    # # full width
+    # width = 19
 
-    # For two images side by side, leave some space
-    width = 9.5
-    height = 9.5
+    # # For two images side by side, leave some space
+    # width = 9.5
+    # height = 9.5
     
     # width = 19.5
     # height = 19.5
