@@ -567,6 +567,10 @@ def iterate_gamma(solver, target, gamma,
         target_ = Function(gamma.function_space())
         target_.assign(Constant(target))
         target = target_
+    elif isinstance(target, (list, np.ndarray)):
+        target_ = Function(gamma.function_space())
+        assign_to_vector(target_.vector(), np.array(target))
+        target = target_
     
     target_reached = check_target_reached(solver, gamma, "gamma", target)
 

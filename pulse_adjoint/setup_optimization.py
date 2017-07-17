@@ -325,9 +325,9 @@ def make_solver_parameters(params, patient, matparams,
             V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
 
         
-            bc = [DirichletBC(V.sub(0), Constant(0.0), patient.BASE),
-                      DirichletBC(V.sub(1), base_bc_y, endoring, "pointwise"),
-                      DirichletBC(V.sub(2), base_bc_z, endoring, "pointwise")]
+            bc = [DirichletBC(V.sub(0), Constant(0.0), patient.ffun, patient.markers["BASE"][0]),
+                  DirichletBC(V.sub(1), base_bc_y, endoring, "pointwise"),
+                  DirichletBC(V.sub(2), base_bc_z, endoring, "pointwise")]
             return bc
 
     elif params["base_bc"] == "fixed":
@@ -340,7 +340,7 @@ def make_solver_parameters(params, patient, matparams,
             '''Fix the basal plane.
             '''
             V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-            bc = [DirichletBC(V, Constant((0, 0, 0)), patient.markers["BASE"][0])]
+            bc = [DirichletBC(V, Constant((0, 0, 0)), patient.ffun, patient.markers["BASE"][0])]
             return bc
         
         
@@ -355,7 +355,7 @@ def make_solver_parameters(params, patient, matparams,
             in the x = 0 plane.
             '''
             V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-            bc = [DirichletBC(V.sub(0), 0, patient.markers["BASE"][0])]
+            bc = [DirichletBC(V.sub(0), 0, patient.ffun, patient.markers["BASE"][0])]
             return bc
     
         

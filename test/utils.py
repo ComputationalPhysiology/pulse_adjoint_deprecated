@@ -301,7 +301,7 @@ def create_unloaded_geometry(params, us, ap_params, fiber_params, control_region
     ffun_img.array()[:] = params["facet_function"].array()
     
     # fibers
-    fields = generate_fibers(mesh_img, fiber_params, ffun_img)
+    fields = generate_fibers(mesh_img, ffun = ffun_img, **fiber_params)
     f0 = fields[0]
     
     

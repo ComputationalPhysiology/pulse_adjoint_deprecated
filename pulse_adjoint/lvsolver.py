@@ -176,7 +176,7 @@ class LVSolver(object):
                                               self._bcs,
                                               self._dG)
 
-
+        parameters["form_compiler"]["representation"] = "uflacs"
         solver = NonlinearVariationalSolver(problem)
         solver.parameters.update(self.parameters["solve"])
         

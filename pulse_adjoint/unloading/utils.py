@@ -290,6 +290,10 @@ def solve_lv(pressure, solver, p_expr, ntries = 5, n = 2, annotate = False):
 
 
 def update_vector_field(f0, new_mesh, u = None, name = "fiber", normalize =True, regen_fibers = False):
+
+
+    df.parameters["form_compiler"]["representation"] = "quadrature"
+    df.parameters["form_compiler"]["quadrature_degree"] = 4
     
     ufl_elem = f0.function_space().ufl_element()
     f0_new = df.Function(df.FunctionSpace(new_mesh,ufl_elem), name = name)
