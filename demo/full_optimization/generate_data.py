@@ -38,7 +38,7 @@ from pulse_adjoint.adjoint_contraction_args import PHASES, logger
 from mesh_generation import load_geometry_from_h5, save_geometry_to_h5
 from mesh_generation.strain_regions import make_crl_basis
 
-from patient_data import LVTestPatient
+from pulse_adjoint import LVTestPatient
 
 setup_general_parameters()
 

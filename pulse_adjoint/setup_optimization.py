@@ -30,7 +30,19 @@ from .utils import Object, Text, print_line, print_head
 from .adjoint_contraction_args import *
 from .numpy_mpi import *
 from .setup_parameters import *
+def merge_control(patient, control_str):
 
+    sfun = MeshFunction("size_t", patient.mesh, patient.sfun.dim())
+    sfun.set_values(patient.sfun.array())
+    if control_str != "":
+        for v in control_str.split(":"):
+            vals = sorted(np.array(v.split(","), dtype=int))
+            min_val = vals[0]
+            for vi in vals[1:]:
+                sfun.array()[sfun.array() == vi] = min_val
+                
+    return sfun
+    
 def get_material_model(material_model):
 
     if material_model == "holzapfel_ogden":
@@ -275,12 +287,10 @@ def make_solver_parameters(params, patient, matparams,
     # Neumann BC
     neuman_bc = []
 
-    #V_real = FunctionSpace(patient.mesh, "R", 0)
-    #p_lv = Expression("t", t = p_lv_, name = "LV_endo_pressure", element = V_real.ufl_element())
     p_lv = Constant(p_lv_, name = "LV_endo_pressure")
 
-    if patient.markers.has_key("ENDO_LV"):
-        #p_rv = Expression("t", t = p_rv_, name = "RV_endo_pressure", element = V_real.ufl_element())
+    if patient.is_biv():
+
         p_rv = Constant(p_rv_, name = "RV_endo_pressure")
         
         neumann_bc = [[p_lv, patient.markers["ENDO_LV"][0]],
@@ -291,9 +301,6 @@ def make_solver_parameters(params, patient, matparams,
         neumann_bc = [[p_lv, patient.markers["ENDO"][0]]]
         pressure = {"p_lv":p_lv}
     
-
-
-    #pericard = Function(V_real, name = "pericardium_spring")
     pericard = Constant(params["pericardium_spring"])
     robin_bc = [[pericard, patient.markers["EPI"][0]]]
 
@@ -406,7 +413,8 @@ def make_control(params, patient):
 
     ##  Contraction parameter
     if params["gamma_space"] == "regional":
-        gamma = RegionalParameter(patient.sfun)
+        sfun = merge_control(patient, params["merge_active_control"])
+        gamma = RegionalParameter(sfun)
     else:
         gamma_family, gamma_degree = params["gamma_space"].split("_")
         gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
@@ -419,7 +427,8 @@ def make_control(params, patient):
     
     # Create an object for each single material parameter
     if params["matparams_space"] == "regional":
-        paramvec_ = RegionalParameter(patient.sfun)
+        sfun = merge_control(patient, params["merge_passive_control"])
+        paramvec_ = RegionalParameter(sfun)
         
     else:
         
@@ -466,8 +475,9 @@ def make_control(params, patient):
             # Get material parameter from passive phase file
             h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
             
-            
+    
     matparams = params["Material_parameters"].to_dict()
+    
     for par, val in matparams.iteritems():
 
         # Check if material parameter should be fixed
@@ -683,7 +693,7 @@ def get_volume(patient, unload = False, chamber = "lv", u = None):
         ffun = patient.ffun
 
     if chamber == "lv":
-        if patient.markers.has_key("ENDO_LV"):
+        if patient.is_biv():
             endo_marker = patient.markers["ENDO_LV"][0]
         else:
             endo_marker = patient.markers["ENDO"][0]

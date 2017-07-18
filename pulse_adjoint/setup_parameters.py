@@ -485,6 +485,15 @@ def setup_application_parameters(material_model = "holzapfel_ogden"):
 
     params.add("strain_tensor", "gradu", ["E", "gradu"])
     params.add("map_strain", False)
+
+
+    # e.g merge region 1,2 into one region -> "1,2"
+    # e.g merge region 1,2 into one region and
+    # region 3,4 into one region -> "1,2:3,4"
+    # this will yeild two regions (region 1 and 3)
+    # Note: only applicable for regional parameters
+    params.add("merge_passive_control", "")
+    params.add("merge_active_control", "")
     
     return params
 

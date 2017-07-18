@@ -154,6 +154,8 @@ class BasePatient(object):
         else:
             self.strain_weights = None
 
+    def is_biv(self):
+        return self.markers.has_key("ENDO_LV")
             
     def interpolate_data(self, start, n = 1):
         """Interpolate data for the pressure, 
