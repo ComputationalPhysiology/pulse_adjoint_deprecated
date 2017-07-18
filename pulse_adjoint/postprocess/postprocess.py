@@ -321,16 +321,19 @@ class PostProcess(object):
         
         
         data = {}
+        self._passive_filling_duration = {}
         for patient_name in self._keys:
 
             
             val = self.get_data(patient_name)
+            
 
             
             data[patient_name] = {}
 
             params, patient = self._setup_compute(patient_name)
-
+            self._passive_filling_duration[patient_name] = patient.passive_filling_duration
+            
             def compute_echo_work(patient, params):
                 strain = {}
                 load.load_measured_strain(strain, patient, "measured_strain")
@@ -455,6 +458,59 @@ class PostProcess(object):
                     
                     self._save_tmp_results(patient_name, "emax", d)
                     data[patient_name].update(**d)
+
+            if "end_systolic_elastance" in args:
+
+                if self._data_exist(patient_name, "end_systolic_elastance") and not self._recompute:
+                    self._load_tmp_results(patient_name, "end_systolic_elastance", data[patient_name])
+
+
+                else:
+                    logger.info("Compute end_systolic_elastance")
+
+                    es = self._es[patient_name]
+                    
+                    # from IPython import embed; embed()
+                    # exit()
+                    state = val["states"][str(es)]
+                    gamma = val["gammas"][str(es)]
+
+                    matparams = val["material_parameters"]
+                    
+                    if params["matparams_space"] == "regional":
+                        mat = RegionalParameter(patient.sfun)
+                        mat.vector()[:] = matparams["a"]
+                    else:
+                        family, degree = params["matparams_space"].split("_")
+                        mat_space= dolfin.FunctionSpace(moving_mesh, family, int(degree))
+                        mat = dolfin.Function(mat_space, name = "material_parameter_a")
+                        mat.vector()[:] = matparams["a"]
+
+                    matparams["a"] = mat
+
+                    for k in ["a_f", "b", "b_f"]:
+                        v = dolfin.Constant(matparams[k][0])
+                        matparams[k] = v
+
+
+                    d = {}
+                    if patient.is_biv():
+                        pressure = (patient.pressure[es],patient.rv_pressure[es])
+                        
+                        d["end_systolic_elastance_rv"] =  utils.compute_elastance(state, pressure, gamma, patient,
+                                                                                  params, matparams,chamber="rv")
+                        
+                    else:
+                        pressure = patient.pressure[es]
+                        
+                    
+
+                    d["end_systolic_elastance"] = utils.compute_elastance(state, pressure, gamma, patient,
+                                                                           params, matparams,chamber="lv")
+
+                    self._save_tmp_results(patient_name, "end_systolic_elastance", d)
+                    data[patient_name].update(**d)
+                    
                 
             if "gamma_mean" or "gamma_regional" in args:
                 

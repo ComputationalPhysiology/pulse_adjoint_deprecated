@@ -289,7 +289,7 @@ def make_solver_parameters(params, patient, matparams,
 
     p_lv = Constant(p_lv_, name = "LV_endo_pressure")
 
-    if patient.is_biv():
+    if patient.markers.has_key("ENDO_LV"):
 
         p_rv = Constant(p_rv_, name = "RV_endo_pressure")
         
@@ -693,7 +693,7 @@ def get_volume(patient, unload = False, chamber = "lv", u = None):
         ffun = patient.ffun
 
     if chamber == "lv":
-        if patient.is_biv():
+        if patient.markers.has_key("ENDO_LV"):
             endo_marker = patient.markers["ENDO_LV"][0]
         else:
             endo_marker = patient.markers["ENDO"][0]

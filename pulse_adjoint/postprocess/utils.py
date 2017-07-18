@@ -524,7 +524,7 @@ def interpolate_trace_to_valve_times(arr, valve_times, N):
  
     return np.concatenate(full_arr)
 def compute_elastance(state, pressure, gamma, patient,
-                      params, matparams, return_v0 = False):
+                      params, matparams, return_v0 = False, chamber = "lv"):
     """FIXME! briefly describe function
 
     :param state: 
@@ -541,23 +541,47 @@ def compute_elastance(state, pressure, gamma, patient,
     """
     
 
-    solver, p_lv = get_calibrated_solver(state, pressure,
+    solver, p_expr = get_calibrated_solver(state, pressure,
                                          gamma, patient,
                                          params,matparams)
 
-    p_lv.t = pressure
-    solver.solve()
-   
     u,_ = dolfin.split(solver.get_state())
-    volume = compute_inner_cavity_volume(patient.mesh, patient.ffun,
-                                         patient.markers["ENDO"][0], u)
 
+    if patient.is_biv():
+        p_expr["p_lv"].assign(pressure[0])
+        p_expr["p_rv"].assign(pressure[1])
+        
+    else:
+        p_expr["p_lv"].assign(pressure)
+
+
+    solver.solve()
+
+    assert chamber in ["lv", "rv"]
+    if chamber == "lv":
+        P = p_expr["p_lv"]
+        if patient.markers.has_key("ENDO_LV"):
+            endo_marker =  patient.markers["ENDO_LV"][0]
+            pressure_ = pressure[0]
+        else:
+            endo_marker = patient.markers["ENDO"][0]
+            pressure_ = pressure
+    else:
+        
+        P = p_expr["p_rv"]
+        endo_marker = patient.markers["ENDO_RV"][0]
+        pressure_ = pressure[1]
+    
+    volume = compute_inner_cavity_volume(patient.mesh, patient.ffun,
+                                         endo_marker, u)
+
+    
     vs = [volume]
-    ps = [pressure]
+    ps = [pressure_]
 
     print "Original"
     print "{:10}\t{:10}".format("pressure", "volume")
-    print "{:10.2f}\t{:10.2f}".format(pressure, volume)
+    print "{:10.2f}\t{:10.2f}".format(pressure_, volume)
     print "Increase the pressure"
 
     n = 1
@@ -565,7 +589,8 @@ def compute_elastance(state, pressure, gamma, patient,
     crash = True
     while crash:
         # Increase the pressure
-        p_lv.t += inc
+        P_ = float(P) + inc
+        P.assign(P_)
         # Do a new solve
         try:
             solver.solve()
@@ -577,18 +602,18 @@ def compute_elastance(state, pressure, gamma, patient,
             # Compute the new volume
             u,_ = dolfin.split(solver.get_state())
             v = compute_inner_cavity_volume(patient.mesh, patient.ffun,
-                                            patient.markers["ENDO"][0], u)
+                                            endo_marker, u)
             
-            print "{:10.2f}\t{:10.2f}".format(p_lv.t, v)
+            print "{:10.2f}\t{:10.2f}".format(float(P), v)
             # Append to the list
             vs.append(v)
-            ps.append(p_lv.t)
+            ps.append(float(P))
 
             crash = False
 
     if return_v0:
         e = np.mean(np.divide(np.diff(ps), np.diff(vs)))
-        v0 = volume - float(pressure)/e
+        v0 = volume - float(pressure_)/e
         return e, v0
     else:
         return np.mean(np.divide(np.diff(ps), np.diff(vs)))
@@ -1131,6 +1156,11 @@ def make_simulation(params, features, outdir, patient):
             pass
         elif f == "gamma":
             functions[f] = dolfin.Function(gamma_space, name="gamma")
+
+        elif f == "hydrostatic_pressure":
+            functions[f] = dolfin.Function(moving_spaces["pressure_space"], 
+                                           name=f)
+            
         else:
             functions[f] = dolfin.Function(moving_spaces["stress_space"], 
                                           name=f)
@@ -1326,7 +1356,7 @@ def copmute_mechanical_features(patient, params, val, path):
     
     keys = [":".join(a) for a in product(["green_strain", "cauchy_stress", "cauchy_dev_stress"],
                                          ["longitudinal", "fiber", "circumferential", "radial"])] + \
-                ["gamma:", "displacement:"]
+                ["gamma:", "displacement:", "hydrostatic_pressure:"]
 
 
     features = {k.rstrip(":") : [] for k in keys}
@@ -1334,8 +1364,6 @@ def copmute_mechanical_features(patient, params, val, path):
     from copy import deepcopy
     features_scalar = {k.rstrip(":"):deepcopy(scalar_dict) for k in keys}
     
-
-
     print("\nExtracting the following features:")
     print("\n".join(keys))
 
@@ -1369,7 +1397,7 @@ def copmute_mechanical_features(patient, params, val, path):
 
         if project:
             f_ = dolfin.project(fun, spaces["quad_space_1"])
-            remove_extreme_outliers(f_, 300.0, -50.0)
+            remove_extreme_outliers(f_, 300.0, -300.0)
             f = smooth_from_points(spaces[space], f_, method ="average")
 
             # f = dolfin.project(fun, spaces["stress_space"])
@@ -1425,11 +1453,14 @@ def copmute_mechanical_features(patient, params, val, path):
             if k1 == "displacement":
                 get("displacement", u, "displacement_space", False)
                 
-            if k1 == "gamma":
+            elif k1 == "gamma":
                 gamma = solver.get_gamma()
                 gamma.vector()[:] = np.multiply(params["T_ref"], gamma.vector().array())
                 get("gamma", gamma, "gamma_space", False)
 
+            elif k1 == "hydrostatic_pressure":
+                get("hydrostatic_pressure", p, "pressure_space", False)
+                
             else:
 
                 if k2 == "longitudinal":
@@ -1484,7 +1515,6 @@ def get_solver(matparams, patient, gamma, params):
 
 def get_calibrated_solver(state_arr, pressure, gamma_arr,
                           patient, params, matparams, rv_pressure = None):
-
     
     if params["gamma_space"] == "regional":
         gamma = RegionalParameter(patient.sfun)
@@ -1500,8 +1530,6 @@ def get_calibrated_solver(state_arr, pressure, gamma_arr,
     gamma_tmp.vector()[:] = gamma_arr
     gamma.assign(gamma_tmp)
 
-    p_lv = p_expr["p_lv"]
-    
 
     w = dolfin.Function(solver.get_state_space())
     w.vector()[:] = state_arr
@@ -1509,8 +1537,7 @@ def get_calibrated_solver(state_arr, pressure, gamma_arr,
     solver.reinit(w)
 
     
-    return solver, p_lv
-
+    return solver, p_expr
 
 def remove_extreme_outliers(fun, ub=None, lb=None):
     """
