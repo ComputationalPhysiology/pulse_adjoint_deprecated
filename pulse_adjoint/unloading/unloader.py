@@ -53,7 +53,7 @@ __all__ = ["FixedPoint", "Raghavan", "Hybrid"]
 
 def step(geometry, pressure, k, u, residual, big_res,
          is_biv = False, material_parameters = None, solver_parameters = {},
-         n = 2, solve_tries=1, approx = "project", regen_fibers=False):
+         n = 2, solve_tries=1, approx = "project", merge_control="", regen_fibers=False):
     
     logger.info("\n\nk = {}".format(k))
     
@@ -62,8 +62,9 @@ def step(geometry, pressure, k, u, residual, big_res,
     assign_to_vector(U.vector(), k*gather_broadcast(u.vector().array()))
     new_geometry = update_geometry(geometry, U, regen_fibers)
 
+
     matparams = update_material_parameters(material_parameters,
-                                           new_geometry.mesh)
+                                           new_geometry.mesh, merge_control)
 
     if isinstance(matparams["a"], float):
         logger.info("material parameters = {}".format(matparams["a"]))
@@ -103,13 +104,14 @@ class MeshUnloader(object):
                  options = {"maxiter": 50, "regen_fibers":False,
                             "tol": 1e-4, "solve_tries" : 20},
                  h5group = "", remove_old = False,
-                 solver_parameters = {}, approx = "project"):
+                 solver_parameters = {}, approx = "project", merge_control=""):
 
         
         self.geometry = geometry
         self.pressure = pressure
 
         self.approx = approx
+        self.merge_control = merge_control
         self.h5name = h5name
         self.h5group = h5group
 
@@ -338,7 +340,7 @@ class Raghavan(MeshUnloader):
             res = step(self.geometry, self.pressure, k, u, residual,
                        big_res, self.is_biv, self.material_parameters,
                        self.solver_parameters, self.n, self.parameters["solve_tries"],
-                       self.approx, self.parameters["regen_fibers"])
+                       self.approx, self.merge_control, self.parameters["regen_fibers"])
             residuals[k] = res
             return res
 
@@ -582,7 +584,7 @@ class FixedPoint(MeshUnloader):
             
 
             matparams = update_material_parameters(self.material_parameters,
-                                                   new_geometry.mesh)
+                                                   new_geometry.mesh, self.merge_control)
     
             # Make the solver
             from ..setup_optimization import (make_solver_parameters,

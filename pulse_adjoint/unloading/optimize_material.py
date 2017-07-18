@@ -207,7 +207,8 @@ class UnloadedMaterial(object):
                                      options = self.unload_options,
                                      h5group=str(self.it), remove_old =False,
                                      solver_parameters=self.params,
-                                     approx=self.params["volume_approx"])
+                                     approx=self.params["volume_approx"],
+                                     merge_control=self.params["merge_passive_control"])
 
         
         unloader.unload()        

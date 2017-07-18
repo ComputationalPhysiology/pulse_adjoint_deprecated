@@ -405,18 +405,23 @@ def get_volume(geometry, u = None, chamber="lv"):
         
 
     return vol
-def update_material_parameters(material_parameters, mesh):
+def update_material_parameters(material_parameters, mesh, merge_control_str=""):
     
-    from .. import RegionalParameter
+    from ..setup_optimization import RegionalParameter, merge_control
+    
     
     new_matparams = {}
     for k,v in material_parameters.iteritems():
         if isinstance(v, RegionalParameter):
-            meshfunction = df.MeshFunction("size_t", mesh, 3,
+            geo = lambda: None
+            geo.mesh = mesh
+            geo.sfun = df.MeshFunction("size_t", mesh, 3,
                                         mesh.domains())
+            sfun = merge_control(geo, merge_control_str)
 
-            v_new = RegionalParameter(meshfunction)
+            v_new = RegionalParameter(sfun)
             v_arr = gather_broadcast(v.vector().array())
+          
             assign_to_vector(v_new.vector(), v_arr)
             new_matparams[k] = v_new
 
