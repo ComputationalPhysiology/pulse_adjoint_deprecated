@@ -190,7 +190,12 @@ def run_passive_optimization_step(params, patient, solver_parameters, measuremen
     """
     
     # Load targets
-    optimization_targets, bcs = load_targets(params, solver_parameters, measurements)
+    if params["matparams_space"] == "regional":
+        mshfun = paramvec._meshfunction
+    else:
+        mshfun = None
+        
+    optimization_targets, bcs = load_targets(params, solver_parameters, measurements, mshfun)
 
 
     #Initialize the solver for the Forward problem
@@ -368,7 +373,12 @@ def run_active_optimization_step(params, patient, solver_parameters, measurement
             
 
     # Load targets
-    optimization_targets, bcs = load_targets(params, solver_parameters, measurements)
+    if params["gamma_space"] == "regional":
+        mshfun = gamma._meshfunction
+    else:
+        mshfun = None
+    
+    optimization_targets, bcs = load_targets(params, solver_parameters, measurements, mshfun)
 
     for_run = ActiveForwardRunner(solver_parameters,
                                   pressure,
@@ -660,7 +670,7 @@ def load_target_data(measurements, params, optimization_targets):
     return optimization_targets, bcs
 
 
-def get_optimization_targets(params, solver_parameters):
+def get_optimization_targets(params, solver_parameters, mshfun=None):
     """FIXME! briefly describe function
 
     :param params: 
@@ -684,7 +694,7 @@ def get_optimization_targets(params, solver_parameters):
     
     
     targets = {"regularization": Regularization(mesh,spacestr, reg_par,
-                                                mshfun = solver_parameters["mesh_function"])}
+                                                mshfun = mshfun)}
 
     if p["volume"]:
         logger.debug("Load volume target")
@@ -763,7 +773,6 @@ def get_optimization_targets(params, solver_parameters):
                 if params["strain_approx"] == "project":
                     logger.debug("Project displacement")
                     u = project(u, V)
-                else:
                     logger.debug("Interpolate displacement")
                     u = interpolate(u, V)
                     
@@ -791,7 +800,7 @@ def get_optimization_targets(params, solver_parameters):
     return targets
         
     
-def load_targets(params, solver_parameters, measurements):
+def load_targets(params, solver_parameters, measurements, mshfun=None):
     """FIXME! briefly describe function
 
     :param dict params: 
@@ -810,7 +819,7 @@ def load_targets(params, solver_parameters, measurements):
 
     
     # Load optimization targets
-    optimization_targets = get_optimization_targets(params, solver_parameters)
+    optimization_targets = get_optimization_targets(params, solver_parameters, mshfun)
     
     # Load target data
     optimization_targets, bcs = \

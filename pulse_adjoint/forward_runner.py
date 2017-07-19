@@ -526,6 +526,7 @@ class PassiveForwardRunner(BasicForwardRunner):
         try:
             forward_result = BasicForwardRunner.solve_the_forward_problem(self, self.cphm, annotate, "passive")
         except (SolverDidNotConverge, UnableToChangePressureExeption, RuntimeError) as ex:
+            logger.warning(ex)
             raise SolverDidNotConverge
         else:
             return forward_result, False
