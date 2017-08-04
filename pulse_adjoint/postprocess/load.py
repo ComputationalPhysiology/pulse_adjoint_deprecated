@@ -451,7 +451,7 @@ def save_dict_to_h5(d, h5name, h5group = "",
             os.remove(h5name)
 
     file_mode = "a" if os.path.isfile(h5name) and not overwrite_file else "w"
-
+   
     # IF we should append the file but overwrite the group we need to
     # check that the group does not exist. If so we need to open it in
     # h5py and delete it.
@@ -578,9 +578,10 @@ def get_data(params, patient=None):
     from utils import init_spaces
     spaces = init_spaces(patient.mesh, params["gamma_space"])
 
-    from pulse_adjoint.setup_optimization import RegionalParameter
+    from pulse_adjoint.setup_optimization import RegionalParameter, merge_control
     if params["gamma_space"] == "regional":
-        gamma = RegionalParameter(patient.sfun)
+        sfun = merge_control(patient, params["merge_active_control"])
+        gamma = RegionalParameter(sfun)
     else:
         gamma = dolfin.Function(spaces["gamma_space"], name = "Contraction Parameter")
         
@@ -596,7 +597,8 @@ def get_data(params, patient=None):
     if npassive == 1:
 
         if params["matparams_space"] == "regional":
-            paramvec = RegionalParameter(patient.sfun)
+            sfun = merge_control(patient, params["merge_passive_control"])
+            paramvec = RegionalParameter(sfun)
         else:
             family, degree = params["matparams_space"].split("_")                
             paramvec = dolfin.Function(dolfin.FunctionSpace(patient.mesh, family, int(degree)), name = "matparam vector")
@@ -708,6 +710,7 @@ def get_data(params, patient=None):
 
             for k in unload_iters:
                 group = "/".join([k, passive_group, "optimal_control"])
+              
                 mat = read_matparam(h5file, group, paramvec)
                 print group
                 print mat
