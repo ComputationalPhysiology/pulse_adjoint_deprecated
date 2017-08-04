@@ -99,7 +99,7 @@ class LVSolver(object):
         prm[nsolver]['relative_tolerance'] = 1E-12
         prm[nsolver]['maximum_iterations'] = 15
         # prm[nsolver]['relaxation_parameter'] = 1.0
-        prm[nsolver]['linear_solver'] = 'mumps'
+        prm[nsolver]['linear_solver'] = 'superlu_dist'
         prm[nsolver]['error_on_nonconvergence'] = True
         prm[nsolver]['report'] = True if logger.level < INFO else False
         if self.iterative_solver:
