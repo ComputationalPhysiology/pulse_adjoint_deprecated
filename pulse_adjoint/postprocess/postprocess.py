@@ -86,6 +86,7 @@ class PostProcess(object):
         self._fname = fname
         self._geoname = geoname
         self._pname = pname
+        self.set_feature_keys()
         
         self._recompute = recompute
         self._outdir = outdir
@@ -170,7 +171,8 @@ class PostProcess(object):
 
 
         if params["matparams_space"] == "regional":
-            paramvec = RegionalParameter(patient.sfun)
+            sfun = merge_control(patient, params["merge_passive_control"])
+            paramvec = RegionalParameter(sfun)
         else:
             family, degree = params["matparams_space"].split("_")                
             paramvec = dolfin.Function(dolfin.FunctionSpace(patient.mesh, family, int(degree)), name = "matparam vector")
@@ -309,7 +311,7 @@ class PostProcess(object):
         * 'vtk_simulation'
         * 'cardiac_work:{case}:{work_pair}', where case is 
            "full", "comp_fiber" or "comp_long", and work_pair 
-           is "SE", "PF" or "pgradu"
+           is "SE", "SEdev" "PF" or "pgradu"
 
         """
 
@@ -350,10 +352,8 @@ class PostProcess(object):
                     for r, s in strain["measured_strain"]["longitudinal"].iteritems():
 
 
-                        measured_work[r] \
-                            = np.multiply(utils.compute_cardiac_work_echo(pressure,
-                                                                          s, flip =True),
-                                          760/101.325)
+                        measured_work[r] =utils.compute_cardiac_work_echo(pressure,
+                                                                          s, flip =True)
 
                 return measured_work
                         
@@ -470,15 +470,15 @@ class PostProcess(object):
 
                     es = self._es[patient_name]
                     
-                    # from IPython import embed; embed()
-                    # exit()
+
                     state = val["states"][str(es)]
                     gamma = val["gammas"][str(es)]
 
                     matparams = val["material_parameters"]
                     
                     if params["matparams_space"] == "regional":
-                        mat = RegionalParameter(patient.sfun)
+                        sfun = merge_control(patient, params["merge_passive_control"])
+                        mat = RegionalParameter(sfun)
                         mat.vector()[:] = matparams["a"]
                     else:
                         family, degree = params["matparams_space"].split("_")
@@ -522,7 +522,8 @@ class PostProcess(object):
                 gamma_lst = [gs[k] for k in sorted(gs, key=utils.asint)]
 
                 if params["gamma_space"] == "regional":
-                    gamma = RegionalParameter(patient.sfun)
+                    sfun = merge_control(patient, params["merge_active_control"])
+                    gamma = RegionalParameter(sfun)
                 else:
                     gamma_space = dolfin.FunctionSpace(patient.mesh, "CG", 1)
                     gamma = dolfin.Function(gamma_space, name = "Contraction Parameter")
@@ -584,7 +585,8 @@ class PostProcess(object):
                     logger.info("Compute meachanical features")
                     d = {"features_scalar" : utils.copmute_mechanical_features(patient,
                                                                                params,
-                                                                               val, output)}
+                                                                               val, output,
+                                                                               keys = self._feature_keys)}
                     self._save_tmp_results(patient_name, "features_scalar", d)
 
                 self._load_tmp_results(patient_name,
@@ -594,6 +596,7 @@ class PostProcess(object):
 
                 self._update_features(features)
 
+            
             if any([a.startswith("cardiac_work") for a in args]):
 
                 try:
@@ -614,11 +617,28 @@ class PostProcess(object):
                     self._load_tmp_results(patient_name, string, data[patient_name])
                     
                 else:
-                    logger.info("Compute cardiac work")
-                    d = utils.compute_cardiac_work(patient, params, val, case, wp)
+
+                    if 0:#string == 'cardiac_work:comp_long:pgradu':
+
+                        strain = utils.get_regional_strains(val["displacements"],
+                                                            patient,**params)
+                        work = {}
+                        pressure = patient.pressure[1:] if params["unload"] \
+                                   else patient.pressure
+                        for r, s_ in strain["longitudinal"].iteritems():
+
+                            s = s_[1:] if params["unload"] else s_
+                            work[r] = utils.compute_cardiac_work_echo(pressure,
+                                                                      s, flip =True)
+                            
+                        data[patient_name]["work_pgradu_comp_long"] = work
+                    else:
+                        
+                        logger.info("Compute cardiac work")
+                        d = utils.compute_cardiac_work(patient, params, val, case, wp)
                     
-                    self._save_tmp_results(patient_name, string, d)
-                    data[patient_name].update(**d)
+                        self._save_tmp_results(patient_name, string, d)
+                        data[patient_name].update(**d)
 
                 data[patient_name]["measured_work"]  = compute_echo_work(patient, params)
                 # data[patient_name]["measured_work"] \
@@ -1659,7 +1679,7 @@ class PostProcess(object):
             
             
             # utils.save_displacements(params, self._features[patient_name], outdir)
-            utils.make_simulation(params, self._features[patient_name], outdir, patient)
+            utils.make_simulation(params, self._features[patient_name], outdir, patient, self._data[patient_name])
             
         logger.info("#"*40)
 
@@ -1700,3 +1720,5 @@ class PostProcess(object):
             outdir = "/".join([main_outdir, patient_name, feature])
             vtk_utils.make_snapshots(fs, us, feature_space, outdir, params)
             
+    def set_feature_keys(self, *args):
+        self._feature_keys = args

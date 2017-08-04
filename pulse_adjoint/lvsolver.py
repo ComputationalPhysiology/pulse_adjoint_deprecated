@@ -391,7 +391,7 @@ class Postprocess(object):
         return self.solver.parameters["material"].FirstPiolaStress(self._F, self._p, deviatoric)
         
 
-    def second_piola_stress(self):
+    def second_piola_stress(self, deviatoric=False):
         r"""
         Second Piola Stress Tensor
 
@@ -400,7 +400,8 @@ class Postprocess(object):
            \mathbf{S} =  \mathbf{F}^{-1} \sigma \mathbf{F}^{-T}
 
         """
-        return  self.solver.parameters["material"].SecondPiolaStress(self._F, self._p)
+     
+        return  self.solver.parameters["material"].SecondPiolaStress(self._F, self._p, deviatoric)
 
 
     def chaucy_stress(self, deviatoric=False):

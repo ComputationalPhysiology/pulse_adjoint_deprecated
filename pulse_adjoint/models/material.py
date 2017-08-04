@@ -228,38 +228,43 @@ class Material(object):
 
 
         F = variable(F)
+        J = variable(det(F))
 
-        if p is None:
-            psi = self.strain_energy(F)
-        else:
-            J = det(F)
-            psi = self.strain_energy(F) - p*(J-1)
-
-
-        fiber = self.active.get_component("fiber")
-        sheet = self.active.get_component("sheet")
-        cross_sheet = self.active.get_component("sheet_normal")
-
-
+        
         # First Piola Kirchoff
-        # S = self.SecondPiolaStress(F,p)
-        # P = F*S
-        P = self.FirstPiolaStress(F, p)
+        if deviatoric:
+            P = self.FirstPiolaStress(F, None)
+        else:
+            P = self.FirstPiolaStress(F, p)
                 
         # Cauchy stress
         T = InversePiolaTransform(P, F)
+
+        return T
         
+        # if self.is_isochoric():#deviatoric:
+            
+        #     #T = J**(-2.0/3.0) * (T - (1.0/3.0) * tr(T)*I )
 
-        if deviatoric:
-            logger.debug("Return deviatoric Cauchy stress")
-            return (T - (1.0/3.0) * tr(T)*I )
+        #     if deviatoric:
+        #         logger.debug("Return deviatoric Cauchy stress")
+        #         return T
+        #     else:
+        #         psi_vol = self.compressibility(p,J)
+        #         T_vol = diff(psi_vol, J)*I
+                
+        #         logger.debug("Return total Cauchy stress")
+        #         return T + T_vol
+        # else:
+            
+        #     if deviatoric:
+        #         logger.debug("Return deviatoric Cauchy stress")
+        #         return J**(-2.0/3.0) * (T - (1.0/3.0) * tr(T)*I )
 
-        else:
-            logger.debug("Return total Cauchy stress")
-            return T
-
+        #     else:
+        #         return T
     
-    def SecondPiolaStress(self, F, p, *args, **kwargs):
+    def SecondPiolaStress(self, F, p=None, deviatoric=False, *args, **kwargs):
 
         dim = get_dimesion(F)
         I = Identity(dim)
@@ -302,9 +307,12 @@ class Material(object):
             
 
         # Volumetric
-        psi_vol = self.compressibility(p,J)
-        S_vol = J*diff(psi_vol, J)*inv(Ce)
-
+        if p is None or deviatoric:
+            S_vol = zero((dim,dim))
+        else:
+            psi_vol = self.compressibility(p,J)
+            S_vol = J*diff(psi_vol, J)*inv(Ce)
+            
         
 
         # Active stress
@@ -329,14 +337,17 @@ class Material(object):
         # First Piola Kirchoff
         psi_iso = self.strain_energy(F)
         P_iso = diff(psi_iso, F)
-        
-        J = variable(det(F))
-        psi_vol = self.compressibility(p,J)
-        P_vol = J*diff(psi_vol, J)*inv(F).T
 
-        P = P_iso + P_vol
+        if p is None:
+            return P_iso
+        else:
+            J = variable(det(F))
+            psi_vol = self.compressibility(p,J)
+            P_vol = J*diff(psi_vol, J)*inv(F).T
+            
+            P = P_iso + P_vol
         
-        return P
+            return P
         
 class HolzapfelOgden(Material):
     r"""

@@ -26,7 +26,7 @@
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 import dolfin
 import numpy as np
-from ..setup_optimization import RegionalParameter
+from ..setup_optimization import RegionalParameter, merge_control
 from ..adjoint_contraction_args import *
 
 ALL_ACTIVE_GROUP = "alpha_{}/reg_par_{}/active_contraction/contract_point_{}"
@@ -72,5 +72,5 @@ try:
     dolfin.parameters["allow_extrapolation"] = True
 except:
     pass
-work_pairs = ["SE", "PF", "pgradu", "strain_energy"]
+work_pairs = ["SE", "PF", "pgradu", "strain_energy", "SEdev"]
 cases = ["full", "comp_fiber", "comp_long"]

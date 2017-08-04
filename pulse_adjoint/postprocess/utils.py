@@ -61,7 +61,7 @@ def init_spaces(mesh, gamma_space = "CG_1"):
     spaces = {}
     
     spaces["marker_space"] = dolfin.FunctionSpace(mesh, "DG", 0)
-    spaces["stress_space"] = dolfin.FunctionSpace(mesh, "DG", 0)
+    spaces["stress_space"] = dolfin.FunctionSpace(mesh, "CG", 1)
     
 
     if gamma_space == "regional":
@@ -964,7 +964,24 @@ def compute_cardiac_work(patient, params, val, case, wp):
     # print(header.format(wp, case, region))
 
     first_time = True
-    
+
+    # FIXME : Assume for now that we unload and the
+    # strain should be computed with respect to
+    # first point as reference.
+    #{
+    solver, p_lv = get_calibrated_solver(states["1"],
+                                         pressures[1],
+                                         gammas["1"],
+                                         patient,
+                                         params, 
+                                         matparams)
+        
+    u_ref, _ = solver.get_state().split(deepcopy=True)
+    I = dolfin.Identity(3)
+    F_ref = dolfin.grad(u_ref) + I
+    #}
+
+   
     for t in times:
 
         print "\nTime: {}".format(t)
@@ -983,7 +1000,8 @@ def compute_cardiac_work(patient, params, val, case, wp):
         post = solver.postprocess()
             
         # Second Piola stress
-        S = -post.second_piola_stress()
+        S = -post.second_piola_stress(deviatoric=False)
+        Sdev = -post.second_piola_stress(deviatoric=True)
         # Green-Lagrange strain
         E = post.GreenLagrange()
         
@@ -991,11 +1009,13 @@ def compute_cardiac_work(patient, params, val, case, wp):
         # P = solver.postprocess().first_piola_stress()
         # # Deformation gradient
         # F = post.deformation_gradient()
-        
+
         # Strain energy
         psi = solver.postprocess().strain_energy()
-        
-        gradu = dolfin.grad(u)
+
+        F_ = dolfin.grad(u) + I
+        F = F_*dolfin.inv(F_ref)
+        gradu = F - I
         
         if wp == "strain_energy":
             
@@ -1005,8 +1025,11 @@ def compute_cardiac_work(patient, params, val, case, wp):
             if wp == "SE":
                 stress = S
                 strain = E
+            elif wp == "SEdev":
+                stress = Sdev
+                strain = E
             # elif wp == "PF":
-            #     stress = P< 
+            #     stress = P 
             #     strain = F
             else:# wp == pgradu
                 stress = pressure
@@ -1053,7 +1076,7 @@ def get_feature_spaces(mesh, gamma_space = "CG_1"):
     spaces = {}
 
     spaces["marker_space"] = dolfin.FunctionSpace(mesh, "DG", 0)
-    spaces["stress_space"] = dolfin.FunctionSpace(mesh, "DG", 0)
+    spaces["stress_space"] = dolfin.FunctionSpace(mesh, "CG", 1)
     
 
     if gamma_space == "regional":
@@ -1077,14 +1100,14 @@ def get_feature_spaces(mesh, gamma_space = "CG_1"):
 
 
    
-def make_simulation(params, features, outdir, patient):
+def make_simulation(params, features, outdir, patient, data):
 
    
 
     if not features: return
 
     import vtk_utils
-
+    
 
     # Mesh
     mesh = patient.mesh
@@ -1100,11 +1123,12 @@ def make_simulation(params, features, outdir, patient):
     # Mesh that we move
     moving_mesh = dolfin.Mesh(mesh)
 
+
     # The time stamps
-    if isinstance(features["gamma"], dict):
-        times = sorted(features["gamma"].keys(), key=asint)
+    if isinstance(data["gammas"], dict):
+        times = sorted(data["gammas"].keys(), key=asint)
     else:
-        times = range(len(features["gamma"]))
+        times = range(len(data["gammas"]))
 
     if not hasattr(patient, "time"):
         patient.time = range(patient.num_points)
@@ -1119,7 +1143,8 @@ def make_simulation(params, features, outdir, patient):
     moving_spaces = get_feature_spaces(moving_mesh, params["gamma_space"])
     if params["gamma_space"] == "regional":
         gamma_space = dolfin.FunctionSpace(moving_mesh, "DG", 0)
-        rg = RegionalParameter(patient.sfun)
+        sfun = merge_control(patient, params["merge_active_control"])
+        rg = RegionalParameter(sfun)
     else:
         gamma_space = moving_spaces["gamma_space"]
 
@@ -1136,7 +1161,8 @@ def make_simulation(params, features, outdir, patient):
     # Material parameter
     if params["matparams_space"] == "regional":
         mat_space = dolfin.FunctionSpace(moving_mesh, "DG", 0)
-        rmat = RegionalParameter(patient.sfun)
+        sfun = merge_control(patient, params["merge_passive_control"])
+        rmat = RegionalParameter(sfun)
         rmat.vector()[:] = matvec
         mat = dolfin.Function(mat_space, name = "material_parameter_a")
         m =  dolfin.project(rmat.get_function(), mat_space)
@@ -1150,7 +1176,7 @@ def make_simulation(params, features, outdir, patient):
 
 
     functions = {}
-    for f in features.keys():
+    for f in features.keys()+["gamma"]:
 
         if f == "displacement":
             pass
@@ -1185,7 +1211,7 @@ def make_simulation(params, features, outdir, patient):
 
         moving_mesh.coordinates()[:] = old_coords[:,:3]
         
-        u.vector()[:] = features["displacement"][t]
+        u.vector()[:] = data["displacements"][t]
         
         u_diff.vector()[:] = u.vector() - u_prev.vector()
         d = dolfin.interpolate(u_diff, V)
@@ -1203,11 +1229,11 @@ def make_simulation(params, features, outdir, patient):
             if f == "gamma":
         
                 if params["gamma_space"] == "regional":
-                    rg.vector()[:] = features["gamma"][t]
+                    rg.vector()[:] = data["gammas"][t]
                     g = dolfin.project(rg.get_function(), gamma_space)
                     functions[f].vector()[:] = g.vector()
                 else:
-                    functions[f].vector()[:] = features["gamma"][t]
+                    functions[f].vector()[:] = data["gammas"][t]
             else:
                 functions[f].vector()[:] = features[f][t]
 
@@ -1281,7 +1307,7 @@ def compute_emax(patient, params, val, valve_times):
 
 
 
-def copmute_mechanical_features(patient, params, val, path):
+def copmute_mechanical_features(patient, params, val, path, keys = None):
     """Compute mechanical features such as stress, strain, 
     works etc, save the output in dolfin vectors to a file, and 
     return a dictionary with average scalar values.
@@ -1329,8 +1355,8 @@ def copmute_mechanical_features(patient, params, val, path):
                 matparams[k] = v[0]
             else:
                 if params["matparams_space"] == "regional":
-                    assert len(v) == len(regions)
-                    par = RegionalParameter(patient.sfun)
+                    sfun = merge_control(patient, params["merge_passive_control"])
+                    par = RegionalParameter(sfun)
                     par.vector()[:] = v
                     matparams[k] = par.get_function()
 
@@ -1338,7 +1364,7 @@ def copmute_mechanical_features(patient, params, val, path):
                     family, degree =  params["matparams_space"].split("_")
                     V = dolfin.FunctionSpace(patient.mesh, family, int(degree))
                     par = dolfin.Function(V)
-                    assert len(v) == len(par.vector())
+              
                     par.vector()[:] = v
                     matparams[k] = par
                 
@@ -1353,10 +1379,14 @@ def copmute_mechanical_features(patient, params, val, path):
                                          # ["fiber"])] + \
                                          # ["gamma:", "displacement:"]
 
-    
-    keys = [":".join(a) for a in product(["green_strain", "cauchy_stress", "cauchy_dev_stress"],
-                                         ["longitudinal", "fiber", "circumferential", "radial"])] + \
-                ["gamma:", "displacement:", "hydrostatic_pressure:"]
+    if keys is None:
+        keys = [":".join(a) for a in product(["green_strain", "cauchy_stress",
+                                              "cauchy_dev_stress"],
+                                         ["longitudinal", "fiber",
+                                          "circumferential", "radial"])] + \
+                                          ["gamma:", "displacement:",
+                                           "hydrostatic_pressure:",
+                                           "I1:", "I1e:", "I4f:", "I4fe:"]
 
 
     features = {k.rstrip(":") : [] for k in keys}
@@ -1444,7 +1474,7 @@ def copmute_mechanical_features(patient, params, val, path):
         w_ed.vector()[:] = states[ed_point]
         u_ed, _ = w_ed.split(deepcopy=True)
         F_ed = dolfin.Identity(3) + dolfin.grad(u_ed)
-        
+        F = dolfin.Identity(3) + dolfin.grad(u)
         
         for k in keys:
 
@@ -1460,6 +1490,27 @@ def copmute_mechanical_features(patient, params, val, path):
 
             elif k1 == "hydrostatic_pressure":
                 get("hydrostatic_pressure", p, "pressure_space", False)
+
+            elif k1 == "I1":
+
+                I1 = solver.parameters["material"].active._I1(F)
+                get("I1", I1, "stress_space")
+                
+            elif k1 == "I1e":
+
+                I1e = solver.parameters["material"].active.I1(F)
+                get("I1e", I1e, "stress_space")
+
+            elif k1 == "I4f":
+
+                f0 = solver.parameters["material"].get_component("fiber")
+                I4f = solver.parameters["material"].active._I4(F, f0)
+                get("I4f", I4f, "stress_space")
+                
+            elif k1 == "I4fe":
+
+                I4fe = solver.parameters["material"].active.I4(F, "fiber")
+                get("I4fe", I4fe, "stress_space")
                 
             else:
 
@@ -1485,7 +1536,7 @@ def copmute_mechanical_features(patient, params, val, path):
                     
                     
                 elif k1 == "cauchy_stress":
-                    
+
                     Tf = solver.postprocess().cauchy_stress_component(e, deviatoric=False)
                     get(k, Tf, "stress_space")
 
@@ -1517,8 +1568,9 @@ def get_calibrated_solver(state_arr, pressure, gamma_arr,
                           patient, params, matparams, rv_pressure = None):
     
     if params["gamma_space"] == "regional":
-        gamma = RegionalParameter(patient.sfun)
-        gamma_tmp = RegionalParameter(patient.sfun)
+        sfun = merge_control(patient, params["merge_active_control"])
+        gamma = RegionalParameter(sfun)
+        gamma_tmp = RegionalParameter(sfun)
     else:
         gamma_space = dolfin.FunctionSpace(patient.mesh, "CG", 1)
         gamma_tmp = dolfin.Function(gamma_space, name = "Contraction Parameter (tmp)")
@@ -1559,7 +1611,7 @@ def remove_extreme_outliers(fun, ub=None, lb=None):
 
     
 
-def smooth_from_points(V, f0, nsamples = 20, method="interpolate") :
+def smooth_from_points(V, f0, nsamples = 10, method="interpolate") :
     """
     Smooth f0 by interpolating f0 into V by using radial basis functions
     for interpolating scattered data using nsamples.
