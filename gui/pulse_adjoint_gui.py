@@ -739,7 +739,7 @@ class CreateCLNotebook(CustFrame):
         #setting a default mesh to be used for the plotting when the GUI is opened.
         self.patient = load_geometry_from_h5('../pulse_adjoint/example_meshes/simple_ellipsoid.h5')
         self.current_mesh = self.patient.mesh
-        self.mesh_name = 'simple_ellipsoid.h5'
+        self.mesh_name = ntpath.basename('../pulse_adjoint/example_meshes/simple_ellipsoid.h5')
         
         #Adding tabs with plots to the plotting notebook.
         self.tab_frame_list = []
@@ -814,7 +814,7 @@ class CreateRegNotebook(CustFrame):
         
         self.patient = load_geometry_from_h5('../pulse_adjoint/example_meshes/simple_ellipsoid.h5')
         self.current_mesh = self.patient.mesh
-        self.mesh_name = 'simple_ellipsoid.h5'
+        self.mesh_name = ntpath.basename('../pulse_adjoint/example_meshes/simple_ellipsoid.h5')
 
         self.tab_frame_list = []
         self.tab_list = []
@@ -847,7 +847,8 @@ class MeshFrame(CustFrame):
         CustFrame.__init__(self, *args, **kwargs)
         self.patient = load_geometry_from_h5('../pulse_adjoint/example_meshes/simple_ellipsoid.h5')
         self.current_mesh = self.patient.mesh
-        self.mesh_name = 'simple_ellipsoid.h5'
+        self.mesh_name = ntpath.basename('../pulse_adjoint/example_meshes/simple_ellipsoid.h5')
+        self.mesh_path = '../pulse_adjoint/example_meshes/simple_ellipsoid.h5'
         
         self.title = CustTitle(master = self, coor = [0,0,1,2], text = 'Mesh')
         self.but_load_mesh = CustButton(master = self, coor = [1,0,1,2], text = 'Load mesh', command = self.load_mesh_file)
@@ -860,6 +861,7 @@ class MeshFrame(CustFrame):
     #Function to load mesh from file.
     def load_mesh_file(self):
         mesh_file = tkFileDialog.askopenfilename()
+        self.mesh_path = os.path.abspath(mesh_file)
         self.mesh_name = mesh_file
         
         if self.mesh_name.endswith('.xdmf'):
@@ -1084,7 +1086,7 @@ class MainFrame(CustFrame):
     #Runs the simulation. Either closed loop or regular.    
     def run_simulation(self):
         #Getting the patient bject and mesh from the loaded file.
-        self.patient = load_geometry_from_h5(self.frame_mesh.mesh_name)
+        self.patient = load_geometry_from_h5(self.frame_mesh.mesh_path)
         self.current_mesh = self.patient.mesh
         
         #Getting parameters from the parameter frame
@@ -1184,9 +1186,13 @@ def destroy_all():
 
     main_frame.destroy()
     root.destroy()
-    import psutil
-    for p in [p for p in psutil.process_iter() if p.pid == os.getpid()]: p.kill()
-    sys.exit(0)
+    try:
+        import psutil
+    except:
+        sys.exit(0)    
+    else:
+        for p in [p for p in psutil.process_iter() if p.pid == os.getpid()]: p.kill()
+        sys.exit(0)
     
     return
 
