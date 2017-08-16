@@ -679,7 +679,10 @@ def get_data(params, patient=None):
                 if i.isdigit(): its.append(i)
             unload_subiters[k] = sorted(its, key = lambda t : int(t))
 
-            #data["unload"]["func_vals"][k] = all_data[k]["passive_inflation"]["optimization_results"]["func_vals"]
+            try:
+                data["unload"]["func_vals"][k] = all_data[k]["passive_inflation"]["optimization_results"]["func_vals"]
+            except:
+                pass
             data["unload"]["optimized_volumes"][k] = all_data[k]["passive_inflation"]["volume"]["simulated"]
             if rv:
                 data["unload"]["optimized_rv_volumes"][k] = all_data[k]["passive_inflation"]["rv_volume"]["simulated"]
@@ -770,10 +773,11 @@ def get_data(params, patient=None):
 
     with h5py.File(params["sim_file"], "r") as h5file:
 
-        for k in opt_res.keys():
-
-            if k in h5file[passive_group]["optimization_results"]:
-                data["passive_optimization_results"][k] = h5file[passive_group]["optimization_results"][k][:]
+        if "optimization_results" in h5file[passive_group]:
+            for k in opt_res.keys():
+            
+                if k in h5file[passive_group]["optimization_results"]:
+                    data["passive_optimization_results"][k] = h5file[passive_group]["optimization_results"][k][:]
 
         for p in range(len(active_keys)):
                 
