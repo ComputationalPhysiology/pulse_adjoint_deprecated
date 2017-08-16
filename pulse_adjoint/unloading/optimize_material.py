@@ -100,7 +100,8 @@ class UnloadedMaterial(object):
                  method = "hybrid",
                  tol = 0.05,maxiter = 10,
                  continuation = True,
-                 unload_options = {"maxiter":10, "tol":1e-2, "regen_fibers":True}, optimize_matparams = True):
+                 unload_options = {"maxiter":10, "tol":1e-2, "regen_fibers":True},
+                 optimize_matparams = True):
 
 
         
@@ -425,7 +426,8 @@ class UnloadedMaterial(object):
             logger.info("\nCurrent residual:\t{}".format(err))
 
             
-                
+            if not self.optimize_matparams:
+                break
 
             df.parameters["adjoint"]["stop_annotating"] = False
             if not self.exist("passive_inflation"):
@@ -434,8 +436,7 @@ class UnloadedMaterial(object):
                     
             self.it += 1
 
-            if not self.optimize_matparams:
-                break
+            
             
         
         self.it -= 1
