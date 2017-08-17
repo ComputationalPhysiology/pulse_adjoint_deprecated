@@ -402,6 +402,7 @@ class OptimalControl(object):
         self.paramvec = paramvec
         self.x = x
         self.rd = rd
+        self._initial_guess = np.copy(x)
 
         if params["phase"] == PHASES[0]:
             
@@ -443,9 +444,15 @@ class OptimalControl(object):
                         
                         
                 
-                for i, fi in enumerate(fixed): lb[fi] = ub[fi] = fixed_values[i]
+                for i, fi in enumerate(fixed):
+                    lb[fi] = ub[fi] = fixed_values[i]
+                    self._initial_guess[fi] = fixed_values[i]
+                    
                 logger.info("Upper bounds : {}".format(ub))
                 logger.info("Lower bounds : {}".format(lb))
+
+                
+                
 
         else:
 
@@ -491,6 +498,9 @@ class OptimalControl(object):
                "\n\tOptimization algoritmh:\t{}\n".format(self.opt_type))
         logger.info(msg)
         logger.info("".center(72, "#"))
+
+    def get_initial_guess(self):
+        return self._initial_guess
 
     def _get_options(self, lb, ub, tol, max_iter, **kwargs):
 

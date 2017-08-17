@@ -445,9 +445,12 @@ def solve_oc_problem(params, rd, paramvec, return_solution = False, store_soluti
     """
 
     
-    
+    # Create optimal control problem
+    oc_problem = OptimalControl()
+    oc_problem.build_problem(params, rd, paramvec)
+            
     opt_params = params["Optimization_parameters"]
-    x = gather_broadcast(paramvec.vector().array())
+    x = oc_problem.get_initial_guess()
     nvar = len(x)
     
     if params["phase"] == PHASES[0] and not params["optimize_matparams"]:
