@@ -1124,7 +1124,7 @@ def get_feature_spaces(mesh, gamma_space = "CG_1"):
     spaces["strainfield_space"] = dolfin.VectorFunctionSpace(mesh, "CG", 1)
 
     from pulse_adjoint.utils import QuadratureSpace
-    # spaces["quad_space"] = QuadratureSpace(mesh, 4, dim = 3)
+    spaces["quad_space"] = QuadratureSpace(mesh, 4, dim = 3)
     spaces["quad_space_1"] = QuadratureSpace(mesh, 4, dim = 1)
     
 
