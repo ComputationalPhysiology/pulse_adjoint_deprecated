@@ -1590,6 +1590,7 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
         if project:
 
             f = dolfin.project(fun,spaces[space], solver_type="cg")
+            remove_extreme_outliers(f, -300, 300)
         else:
             f = fun
 
