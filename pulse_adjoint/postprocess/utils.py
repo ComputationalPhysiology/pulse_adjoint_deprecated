@@ -63,10 +63,10 @@ def init_spaces(mesh, gamma_space = "CG_1"):
     spaces["marker_space"] = dolfin.FunctionSpace(mesh, "DG", 0)
     spaces["stress_space"] = dolfin.FunctionSpace(mesh, "CG", 1)
     spaces["cg2"] = dolfin.FunctionSpace(mesh, "CG", 2)
-    spaces["cg3"] = dolfin.FunctionSpace(mesh, "CG", 3)
-    spaces["dg1"] = dolfin.FunctionSpace(mesh, "DG", 1)
-    spaces["dg2"] = dolfin.FunctionSpace(mesh, "DG", 2)
-    spaces["dg3"] = dolfin.FunctionSpace(mesh, "DG", 3)
+    # spaces["cg3"] = dolfin.FunctionSpace(mesh, "CG", 3)
+    # spaces["dg1"] = dolfin.FunctionSpace(mesh, "DG", 1)
+    # spaces["dg2"] = dolfin.FunctionSpace(mesh, "DG", 2)
+    # spaces["dg3"] = dolfin.FunctionSpace(mesh, "DG", 3)
     
 
     if gamma_space == "regional":
@@ -1106,7 +1106,7 @@ def get_feature_spaces(mesh, gamma_space = "CG_1"):
     spaces["stress_space"] = dolfin.FunctionSpace(mesh, "CG", 1)
     spaces["cg1"] = dolfin.FunctionSpace(mesh, "CG", 1)
     spaces["cg2"] = dolfin.FunctionSpace(mesh, "CG", 2)
-    spaces["cg3"] = dolfin.FunctionSpace(mesh, "CG", 3)
+    # spaces["cg3"] = dolfin.FunctionSpace(mesh, "CG", 3)
     # spaces["dg1"] = dolfin.FunctionSpace(mesh, "DG", 1)
     # spaces["dg2"] = dolfin.FunctionSpace(mesh, "DG", 2)
     # spaces["dg3"] = dolfin.FunctionSpace(mesh, "DG", 3)
@@ -1301,7 +1301,8 @@ def make_refined_simulation(params, features, outdir, patient, data):
     mesh_coarse = patient.mesh
 
     print "before refinement"
-    mesh =  dolfin.adapt(dolfin.adapt(mesh_coarse))
+    # mesh =  dolfin.adapt(dolfin.adapt(mesh_coarse))
+    mesh =  dolfin.adapt(mesh_coarse)
     print "after refinement"
     # Mesh that we move
     moving_mesh = dolfin.Mesh(mesh)
@@ -1361,7 +1362,7 @@ def make_refined_simulation(params, features, outdir, patient, data):
                                           name=f)
             functions_[f] = dolfin.Function(spaces["cg1"], 
                                           name=f)
-            functions_coarse[f] = dolfin.Function(coarse_spaces["cg3"], 
+            functions_coarse[f] = dolfin.Function(coarse_spaces["cg2"], 
                                           name=f)
 
 
@@ -1397,7 +1398,7 @@ def make_refined_simulation(params, features, outdir, patient, data):
 
         print "interpolate:"
         for f in functions.keys():
-            print "f"
+            print f
             functions_coarse[f].vector()[:] = features[f][t]
             f_ = dolfin.interpolate(functions_coarse[f], functions_[f].function_space())
             functions[f].vector()[:] = f_.vector()
@@ -1658,23 +1659,23 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
             elif k1 == "I1":
 
                 I1 = solver.parameters["material"].active._I1(F)
-                get("I1", I1, "cg3")
+                get("I1", I1, "cg2")
                 
             elif k1 == "I1e":
 
                 I1e = solver.parameters["material"].active.I1(F)
-                get("I1e", I1e, "cg3")
+                get("I1e", I1e, "cg2")
 
             elif k1 == "I4f":
 
                 f0 = solver.parameters["material"].get_component("fiber")
                 I4f = solver.parameters["material"].active._I4(F, f0)
-                get("I4f", I4f, "cg3")
+                get("I4f", I4f, "cg2")
                 
             elif k1 == "I4fe":
 
                 I4fe = solver.parameters["material"].active.I4(F, "fiber")
-                get("I4fe", I4fe, "cg3")
+                get("I4fe", I4fe, "cg2")
                 
             else:
 
@@ -1695,20 +1696,20 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
                     E = dolfin.project(post.GreenLagrange(F_ref=F_ed), W)
                     Ef = dolfin.inner(E*e, e)
                     
-                    get(k, Ef, "cg3")
+                    get(k, Ef, "cg2")
 
                     
                     
                 elif k1 == "cauchy_stress":
 
                     Tf = solver.postprocess().cauchy_stress_component(e, deviatoric=False)
-                    get(k, Tf, "cg3")
+                    get(k, Tf, "cg2")
                     
                     
                 elif k1 == "cauchy_dev_stress":
 
                     Tf = solver.postprocess().cauchy_stress_component(e, deviatoric=True)
-                    get(k, Tf, "cg3")
+                    get(k, Tf, "cg2")
 
 
 
