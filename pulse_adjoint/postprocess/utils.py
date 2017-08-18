@@ -1218,12 +1218,14 @@ def make_simulation(params, features, outdir, patient, data):
         elif f == "hydrostatic_pressure":
             functions[f] = dolfin.Function(moving_spaces["pressure_space"], 
                                            name=f)
-            
+            functions_[f] = dolfin.Function(moving_spaces["pressure_space"], 
+                                            name=f)
+        
         else:
             functions[f] = dolfin.Function(moving_spaces["cg1"], 
-                                          name=f)
+                                           name=f)
             functions_[f] = dolfin.Function(moving_spaces["cg2"], 
-                                          name=f)
+                                            name=f)
 
 
     # Setup moving mesh
@@ -1240,8 +1242,10 @@ def make_simulation(params, features, outdir, patient, data):
 
     old_coords = np.ones((moving_mesh.coordinates().shape[0], 4))
     old_coords[:,:3] = moving_mesh.coordinates()
-    
+
+    print "Time"
     for i,t in enumerate(times):
+        print "{}/{}".format(t, times[-1])
 
         moving_mesh.coordinates()[:] = old_coords[:,:3]
         
@@ -1342,6 +1346,8 @@ def make_refined_simulation(params, features, outdir, patient, data):
         elif f == "hydrostatic_pressure":
             functions[f] = dolfin.Function(moving_spaces["pressure_space"], 
                                            name=f)
+            functions_[f] = dolfin.Function(spaces["pressure_space"], 
+                                            name=f)
 
             functions_coarse[f] = dolfin.Function(coarse_spaces["pressure_space"], 
                                                   name=f)
@@ -1367,9 +1373,10 @@ def make_refined_simulation(params, features, outdir, patient, data):
    
     fname = "simulation_{}.vtu"
     vtu_path = "/".join([outdir, fname])
-    
-    for i,t in enumerate(times):
 
+    print "Time"
+    for i,t in enumerate(times):
+        print "{}/{}".format(t, times[-1])
         
         u_coarse.vector()[:] = data["displacements"][t]
         u_ = dolfin.interpolate(u_coarse, spaces["displacement_space"])
