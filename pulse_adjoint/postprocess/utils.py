@@ -1524,7 +1524,7 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
     from itertools import product
 
  
-    if keys is None:
+    if not keys:
         keys = [":".join(a) for a in product(["green_strain", "cauchy_stress",
                                               "cauchy_dev_stress"],
                                          ["longitudinal", "fiber",
