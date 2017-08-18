@@ -1582,8 +1582,12 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
         if feature != "displacement":
 
 
-            regional = get_regional_quad(dx, fun, regions)
-            scalar = get_global_quad(dx, fun)
+            if feature == "gamma":
+                regional = get_regional(dx, f, [f.vector().array()], regions)
+                scalar = get_global(dx, f, [f.vector().array()], regions)
+            else:
+                regional = get_regional_quad(dx, fun, regions)
+                scalar = get_global_quad(dx, fun)
   
             for i,r in enumerate(regions):
                 features_scalar[feature][str(r)].append(regional[i])
@@ -1628,6 +1632,8 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
             elif k1 == "gamma":
                 gamma = solver.get_gamma()
                 gamma.vector()[:] = np.multiply(params["T_ref"], gamma.vector().array())
+                # from IPython import embed; embed()
+                # exit()
                 get("gamma", gamma, "gamma_space", False)
 
             elif k1 == "hydrostatic_pressure":
