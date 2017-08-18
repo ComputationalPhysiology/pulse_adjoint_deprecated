@@ -1340,7 +1340,7 @@ def make_refined_simulation(params, features, outdir, patient, data):
     functions_coarse = {}
     for f in features.keys():
 
-        if f in ["displacement"]:
+        if f in ["displacement", "gamma"]:
             pass
 
         elif f == "hydrostatic_pressure":
@@ -1371,7 +1371,7 @@ def make_refined_simulation(params, features, outdir, patient, data):
     fiber = dolfin.Function(moving_spaces["quad_space"])
    
    
-    fname = "simulation_{}.vtu"
+    fname = "refined_simulation_{}.vtu"
     vtu_path = "/".join([outdir, fname])
 
     print "Time"
@@ -1401,7 +1401,7 @@ def make_refined_simulation(params, features, outdir, patient, data):
         u_prev.assign(u)
         
 
-    pvd_path = "/".join([outdir, "simulation.pvd"])
+    pvd_path = "/".join([outdir, "refined_simulation.pvd"])
     print "Simulation saved at {}".format(pvd_path)
     vtk_utils.write_pvd(pvd_path, fname, time_stamps[:i+1])
 
