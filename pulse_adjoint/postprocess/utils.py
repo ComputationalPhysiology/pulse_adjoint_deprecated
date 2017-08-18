@@ -1395,7 +1395,9 @@ def make_refined_simulation(params, features, outdir, patient, data):
         print "after moving mesh"
       
 
+        print "interpolate:"
         for f in functions.keys():
+            print "f"
             functions_coarse[f].vector()[:] = features[f][t]
             f_ = dolfin.interpolate(functions_coarse[f], functions_[f].function_space())
             functions[f].vector()[:] = f_.vector()
@@ -1693,7 +1695,7 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
                     E = dolfin.project(post.GreenLagrange(F_ref=F_ed), W)
                     Ef = dolfin.inner(E*e, e)
                     
-                    get(k, Ef, "stress_space")
+                    get(k, Ef, "cg3")
 
                     
                     
