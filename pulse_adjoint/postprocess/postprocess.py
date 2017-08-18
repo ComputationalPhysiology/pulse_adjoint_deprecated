@@ -596,6 +596,19 @@ class PostProcess(object):
 
                 self._update_features(features)
 
+            if  "mechanical_features_scalar" in args:
+
+                if not os.path.isfile(output) or self._recompute:
+                    logger.info("Compute meachanical features")
+                    d = {"features_scalar" : utils.copmute_mechanical_features(patient,
+                                                                               params,
+                                                                               val, output,
+                                                                               keys = self._feature_keys)}
+                    self._save_tmp_results(patient_name, "features_scalar", d)
+
+                self._load_tmp_results(patient_name,
+                                       "features_scalar",
+                                       data[patient_name])
             
             if any([a.startswith("cardiac_work") for a in args]):
 
@@ -1642,7 +1655,7 @@ class PostProcess(object):
         
         
         
-    def make_simulation(self):
+    def make_simulation(self, refined=False):
 
         setup_general_parameters()
 
@@ -1679,7 +1692,15 @@ class PostProcess(object):
             
             
             # utils.save_displacements(params, self._features[patient_name], outdir)
-            utils.make_simulation(params, self._features[patient_name], outdir, patient, self._data[patient_name])
+            if refined:
+                utils.make_refined_simulation(params,
+                                              self._features[patient_name],
+                                              outdir,
+                                              patient,
+                                              self._data[patient_name])
+            else:
+                utils.make_simulation(params, self._features[patient_name], outdir,
+                                      patient, self._data[patient_name])
             
         logger.info("#"*40)
 

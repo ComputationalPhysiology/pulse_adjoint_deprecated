@@ -283,20 +283,20 @@ def QuadratureSpace(mesh, degree, dim=3):
         if dim == 1:
             element = d.FiniteElement(family = "Quadrature",
                                         cell = mesh.ufl_cell(),
-                                        degree = 4,
+                                        degree = degree,
                                         quad_scheme="default")
         else:
             element = d.VectorElement(family = "Quadrature",
                                         cell = mesh.ufl_cell(),
-                                        degree = 4,
+                                        degree = degree,
                                         quad_scheme="default")
         
         return d.FunctionSpace(mesh, element)
     else:
         if dim == 1:
-            return d.FunctionSpace(mesh, "Quadrature", 4)
+            return d.FunctionSpace(mesh, "Quadrature", degree)
         else:
-            return d.VectorFunctionSpace(mesh, "Quadrature", 4)
+            return d.VectorFunctionSpace(mesh, "Quadrature", degree)
 
 class TablePrint(object):
     """

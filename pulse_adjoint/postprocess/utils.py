@@ -62,6 +62,11 @@ def init_spaces(mesh, gamma_space = "CG_1"):
     
     spaces["marker_space"] = dolfin.FunctionSpace(mesh, "DG", 0)
     spaces["stress_space"] = dolfin.FunctionSpace(mesh, "CG", 1)
+    spaces["cg2"] = dolfin.FunctionSpace(mesh, "CG", 2)
+    spaces["cg3"] = dolfin.FunctionSpace(mesh, "CG", 3)
+    spaces["dg1"] = dolfin.FunctionSpace(mesh, "DG", 1)
+    spaces["dg2"] = dolfin.FunctionSpace(mesh, "DG", 2)
+    spaces["dg3"] = dolfin.FunctionSpace(mesh, "DG", 3)
     
 
     if gamma_space == "regional":
@@ -128,13 +133,7 @@ def get_regional(dx, fun, fun_lst, regions = range(1,18), T_ref=1.0):
         else:
             return np.multiply(T_ref, fun_lst)
 
-    # if len(fun.vector()) == 1:
-        # return fun.vector().array()[0]*np.ones(len(regions))
-
-    meshvols = []
-    for i in regions:
-        meshvols.append(dolfin.Constant(dolfin.assemble(dolfin.Constant(1.0)*dx(i))))
-
+    meshvols = get_meshvols(dx, regions)
     lst = []
     for f in fun_lst:
         fun.vector()[:] = f
@@ -149,6 +148,34 @@ def get_regional(dx, fun, fun_lst, regions = range(1,18), T_ref=1.0):
 
 
     return np.array(lst).T
+
+def get_meshvols(dx, regions):
+
+    meshvols = []
+    for i in regions:
+        meshvols.append(dolfin.Constant(dolfin.assemble(dolfin.Constant(1.0)*dx(i))))
+    return meshvols
+
+def get_regional_quad(dx, fun, regions):
+
+    meshvols = get_meshvols(dx, regions)
+    
+    lst = []
+    for i, r in enumerate(regions):
+
+        lst.append(dolfin.assemble((fun/meshvols[i]) * dx(r)))
+        
+    return np.array(lst).T
+
+def get_global_quad(dx, fun):
+
+    meshvol = dolfin.assemble(dolfin.Constant(1.0)*dx)
+    val = dolfin.assemble(fun * dx) / meshvol
+        
+    return val
+
+
+    
 
 def get_global(dx, fun, fun_lst, regions = range(1,18), T_ref = 1.0):
     """Get average value of function
@@ -1077,7 +1104,12 @@ def get_feature_spaces(mesh, gamma_space = "CG_1"):
 
     spaces["marker_space"] = dolfin.FunctionSpace(mesh, "DG", 0)
     spaces["stress_space"] = dolfin.FunctionSpace(mesh, "CG", 1)
-    
+    spaces["cg1"] = dolfin.FunctionSpace(mesh, "CG", 1)
+    spaces["cg2"] = dolfin.FunctionSpace(mesh, "CG", 2)
+    spaces["cg3"] = dolfin.FunctionSpace(mesh, "CG", 3)
+    spaces["dg1"] = dolfin.FunctionSpace(mesh, "DG", 1)
+    spaces["dg2"] = dolfin.FunctionSpace(mesh, "DG", 2)
+    spaces["dg3"] = dolfin.FunctionSpace(mesh, "DG", 3)
 
     if gamma_space == "regional":
         spaces["gamma_space"] = dolfin.VectorFunctionSpace(mesh, "R", 0, dim = 17)
@@ -1092,14 +1124,13 @@ def get_feature_spaces(mesh, gamma_space = "CG_1"):
     spaces["strainfield_space"] = dolfin.VectorFunctionSpace(mesh, "CG", 1)
 
     from pulse_adjoint.utils import QuadratureSpace
-    spaces["quad_space"] = QuadratureSpace(mesh, 4, dim = 3)
+    # spaces["quad_space"] = QuadratureSpace(mesh, 4, dim = 3)
     spaces["quad_space_1"] = QuadratureSpace(mesh, 4, dim = 1)
     
 
     return spaces
 
 
-   
 def make_simulation(params, features, outdir, patient, data):
 
    
@@ -1176,6 +1207,7 @@ def make_simulation(params, features, outdir, patient, data):
 
 
     functions = {}
+    functions_ = {}    
     for f in features.keys()+["gamma"]:
 
         if f == "displacement":
@@ -1188,7 +1220,9 @@ def make_simulation(params, features, outdir, patient, data):
                                            name=f)
             
         else:
-            functions[f] = dolfin.Function(moving_spaces["stress_space"], 
+            functions[f] = dolfin.Function(moving_spaces["cg1"], 
+                                          name=f)
+            functions_[f] = dolfin.Function(moving_spaces["cg2"], 
                                           name=f)
 
 
@@ -1235,10 +1269,126 @@ def make_simulation(params, features, outdir, patient, data):
                 else:
                     functions[f].vector()[:] = data["gammas"][t]
             else:
-                functions[f].vector()[:] = features[f][t]
+                functions_[f].vector()[:] = features[f][t]
+                f_ = dolfin.interpolate(functions_[f], functions[f].function_space())
+                functions[f].vector()[:] = f_.vector()
 
-
+     
         vtk_utils.add_stuff(moving_mesh, vtu_path.format(i), sm,mat,
+                            *functions.values())
+        
+        u_prev.assign(u)
+        
+
+    pvd_path = "/".join([outdir, "simulation.pvd"])
+    print "Simulation saved at {}".format(pvd_path)
+    vtk_utils.write_pvd(pvd_path, fname, time_stamps[:i+1])
+   
+def make_refined_simulation(params, features, outdir, patient, data):
+
+   
+
+    if not features: return
+
+    import vtk_utils
+    
+
+    # Mesh
+    mesh_coarse = patient.mesh
+    mesh =  dolfin.adapt(dolfin.adapt(mesh_coarse))
+
+    # Mesh that we move
+    moving_mesh = dolfin.Mesh(mesh)
+
+
+    # The time stamps
+    if isinstance(data["gammas"], dict):
+        times = sorted(data["gammas"].keys(), key=asint)
+    else:
+        times = range(len(data["gammas"]))
+
+    if not hasattr(patient, "time"):
+        patient.time = range(patient.num_points)
+        
+    time_stamps = np.roll(patient.time, -np.argmin(patient.time))
+    from scipy.interpolate import InterpolatedUnivariateSpline
+    s = InterpolatedUnivariateSpline(range(len(time_stamps)), time_stamps, k = 1)
+    time_stamps = s(np.array(times, dtype=float))
+    
+    # Create function spaces
+    coarse_spaces = get_feature_spaces(mesh_coarse, params["gamma_space"])
+
+    spaces = get_feature_spaces(mesh, params["gamma_space"])
+    moving_spaces = get_feature_spaces(moving_mesh, params["gamma_space"])
+
+
+    # Markers
+    sm_coarse = dolfin.Function(coarse_spaces["marker_space"])
+    sm = dolfin.Function(moving_spaces["marker_space"],
+                                name = "AHA-zones")
+    sm_coarse.vector()[:] = patient.sfun.array()
+    sm_ = dolfin.interpolate(sm_coarse, moving_spaces["marker_space"])
+    sm.vector()[:] =sm_.vector()
+
+
+    functions = {}
+    functions_ = {}
+    functions_coarse = {}
+    for f in features.keys():
+
+        if f in ["displacement"]:
+            pass
+
+        elif f == "hydrostatic_pressure":
+            functions[f] = dolfin.Function(moving_spaces["pressure_space"], 
+                                           name=f)
+
+            functions_coarse[f] = dolfin.Function(coarse_spaces["pressure_space"], 
+                                                  name=f)
+            
+        else:
+            functions[f] = dolfin.Function(moving_spaces["cg1"], 
+                                          name=f)
+            functions_[f] = dolfin.Function(spaces["cg1"], 
+                                          name=f)
+            functions_coarse[f] = dolfin.Function(coarse_spaces["cg3"], 
+                                          name=f)
+
+
+    # Setup moving mesh
+    u_coarse = dolfin.Function(coarse_spaces["displacement_space"])
+    u = dolfin.Function(spaces["displacement_space"])
+    u_prev = dolfin.Function(spaces["displacement_space"])
+    u_diff = dolfin.Function(spaces["displacement_space"])
+    # Space for interpolation
+    V = dolfin.VectorFunctionSpace(mesh, "CG", 1)
+    fiber = dolfin.Function(moving_spaces["quad_space"])
+   
+   
+    fname = "simulation_{}.vtu"
+    vtu_path = "/".join([outdir, fname])
+    
+    for i,t in enumerate(times):
+
+        
+        u_coarse.vector()[:] = data["displacements"][t]
+        u_ = dolfin.interpolate(u_coarse, spaces["displacement_space"])
+        u.vector()[:] = u_.vector()
+        
+        u_diff.vector()[:] = u.vector() - u_prev.vector()
+        d = dolfin.interpolate(u_diff, V)
+        dolfin.ALE.move(moving_mesh, d)
+
+      
+
+        for f in functions.keys():
+            functions_coarse[f].vector()[:] = features[f][t]
+            f_ = dolfin.interpolate(functions_coarse[f], functions_[f].function_space())
+            functions[f].vector()[:] = f_.vector()
+
+
+     
+        vtk_utils.add_stuff(moving_mesh, vtu_path.format(i), sm,
                             *functions.values())
         
         u_prev.assign(u)
@@ -1319,8 +1469,6 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
 
     """
     
-    
-
     outdir = os.path.dirname(path)
     if not os.path.exists(outdir):
         os.makedirs(outdir)
@@ -1375,11 +1523,8 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
 
     from itertools import product
 
-    # keys = [":".join(a) for a in product(["cauchy_stress"],
-                                         # ["fiber"])] + \
-                                         # ["gamma:", "displacement:"]
-
-    if keys is None:
+ 
+    if not keys:
         keys = [":".join(a) for a in product(["green_strain", "cauchy_stress",
                                               "cauchy_dev_stress"],
                                          ["longitudinal", "fiber",
@@ -1406,6 +1551,7 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
 
     if hasattr(patient, "circumferential"):
         e_circ = patient.circumferential
+
         has_circumferential = True
     else:
         has_circumferential = False
@@ -1417,7 +1563,6 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
         has_radial = False
 
         
-        
     e_f = get_fiber_field(patient)
     
     def get(feature, fun, space, project = True):
@@ -1426,31 +1571,28 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
         assert feature in features.keys(), "Invalid feature: {}".format(feature)
 
         if project:
-            f_ = dolfin.project(fun, spaces["quad_space_1"])
-            remove_extreme_outliers(f_, 300.0, -300.0)
-            f = smooth_from_points(spaces[space], f_, method ="average")
-
-            # f = dolfin.project(fun, spaces["stress_space"])
-            # remove_extreme_outliers(f, 500.0, -100.0)
+         
+            f = dolfin.project(fun,spaces[space])
         else:
             f = fun
+
             
         features[feature].append(dolfin.Vector(f.vector()))
-
+        
         if feature != "displacement":
 
-            arr = f.vector().array()            
-            regional = get_regional(dx, f, [arr], regions)
-            scalar = get_global(dx, f, [arr], regions)
-            
+
+            regional = get_regional_quad(dx, fun, regions)
+            scalar = get_global_quad(dx, fun)
+  
             for i,r in enumerate(regions):
                 features_scalar[feature][str(r)].append(regional[i])
                 
-            features_scalar[feature]["global"].append(scalar[0])
+            features_scalar[feature]["global"].append(scalar)
         
-        
-    from pulse_adjoint.unloading.utils import normalize_vector_field
+        return f
     
+
     for t in times:
 
         print("\tTimepoint {}/{} ".format(t, len(times)-1))
@@ -1494,23 +1636,23 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
             elif k1 == "I1":
 
                 I1 = solver.parameters["material"].active._I1(F)
-                get("I1", I1, "stress_space")
+                get("I1", I1, "cg3")
                 
             elif k1 == "I1e":
 
                 I1e = solver.parameters["material"].active.I1(F)
-                get("I1e", I1e, "stress_space")
+                get("I1e", I1e, "cg3")
 
             elif k1 == "I4f":
 
                 f0 = solver.parameters["material"].get_component("fiber")
                 I4f = solver.parameters["material"].active._I4(F, f0)
-                get("I4f", I4f, "stress_space")
+                get("I4f", I4f, "cg3")
                 
             elif k1 == "I4fe":
 
                 I4fe = solver.parameters["material"].active.I4(F, "fiber")
-                get("I4fe", I4fe, "stress_space")
+                get("I4fe", I4fe, "cg3")
                 
             else:
 
@@ -1538,16 +1680,16 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
                 elif k1 == "cauchy_stress":
 
                     Tf = solver.postprocess().cauchy_stress_component(e, deviatoric=False)
-                    get(k, Tf, "stress_space")
-
+                    get(k, Tf, "cg3")
+                    
                     
                 elif k1 == "cauchy_dev_stress":
 
                     Tf = solver.postprocess().cauchy_stress_component(e, deviatoric=True)
-                    get(k, Tf, "stress_space")
+                    get(k, Tf, "cg3")
 
 
-        
+
     from load import save_dict_to_h5
     save_dict_to_h5(features, path)
 
@@ -1673,7 +1815,7 @@ def smooth_from_points(V, f0, nsamples = 10, method="interpolate") :
         fvals = f0val[s_idx]
 
         if method == "interpolate":
-            rbf = Rbf(xx, yy, zz, fvals, function='linear')
+            rbf = Rbf(xx, yy, zz, fvals, function= 'gaussian')# function='linear')
             val = float(rbf(v[0], v[1], v[2]))
 
         elif method == "average":

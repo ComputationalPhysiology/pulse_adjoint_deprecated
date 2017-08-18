@@ -100,14 +100,14 @@ def cm2inch(*tupl):
         return tuple(i/inch for i in tupl)
 
     
-def setup_plot(fontsize=7,dpi=300,height=9.5, width=9.5):
+def setup_plot(fontsize=7,dpi=300,height=9.5, width=9.5, autolayout=True):
     
     # Plotting options
     if has_seaborn:
         sns.set_palette("husl")
         sns.set_style("white")
         sns.set_style("ticks")
-    mpl.rcParams.update({'figure.autolayout': True})
+    mpl.rcParams.update({'figure.autolayout': autolayout})
 
   
     
