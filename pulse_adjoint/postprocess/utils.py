@@ -82,7 +82,7 @@ def init_spaces(mesh, gamma_space = "CG_1"):
     spaces["strainfield_space"] = dolfin.VectorFunctionSpace(mesh, "CG", 1)
 
     
-    spaces["quad_space"] = QuadratureSpace(mesh, 4, dim = 1)
+    # spaces["quad_space"] = QuadratureSpace(mesh, 4, dim = 1)
     
     return spaces
 
@@ -1107,9 +1107,9 @@ def get_feature_spaces(mesh, gamma_space = "CG_1"):
     spaces["cg1"] = dolfin.FunctionSpace(mesh, "CG", 1)
     spaces["cg2"] = dolfin.FunctionSpace(mesh, "CG", 2)
     spaces["cg3"] = dolfin.FunctionSpace(mesh, "CG", 3)
-    spaces["dg1"] = dolfin.FunctionSpace(mesh, "DG", 1)
-    spaces["dg2"] = dolfin.FunctionSpace(mesh, "DG", 2)
-    spaces["dg3"] = dolfin.FunctionSpace(mesh, "DG", 3)
+    # spaces["dg1"] = dolfin.FunctionSpace(mesh, "DG", 1)
+    # spaces["dg2"] = dolfin.FunctionSpace(mesh, "DG", 2)
+    # spaces["dg3"] = dolfin.FunctionSpace(mesh, "DG", 3)
 
     if gamma_space == "regional":
         spaces["gamma_space"] = dolfin.VectorFunctionSpace(mesh, "R", 0, dim = 17)
@@ -1119,13 +1119,13 @@ def get_feature_spaces(mesh, gamma_space = "CG_1"):
         
     spaces["displacement_space"] = dolfin.VectorFunctionSpace(mesh, "CG", 2)
     spaces["pressure_space"] = dolfin.FunctionSpace(mesh, "CG", 1)
-    spaces["state_space"] = spaces["displacement_space"]*spaces["pressure_space"]
-    spaces["strain_space"] = dolfin.VectorFunctionSpace(mesh, "R", 0, dim=3)
-    spaces["strainfield_space"] = dolfin.VectorFunctionSpace(mesh, "CG", 1)
+    # spaces["state_space"] = spaces["displacement_space"]*spaces["pressure_space"]
+    # spaces["strain_space"] = dolfin.VectorFunctionSpace(mesh, "R", 0, dim=3)
+    # spaces["strainfield_space"] = dolfin.VectorFunctionSpace(mesh, "CG", 1)
 
     from pulse_adjoint.utils import QuadratureSpace
-    spaces["quad_space"] = QuadratureSpace(mesh, 4, dim = 3)
-    spaces["quad_space_1"] = QuadratureSpace(mesh, 4, dim = 1)
+    # spaces["quad_space"] = QuadratureSpace(mesh, 4, dim = 3)
+    # spaces["quad_space_1"] = QuadratureSpace(mesh, 4, dim = 1)
     
 
     return spaces
@@ -1234,7 +1234,7 @@ def make_simulation(params, features, outdir, patient, data):
     u_diff = dolfin.Function(spaces["displacement_space"])
     # Space for interpolation
     V = dolfin.VectorFunctionSpace(mesh, "CG", 1)
-    fiber = dolfin.Function(moving_spaces["quad_space"])
+    # fiber = dolfin.Function(moving_spaces["quad_space"])
    
    
     fname = "simulation_{}.vtu"
@@ -1299,8 +1299,10 @@ def make_refined_simulation(params, features, outdir, patient, data):
 
     # Mesh
     mesh_coarse = patient.mesh
-    mesh =  dolfin.adapt(dolfin.adapt(mesh_coarse))
 
+    print "before refinement"
+    mesh =  dolfin.adapt(dolfin.adapt(mesh_coarse))
+    print "after refinement"
     # Mesh that we move
     moving_mesh = dolfin.Mesh(mesh)
 
@@ -1320,11 +1322,13 @@ def make_refined_simulation(params, features, outdir, patient, data):
     time_stamps = s(np.array(times, dtype=float))
     
     # Create function spaces
+    print "get coarse spaces"
     coarse_spaces = get_feature_spaces(mesh_coarse, params["gamma_space"])
-
+    print "get fine spaces"
     spaces = get_feature_spaces(mesh, params["gamma_space"])
+    print "get moving spaces"
     moving_spaces = get_feature_spaces(moving_mesh, params["gamma_space"])
-
+    print "done"
 
     # Markers
     sm_coarse = dolfin.Function(coarse_spaces["marker_space"])
@@ -1368,7 +1372,7 @@ def make_refined_simulation(params, features, outdir, patient, data):
     u_diff = dolfin.Function(spaces["displacement_space"])
     # Space for interpolation
     V = dolfin.VectorFunctionSpace(mesh, "CG", 1)
-    fiber = dolfin.Function(moving_spaces["quad_space"])
+    # fiber = dolfin.Function(moving_spaces["quad_space"])
    
    
     fname = "refined_simulation_{}.vtu"
@@ -1379,13 +1383,16 @@ def make_refined_simulation(params, features, outdir, patient, data):
         print "{}/{}".format(t, times[-1])
         
         u_coarse.vector()[:] = data["displacements"][t]
+        print "before interpolation"
         u_ = dolfin.interpolate(u_coarse, spaces["displacement_space"])
+        print "after interpolation"
         u.vector()[:] = u_.vector()
         
         u_diff.vector()[:] = u.vector() - u_prev.vector()
         d = dolfin.interpolate(u_diff, V)
+        print "before moving mesh"
         dolfin.ALE.move(moving_mesh, d)
-
+        print "after moving mesh"
       
 
         for f in functions.keys():
@@ -1578,8 +1585,8 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
         assert feature in features.keys(), "Invalid feature: {}".format(feature)
 
         if project:
-         
-            f = dolfin.project(fun,spaces[space])
+
+            f = dolfin.project(fun,spaces[space], solver_type="cg")
         else:
             f = fun
 
