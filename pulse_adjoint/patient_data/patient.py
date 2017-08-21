@@ -37,25 +37,6 @@ patient_types =  [ "full", "lv", "biv", "pah", "work", "test"]
 curdir = os.path.dirname(os.path.abspath(__file__))
 
 
-# def setup_patient_parameters(name, mesh_type,  **kwargs):
-#     from dolfin import Parameters
-
-#     params = Parameters("Patient")
-#     params.add("name", name)
-
-#     echo_path = kwargs.pop("echo_path", "")
-#     params.add("echo_path", echo_path)
-
-#     pressure_path = kwargs.pop("pressure_path", "")
-#     params.add("pressure_path", pressure_path)
-
-#     mesh_path = kwargs.pop("mesh_path", "")
-#     params.add("mesh_path", mesh_path)
-
-#     params.add("mesh_type", mesh_type, ["lv","biv"])
-        
-#     return params
-
 def get_patient_class(patient_type, params):
 
     
@@ -92,9 +73,6 @@ def get_patient_class(patient_type, params):
 
 def Patient(patient_type, **kwargs):
 
-    name = kwargs.pop("patient", "JohnDoe")
-    # params = setup_patient_parameters(name, mesh_type, **kwargs)
-
     return get_patient_class(patient_type, kwargs)
 
 
@@ -103,11 +81,10 @@ def Patient(patient_type, **kwargs):
 
 
 class BasePatient(object):
-    def __init__(self, name, mesh_type, **kwargs):
+    def __init__(self, **kwargs):
 
 
-        self._name = name
-        self._mesh_type = mesh_type
+        self._name = kwargs.pop("patient", "JohnDoe")
         self.h5group = kwargs.pop("mesh_group", None)
 
         
@@ -346,12 +323,12 @@ class BiVTestPatient(TestPatient):
 
         
 class FullPatient(BasePatient):
-    def __init__(self, name="JohnDoe", mesh_type="lv", **kwargs):
+    def __init__(self, **kwargs):
         self._type = "full"
-
+        self._mesh_type="lv"
         init = kwargs.pop("init", True)
         if init:
-            BasePatient.__init__(self, name, mesh_type, **kwargs)
+            BasePatient.__init__(self, **kwargs)
             self._set_strain_weights(**kwargs)
 
     def get_fiber_strain(self):
@@ -402,10 +379,11 @@ class FullPatient(BasePatient):
 
 
 class BiVPatient(BasePatient):
-    def __init__(self, name, mesh_type, **kwargs):
+    def __init__(self, **kwargs):
+        self._mesh_type = "biv"
         self._type = "biv"
 
-        BasePatient.__init__(self, name, mesh_type, **kwargs)
+        BasePatient.__init__(self, **kwargs)
         self.ENDO = self.ENDO_LV
 
         self._set_strain_weights(**kwargs)
