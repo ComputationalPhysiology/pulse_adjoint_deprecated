@@ -37,24 +37,24 @@ patient_types =  [ "full", "lv", "biv", "pah", "work", "test"]
 curdir = os.path.dirname(os.path.abspath(__file__))
 
 
-def setup_patient_parameters(name, mesh_type,  **kwargs):
-    from dolfin import Parameters
+# def setup_patient_parameters(name, mesh_type,  **kwargs):
+#     from dolfin import Parameters
 
-    params = Parameters("Patient")
-    params.add("name", name)
+#     params = Parameters("Patient")
+#     params.add("name", name)
 
-    echo_path = kwargs.pop("echo_path", "")
-    params.add("echo_path", echo_path)
+#     echo_path = kwargs.pop("echo_path", "")
+#     params.add("echo_path", echo_path)
 
-    pressure_path = kwargs.pop("pressure_path", "")
-    params.add("pressure_path", pressure_path)
+#     pressure_path = kwargs.pop("pressure_path", "")
+#     params.add("pressure_path", pressure_path)
 
-    mesh_path = kwargs.pop("mesh_path", "")
-    params.add("mesh_path", mesh_path)
+#     mesh_path = kwargs.pop("mesh_path", "")
+#     params.add("mesh_path", mesh_path)
 
-    params.add("mesh_type", mesh_type, ["lv","biv"])
+#     params.add("mesh_type", mesh_type, ["lv","biv"])
         
-    return params
+#     return params
 
 def get_patient_class(patient_type, params):
 
@@ -78,7 +78,9 @@ def get_patient_class(patient_type, params):
     
 
 
-    if patient_type in ["pah", "biv"] or params["mesh_type"] in ["biv"]:
+    if patient_type in ["pah", "biv"]:
+        return BiVPatient(**params)
+    if params.has_key("mesh_type") and params["mesh_type"] == "biv":
         return BiVPatient(**params)
     
     if patient_type in ["full", "work","lv"]:
@@ -88,12 +90,12 @@ def get_patient_class(patient_type, params):
         
     
 
-def Patient(patient_type, mesh_type, **kwargs):
+def Patient(patient_type, **kwargs):
 
     name = kwargs.pop("patient", "JohnDoe")
-    params = setup_patient_parameters(name, mesh_type, **kwargs)
+    # params = setup_patient_parameters(name, mesh_type, **kwargs)
 
-    return get_patient_class(patient_type, params)
+    return get_patient_class(patient_type, kwargs)
 
 
 
@@ -103,10 +105,11 @@ def Patient(patient_type, mesh_type, **kwargs):
 class BasePatient(object):
     def __init__(self, name, mesh_type, **kwargs):
 
+
         self._name = name
         self._mesh_type = mesh_type
-        self.h5group = kwargs.pop("h5group", None)
-        
+        self.h5group = kwargs.pop("mesh_group", None)
+
         
         self._set_paths(**kwargs)
         # self._check_paths()
@@ -237,6 +240,7 @@ class BasePatient(object):
        
         for k,v in d.iteritems():
             setattr(self, k, v)
+
 
         if self.h5group is None:
             self.h5group = "" if not hasattr(self, "passive_filling_begins") \
@@ -453,12 +457,14 @@ class BiVPatient(BasePatient):
             setattr(self, a[1], getattr(self, a[0]))
             delattr(self, a[0])
 
-        
+
         if not hasattr(self, "passive_filling_begins"):
             self.passive_filling_begins = 0
-            self.h5group = ""
+            if not hasattr(self, "h5group"):
+                self.h5group = ""
         else:
-            self.h5group = str(self.passive_filling_begins)
+            if not hasattr(self, "h5group"):
+                self.h5group = str(self.passive_filling_begins)
 
         self.num_points = len(self.volume)
         self.num_contract_points = self.num_points - self.passive_filling_duration
