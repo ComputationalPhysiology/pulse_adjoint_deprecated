@@ -96,7 +96,8 @@ class UnloadedMaterial(object):
     """
     def __init__(self, geometry_index,
                  pressures, volumes,
-                 params, initial_guess = None,
+                 params, paramvec,
+                 initial_guess = None,
                  method = "hybrid",
                  tol = 0.05,maxiter = 10,
                  continuation = True,
@@ -107,6 +108,7 @@ class UnloadedMaterial(object):
         
         
         p0 = pressures[0]
+        self.it = 0
         self.is_biv = isinstance(p0, tuple) and len(p0) == 2
         self.params = params
         self.initial_guess = initial_guess
@@ -118,6 +120,8 @@ class UnloadedMaterial(object):
         
         self._backward_displacement = None
         self.unload_options = unload_options
+
+        self._paramvec = paramvec.copy(deepcopy=True)
       
         # 5% change
         self.tol = tol
@@ -253,6 +257,43 @@ class UnloadedMaterial(object):
             logger.warning(msg)
             return load_geometry_from_h5(self.params["Patient_parameters"]["mesh_path"],
                                          self.params["Patient_parameters"]["mesh_path"])
+
+    def get_optimal_material_parameter(self):
+
+
+        paramvec = self._paramvec.copy(deepcopy=True)
+        try:
+            group = "/".join([str(self.it-1), "passive_inflation", "optimal_control"])
+            with df.HDF5File(df.mpi_comm_world(), self.params["sim_file"], "r") as h5file:
+                h5file.read(paramvec, group)
+            logger.info("Load material parameter from {}:{}".format(self.params["sim_file"], group))
+        except:
+            logger.info("Could not open and read material parameter")
+
+            # from IPython import embed; embed()
+            # exit()
+        return paramvec
+
+
+    def get_loaded_volume(self, chamber="lv"):
+
+        from pulse_adjoint.setup_optimization import get_volume
+        
+        geo = self.get_unloaded_geometry()
+        V = df.VectorFunctionSpace(geo.mesh, "CG", 2)
+        u = df.Function(V)
+        try:
+            group = "/".join([str(self.it), "passive_inflation", "displacement", "1"])
+            with df.HDF5File(df.mpi_comm_world(), self.params["sim_file"], "r") as h5file:
+                h5file.read(u, group)
+            logger.info("Load displacement from {}:{}".format(self.params["sim_file"], group))
+        except:
+            logger.info("Could not open and read displacement")
+
+        
+        return get_volume(geo, chamber=chamber, u=u)
+
+        
 
         
         
@@ -405,13 +446,9 @@ class UnloadedMaterial(object):
 
         err = np.inf
         res = None
-        func_val_diff = 0.0
-        # Just a large number
-        prev_func_val = 100.0
         
               
-        self.it = 0
-
+        
 
         while self.it < self.maxiter and err > self.tol:
             
@@ -448,7 +485,4 @@ class UnloadedMaterial(object):
             # Store optimization results
             res[0]["h5group"]=""
             store(*res)
-       
 
-        
-            
