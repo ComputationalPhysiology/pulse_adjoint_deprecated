@@ -1,6 +1,6 @@
 # Pulse-Adjoint #
  
-
+This repository contains code for solving basic problems in cardiac mechanics as well as code for doing data assimilation. 
 A cardiac computational model is constrained using clinical measurements such as pressure, volume and regional strain. The problem is formulated as a PDE-constrained optimisation problem where the objective functional represents the misfit between measured and simulated data. There are two phases; passive and active. In the passive phase the material parameters are the control parameters, and in the active phase the contraction parameter is the control parameter. The control parameters can be scalar or spatially resolved. The problem is solved using a gradient based optimization algorithm where the gradient is provided by solving the adjoint system.
 
 ## Installation ##
@@ -44,9 +44,9 @@ You are welcomed to use this code for your own reaseach, but encourage you to ci
 
 
 [1] Balaban, G., H. Finsberg, J. Sundnes, M. E. Rognes, H.-H. Odland, S. Ross, and S. T. Wall, 2016: High resolution data assimilation of cardiac mechanics
-applied to a dyssynchronous ventricle. International Journal for Numerical Methods in Engineering, 79, no. 11, 1309–1331
+applied to a dyssynchronous ventricle. International Journal for Numerical Methods in Engineering, 79, no. 11, 1309ï¿½1331
 
-[2] Finsberg, H., G. Balaban, S. Ross, T. F. Håland, H. H. Odland, J. Sundnes, and S. Wall, 2017: Estimating cardiac contraction through high resolution
+[2] Finsberg, H., G. Balaban, S. Ross, T. F. Hï¿½land, H. H. Odland, J. Sundnes, and S. Wall, 2017: Estimating cardiac contraction through high resolution
 data assimilation of a personalized mechanical model. Journal of Computational Science.
 
 ## License ##
