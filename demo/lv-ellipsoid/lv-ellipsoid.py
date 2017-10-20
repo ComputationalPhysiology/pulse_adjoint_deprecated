@@ -164,8 +164,8 @@ def main():
         geo = load_geometry_from_h5(geo_file)
         
 
-    df.plot(geo.sfun, interactive=True)
-    exit()
+    # df.plot(geo.sfun, interactive=True)
+    # exit()
     
     def make_dirichlet_bcs(W):
         V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
