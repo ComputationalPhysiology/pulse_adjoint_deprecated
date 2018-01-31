@@ -35,7 +35,7 @@ else:
         "numpy",
         "scipy",
         "matplotlib",
-        "mesh_generation>=0.1!"
+        "mesh_generation>=0.1",
         "pyyaml",
         "h5py"        
     ]
