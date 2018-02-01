@@ -18,5 +18,5 @@ pipelines:
           # Just do a very simple test, to make sure that this simple demo runs.
           - cd $BITBUCKET_CLONE_DIR
           - sudo python setup.py install
-          - cd pulse_adjoint/demo/lv-ellipsoid
+          - cd demo/lv-ellipsoid
           - python lv-ellipsoid.py
