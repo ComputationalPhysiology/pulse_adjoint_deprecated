@@ -12,7 +12,6 @@ pipelines:
           - export HOME=/home/fenics
           - export PATH=$HOME/bin:$HOME/.local/bin:$PATH
           - source $HOME/fenics.env.conf
-          - source $HOME/dolfin-adjoint.conf
           - export FENICS_PYTHON_MAJOR_VERSION=2
           - export FENICS_PYTHON_MINOR_VERSION=7
           - export PYTHONPATH=/usr/local/lib/python2/dist-packages/:$PYTHONPATH
