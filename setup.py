@@ -40,7 +40,7 @@ else:
         "h5py"        
     ]
 
-dependency_links = ["git+ssh.//git@bitbucket.org:finsberg/mesh_generation.git#egg=mesh_generation-0.1"]
+dependency_links = ["git+ssh://git@bitbucket.org:finsberg/mesh_generation.git#egg=mesh_generation-0.1"]
 
 setup(name = "pulse_adjoint",
       version = "{0}.{1}".format(major, minor),
