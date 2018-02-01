@@ -16,5 +16,7 @@ pipelines:
           - export FENICS_PYTHON_MINOR_VERSION=7
           - export PYTHONPATH=/usr/local/lib/python2/dist-packages/:$PYTHONPATH
           # Just do a very simple test, to make sure that this simple demo runs.
-          - cd $HOME/pulse_adjoint/demo/lv-ellipsoid
+          - cd $BITBUCKET_CLONE_DIR
+          - sudo python setup.py install
+          - cd pulse_adjoint/demo/lv-ellipsoid
           - python lv-ellipsoid.py
