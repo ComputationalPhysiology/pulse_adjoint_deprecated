@@ -35,12 +35,12 @@ else:
         "numpy",
         "scipy",
         "matplotlib",
-        "mesh_generation>=0.1",
+        "mesh_generation==0.1",
         "pyyaml",
         "h5py"        
     ]
 
-dependency_links = ["https://bitbucket.org/finsberg/mesh_generation/get/master.tar.gz#egg=mesh_generation-0.1"]
+dependency_links = ["git+ssh.//git@bitbucket.org:finsberg/mesh_generation.git#egg=mesh_generation-0.1"]
 
 setup(name = "pulse_adjoint",
       version = "{0}.{1}".format(major, minor),
