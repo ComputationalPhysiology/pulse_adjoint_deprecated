@@ -1,0 +1,14 @@
+# This is a sample build configuration for Python.
+# Check our guides at https://confluence.atlassian.com/x/x4UWN for more examples.
+# Only use spaces to indent your .yml configuration.
+# -----
+# You can specify a custom docker image from Docker Hub as your build environment.
+image: finsberg/pulse_adjoint
+
+pipelines:
+  default:
+    - step:
+        script: 
+          # Just do a very simple test, to make sure that this simple demo runs.
+          - cd pulse_adjoint/demo/lv-ellipsoid
+          - python lv-ellipsoid.py
