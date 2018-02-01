@@ -10,5 +10,5 @@ pipelines:
     - step:
         script: 
           # Just do a very simple test, to make sure that this simple demo runs.
-          - cd pulse_adjoint/demo/lv-ellipsoid
+          - cd $HOME/pulse_adjoint/demo/lv-ellipsoid
           - python lv-ellipsoid.py
