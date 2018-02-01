@@ -99,7 +99,8 @@ class LVSolver(object):
         prm[nsolver]['relative_tolerance'] = 1E-12
         prm[nsolver]['maximum_iterations'] = 15
         # prm[nsolver]['relaxation_parameter'] = 1.0
-        prm[nsolver]['linear_solver'] = 'superlu_dist'
+        # prm[nsolver]['linear_solver'] = 'superlu_dist'
+        prm[nsolver]['linear_solver'] = 'lu'
         prm[nsolver]['error_on_nonconvergence'] = True
         prm[nsolver]['report'] = True if logger.level < INFO else False
         if self.iterative_solver:
@@ -449,6 +450,17 @@ class Postprocess(object):
         E = 0.5 * (C - self._I)
         return E
 
+    def AlmansiStrain(self, F_ref=None):
+        if F_ref is None:
+            F = self._F
+        else:
+            F = self._F*inv(F_ref)
+            
+        b = F*F.T
+        e = 0.5 * (self._I - inv(b))
+        return e
+        
+
     def fiber_strain(self):
         r"""Compute Fiber strain
 
@@ -487,6 +499,13 @@ class Postprocess(object):
         n_norm = normalize_vector_field(n)
         return inner((self.chaucy_stress(deviatoric)*n_norm), n_norm)
         # return inner((self.chaucy_stress(deviatoric)*n)/n**2, n)
+
+    def almansi_strain_component(self, n0, F_ref=None):
+
+        n = project(self._F*n0, n0.function_space())
+        from pulse_adjoint.unloading.utils import normalize_vector_field
+        n_norm = normalize_vector_field(n)
+        return inner((self.AlmansiStrain(F_ref=F_ref)*n_norm), n_norm)
 
     def piola2_stress_component(self, n0):
         
