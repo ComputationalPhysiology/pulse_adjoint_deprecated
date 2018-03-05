@@ -5,6 +5,10 @@ USER root
 
 RUN sudo apt-get update && sudo apt-get -y install git
 
+# Install some latex stuff in order to plot the figures
+RUN apt-get update &&  apt-get install dvipng texlive-latex-extra texlive-fonts-recommended -y
+
+
 RUN git clone -b dolfin-adjoint-2016.1.0 https://bitbucket.org/dolfin-adjoint/dolfin-adjoint
 RUN git clone -b libadjoint-2016.1.0 https://bitbucket.org/dolfin-adjoint/libadjoint
 
