@@ -31,7 +31,16 @@ to compute the different features that we want to visualise.
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 from .args import *
 
-    
+def default_mechanical_features():
+    from itertools import product
+    return  [":".join(a) for a in product(["green_strain", "cauchy_stress",
+                                           "cauchy_dev_stress"],
+                                          ["longitudinal", "fiber",
+                                           "circumferential", "radial"])] + \
+                                           ["gamma:", "displacement:",
+                                            "hydrostatic_pressure:",
+                                            "I1:", "I1e:", "I4f:", "I4fe:"]
+
 def asint(s):
     try: return int(s), ''
     except ValueError: return sys.maxint, s
@@ -51,7 +60,36 @@ def get_fiber_field(patient):
             raise ValueError("Unable to find fiber field")
 
     return e_f
+
+
+def get_backward_displacement(patient, val):
+    keys = val["unload"]["backward_displacement"].keys()
+    key = sorted(keys, key = lambda t: int(t))[-1]
+
+    u_arr = val["unload"]["backward_displacement"][key]
+
+    if hasattr(patient, "original_geometry"):
+        mesh = patient.original_geometry
+    else:
+        mesh = patient.mesh
+        
+    V = dolfin.VectorFunctionSpace(mesh, "CG", 1)
+    u = dolfin.Function(V)
+
+    u.vector()[:] = u_arr
     
+    return u
+
+def get_sheets(patient, u):
+
+    if patient.sheets:
+        return patient.sheets
+
+    # Otherwise we need to load the original sheets 
+        
+    from pulse_adjoint.unloading.utils import update_vector_field
+    
+    pass
     
 
 def init_spaces(mesh, gamma_space = "CG_1"):
@@ -321,6 +359,7 @@ def get_regional_strains(disps, patient, unload=False,
                          strain_reference="0",
                          strain_tensor="gradu",
                          map_strain = False,
+                         almansi=False,
                          *args, **kwargs):
 
 
@@ -369,6 +408,9 @@ def get_regional_strains(disps, patient, unload=False,
 
     else:
         F_ref = dolfin.Identity(3)
+
+    if almansi:
+        strain_tensor="almansi"
 
 
     crl_basis = {}
@@ -913,7 +955,7 @@ def compute_cardiac_work_echo(stresses, strains, flip =False):
     
     
 
-def compute_cardiac_work(patient, params, val, case, wp):
+def compute_cardiac_work(patient, params, val, case, wp, e_k = None):
     """Compute cardiac work. 
 
     :param patient: patient data
@@ -945,10 +987,10 @@ def compute_cardiac_work(patient, params, val, case, wp):
     V = dolfin.TensorFunctionSpace(patient.mesh, "DG", 1)
     W = dolfin.FunctionSpace(patient.mesh, "DG", 1)
     e_f = get_fiber_field(patient)
-    e_l = patient.longitudinal
+    
 
     
-    assert case in cases, "Unknown case {}".format(case)
+    # assert case in cases, "Unknown case {}".format(case)
     assert wp in work_pairs, "Unknown work pair {}".format(wp)
 
     reults = {}
@@ -966,15 +1008,26 @@ def compute_cardiac_work(patient, params, val, case, wp):
             
 
     case_split = case.split("_")
-    if len(case_split) == 1:
-        e_k = None
+
+                        
+    if e_k is None:
         
-    elif case_split[1] == "fiber":
-        e_k = e_f
+        if len(case_split) == 1:
+            e_k = None
         
-    else:
-        e_k = e_l
-        
+        elif case_split[1] == "fiber":
+            e_k = e_f
+
+        elif case_split[1] == "sheet":
+
+
+            e_k = get_sheets(patient)
+
+        elif case_split[1] == "crosssheet":
+            e_k = get_cross_sheets(patient)
+        else:
+            e_k = patient.longitudinal
+
                 
     case_ = case_split[0]
         
@@ -984,7 +1037,7 @@ def compute_cardiac_work(patient, params, val, case, wp):
 
     cw.reset()
 
-    regions = set(patient.sfun.array())
+    regions = [0]+ list(set(patient.sfun.array()))
     work_lst = {r:[] for r in regions}
     power_lst = {r:[] for r in regions}
 
@@ -1273,6 +1326,7 @@ def make_simulation(params, features, outdir, patient, data):
                 else:
                     functions[f].vector()[:] = data["gammas"][t]
             else:
+                
                 functions_[f].vector()[:] = features[f][t]
                 f_ = dolfin.interpolate(functions_[f], functions[f].function_space())
                 functions[f].vector()[:] = f_.vector()
@@ -1537,18 +1591,9 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
     states = val["states"]
     gammas = val["gammas"]
     times = sorted(states.keys(), key=asint)
-
-    from itertools import product
-
  
     if not keys:
-        keys = [":".join(a) for a in product(["green_strain", "cauchy_stress",
-                                              "cauchy_dev_stress"],
-                                         ["longitudinal", "fiber",
-                                          "circumferential", "radial"])] + \
-                                          ["gamma:", "displacement:",
-                                           "hydrostatic_pressure:",
-                                           "I1:", "I1e:", "I4f:", "I4fe:"]
+        keys = default_mechanical_features()
 
 
     features = {k.rstrip(":") : [] for k in keys}
@@ -1650,8 +1695,7 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
             elif k1 == "gamma":
                 gamma = solver.get_gamma()
                 gamma.vector()[:] = np.multiply(params["T_ref"], gamma.vector().array())
-                # from IPython import embed; embed()
-                # exit()
+
                 get("gamma", gamma, "gamma_space", False)
 
             elif k1 == "hydrostatic_pressure":
@@ -1712,6 +1756,10 @@ def copmute_mechanical_features(patient, params, val, path, keys = None):
                     Tf = solver.postprocess().cauchy_stress_component(e, deviatoric=True)
                     get(k, Tf, "cg2")
 
+                elif k1 == "almansi_strain":
+                    Ef = solver.postprocess().almansi_strain_component(e, F_ref=F_ed)
+                    get(k, Ef, "cg2")
+                    
 
 
     from load import save_dict_to_h5
