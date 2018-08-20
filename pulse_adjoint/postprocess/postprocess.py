@@ -139,10 +139,21 @@ class PostProcess(object):
         
         name = "_".join([patient_name, key]) + ".yml"
         path = "/".join([self._tmp_resdir, name])
-        
-        with open(path, 'wb') as f:
-            yaml.dump(d, f, default_flow_style=False)
 
+        def listize(dic):
+            d1 = {}
+            for k, v in dic.items():
+                if isinstance(v, dict):
+                    d1[k] = listize(v)
+                elif isinstance(v, np.ndarray):
+                    d1[k] = v.tolist()
+                else:
+                    d1[k] = v
+            return d1
+        d1 = listize(d)
+        with open(path, 'wb') as f:
+            yaml.dump(d1, f, default_flow_style=False)
+            
     def _update_results(self, data):
         """ Update results
         """

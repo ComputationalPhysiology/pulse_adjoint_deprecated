@@ -1792,7 +1792,6 @@ def get_calibrated_solver(state_arr, pressure, gamma_arr,
 
     solver, p_expr = get_solver(matparams, patient, gamma, params)
 
-    
     gamma_tmp.vector()[:] = gamma_arr
     gamma.assign(gamma_tmp)
 
