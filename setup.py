@@ -28,19 +28,20 @@ if platform.system() == "Windows" or "bdist_wininst" in sys.argv:
     scripts.extend(batch_files)
 
 
-if on_rtd:
-    REQUIREMENTS = []
-else:
-    REQUIREMENTS = [
-        "numpy",
-        "scipy",
-        "matplotlib",
-        "mesh_generation==0.1",
-        "pyyaml",
-        "h5py"        
-    ]
+REQUIREMENTS = []
+# if on_rtd:
+#     REQUIREMENTS = []
+# else:
+#     REQUIREMENTS = [
+#         "numpy",
+#         "scipy",
+#         "matplotlib",
+#         # "mesh_generation==0.1",
+#         "pyyaml",
+#         "h5py"        
+#     ]
 
-dependency_links = ["git+ssh://git@bitbucket.org:finsberg/mesh_generation.git#egg=mesh_generation-0.1"]
+# dependency_links = ["git+ssh://git@bitbucket.org:finsberg/mesh_generation.git#egg=mesh_generation-0.1"]
 
 setup(name = "pulse_adjoint",
       version = "{0}.{1}".format(major, minor),
@@ -51,7 +52,7 @@ setup(name = "pulse_adjoint",
       author_email = "henriknf@simula.no",
       license="LGPL version 3 or later",
       install_requires=REQUIREMENTS,
-      dependency_links=dependency_links,
+      # dependency_links=dependency_links,
       packages = ["pulse_adjoint",
                   "pulse_adjoint.models",
                   "pulse_adjoint.postprocess",

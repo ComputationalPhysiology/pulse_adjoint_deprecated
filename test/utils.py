@@ -44,11 +44,11 @@ from pulse_adjoint.forward_runner import PassiveForwardRunner, ActiveForwardRunn
 from pulse_adjoint.adjoint_contraction_args import PASSIVE_INFLATION_GROUP, PHASES, logger
 from pulse_adjoint.run_optimization import solve_oc_problem, run_unloaded_optimization as unloaded
 
+from pulse.geometry_utils import (generate_fibers,
+                                  setup_fiber_parameters,
+                                  make_crl_basis,
+                                  mark_strain_regions)
 
-from mesh_generation.mesh_utils import generate_fibers
-from mesh_generation.idealized_geometry import mark_strain_regions
-from mesh_generation.generate_mesh import setup_fiber_parameters
-from mesh_generation.strain_regions import make_crl_basis
 
 # This is temporary
 foc = 1.54919333848
@@ -59,7 +59,7 @@ def setup_params(phase, space = "CG_1", mesh_type = "lv",
     setup_general_parameters()
     params = setup_adjoint_contraction_parameters()
     
-    for key in params["Optimization_targets"].keys():
+    for key in list(params["Optimization_targets"].keys()):
         if key in opt_targets:
             params["Optimization_targets"][key] = True
         else:
@@ -227,7 +227,7 @@ def setup(phase, material_model, active_model,
                                                      eps_strain, pressures)
 
 
-    print("Exact control = {}\n".format(f_ex.vector().array()))
+    print(("Exact control = {}\n".format(f_ex.vector().array())))
     
     if unload:
         params, ap_params, pressure_expr, basis, u_img = create_unloaded_geometry(params, us, ap_params,
@@ -319,7 +319,7 @@ def create_unloaded_geometry(params, us, ap_params, fiber_params, control_region
                  subdomain_data = geo_img.ffun,
                  domain = geo_img.mesh)(30)
     vol = assemble((-1.0/3.0)*dot(X,N)*ds)
-    print vol
+    print(vol)
 
     
     if os.path.isfile("synthetic_unloaded.h5"):
@@ -580,7 +580,7 @@ def generate_data(expr, params, ap_params, pressure_expr, phase,
             strains_arr.append(strains_arr_it)
         
         
-        if params.has_key("markers"):
+        if "markers" in params:
             dS = Measure("exterior_facet",
                          subdomain_data = params["facet_function"],
                          domain = params["mesh"])(params["markers"]["ENDO"][0])
@@ -632,7 +632,7 @@ def get_application_parameters(space = "CG_1", phase="passive",
         ap_params["Active_optimization_weigths"]["regularization"] = weight[2]
 
     if matparams:
-        for k, v in matparams.iteritems():
+        for k, v in matparams.items():
             ap_params["Material_parameters"][k] = v
 
     ap_params["Optimization_parameters"]["passive_maxiter"] = 100
@@ -739,7 +739,7 @@ def run_optimization(params, strains, vols,  ap_params, pressures, p_lv, initial
                          regtype = "L2_grad", mshfun = params["control_markers"])
     
 
-    if params.has_key("markers"):
+    if "markers" in params:
         dS = Measure("exterior_facet",
                      subdomain_data = params["facet_function"],
                      domain = params["mesh"])(params["markers"]["ENDO"][0])
@@ -773,7 +773,7 @@ def run_optimization(params, strains, vols,  ap_params, pressures, p_lv, initial
     forward_result, _ = for_run(paramvec, False)
 
     weights = {}
-    for k, v in for_run.opt_weights.iteritems():
+    for k, v in for_run.opt_weights.items():
         weights[k] = v/(10*forward_result["func_value"])
     for_run.opt_weights.update(**weights)
     # print("Update weights for functional")

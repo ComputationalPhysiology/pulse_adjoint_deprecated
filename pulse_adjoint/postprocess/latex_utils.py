@@ -38,8 +38,9 @@ from .tables import tabalize
 def chunks(l, n):
     """Yield successive n-sized chunks from l."""
     for i in range(0, len(l), n):
-        yield l[i:i + n]
-        
+        yield l[i : i + n]
+
+
 latex_head = r"""\documentclass[tightpage, 26pt]{{standalone}}
 \usepackage{{subcaption}}
 \usepackage{{graphicx}}
@@ -56,59 +57,75 @@ latex_head = r"""\documentclass[tightpage, 26pt]{{standalone}}
 \renewcommand{{\arraystretch}}{{0.0}}
 """
 
+
 def tab_head(n):
-    s = r"""
-    \begin{tabular}{"""+r"""C"""*n+r"""}
+    s = (
+        r"""
+    \begin{tabular}{"""
+        + r"""C""" * n
+        + r"""}
     """
+    )
     return s.replace(" ", "")
+
 
 def tab_labels(n):
     s = r"""
-    """.replace(" ", "")
+    """.replace(
+        " ", ""
+    )
     for i in range(n):
-        s+=r"""\multicolumn{{{{1}}}}{{{{l}}}}{{{{{{{}}}}}}} \vspace{{{{0.01cm}}}}""".format(i)
-        if i == n-1:
-            s+= r"""\\
+        s += r"""\multicolumn{{{{1}}}}{{{{l}}}}{{{{{{{}}}}}}} \vspace{{{{0.01cm}}}}""".format(
+            i
+        )
+        if i == n - 1:
+            s += r"""\\
 """
         else:
-            s+= r"""&
+            s += r"""&
 """
     return s
+
 
 def tab_img(n):
     s = r"""
-    """.replace(" ", "")
+    """.replace(
+        " ", ""
+    )
     for i in range(n):
-        s+=r"""\imgcasefront{{{{{{{}}}}}}} \vspace{{{{0.01cm}}}}""".format(i)
-        if i == n-1:
-            s+= r"""\\
+        s += r"""\imgcasefront{{{{{{{}}}}}}} \vspace{{{{0.01cm}}}}""".format(i)
+        if i == n - 1:
+            s += r"""\\
 """
         else:
-            s+= r"""&
+            s += r"""&
 """
     for i in range(n):
-        s+=r"""\imgcaseside{{{{{{{}}}}}}} \vspace{{{{0.01cm}}}}""".format(i)
-        if i == n-1:
-            s+= r"""\\
+        s += r"""\imgcaseside{{{{{{{}}}}}}} \vspace{{{{0.01cm}}}}""".format(i)
+        if i == n - 1:
+            s += r"""\\
 """
         else:
-            s+= r"""&
+            s += r"""&
 """
     return s
 
+
 def tab_heatmap(n):
-     return r"""
+    return r"""
 \multicolumn{{{{{0}}}}}{{{{c}}}}{{{{{{1}}}}}} \vspace{{{{0.1cm}}}}\\
 \multicolumn{{{{{0}}}}}{{{{c}}}}{{{{\adjincludegraphics[scale=0.1,trim={{{{{{{{.0\width}}}} {{{{.0\height}}}} {{{{.0\width}}}} {{{{.785\height}}}}}}}}, clip]{{{{{{0}}}}}}}}}}\\
-""".format(n)
-    
+""".format(
+        n
+    )
 
-tab_tail=r"""
+
+tab_tail = r"""
 \end{tabular}
 \end{document}
 """
 
-strain_tab=r"""\documentclass[tightpage, 26pt]{{standalone}}
+strain_tab = r"""\documentclass[tightpage, 26pt]{{standalone}}
 \usepackage{{subcaption}}
 \usepackage{{graphicx}}
 \usepackage{{float}}
@@ -128,86 +145,76 @@ strain_tab=r"""\documentclass[tightpage, 26pt]{{standalone}}
 """
 
 
-
-def make_canvas_strain(paths, name = None):
+def make_canvas_strain(paths, name=None):
 
     outdir = os.path.dirname(paths[0])
-   
+
     latex_full = strain_tab.format(*paths)
 
     fname = "simulated_strains" if name is None else name
-    
+
     fnametex = ".".join([fname, "tex"])
     with open(fnametex, "w") as f:
         f.write(latex_full)
 
     os.system("pdflatex {} >/dev/null".format(fnametex))
-   
+
     for ext in [".aux", ".log", ".tex"]:
-        os.remove(fname+ext)
+        os.remove(fname + ext)
 
-    src= ".".join([fname, "pdf"])
+    src = ".".join([fname, "pdf"])
     dst = "/".join([outdir, src])
-  
+
     shutil.move(src, dst)
-    print "moved from {} to {}".format(src, dst)
-    
+    print("moved from {} to {}".format(src, dst))
 
-def make_canvas_snap_shot(lst, times, name, heatmap_name = "", heatmap_label = r"$\gamma$"):
 
-    assert len(lst) == len(times), \
-        "Not equal length"
+def make_canvas_snap_shot(lst, times, name, heatmap_name="", heatmap_label=r"$\gamma$"):
+
+    assert len(lst) == len(times), "Not equal length"
 
     div = False
-    for n in [4,5,6]:
-        if not(len(lst) % n):
+    for n in [4, 5, 6]:
+        if not (len(lst) % n):
             N = n
             div = True
 
-    assert div, \
-        "list must be diviable by four six or five. Length is {}".format(len(lst))
+    assert div, "list must be diviable by four six or five. Length is {}".format(
+        len(lst)
+    )
 
     # Check that the files exist and add extension
     for l in lst:
         v = "_{}".format(l)
         for s in ["_front", "_side"]:
             if os.path.isfile(name + v + s):
-                shutil.move(name + v + s,
-                            name + v + s +".png")
+                shutil.move(name + v + s, name + v + s + ".png")
             else:
                 if not os.path.isfile(name + v + s + ".png"):
                     raise IOError("File {} not found".format(name + v + s))
-                
+
     if heatmap_name != "":
         if not os.path.isfile(heatmap_name + ".png"):
             if os.path.isfile(heatmap_name):
-                shutil.move(heatmap_name, heatmap_name+".png")
-                latex_heatmap = tab_heatmap(N).format(heatmap_name,
-                                                      heatmap_label)
+                shutil.move(heatmap_name, heatmap_name + ".png")
+                latex_heatmap = tab_heatmap(N).format(heatmap_name, heatmap_label)
             else:
-                print "Not heatmap figure named ", heatmap_name
-                print "Make figure without heatmap"
+                print("Not heatmap figure named ", heatmap_name)
+                print("Make figure without heatmap")
                 latex_heatmap = ""
 
         else:
-            latex_heatmap = tab_heatmap(N).format(heatmap_name,
-                                                  heatmap_label)
-    
-       
+            latex_heatmap = tab_heatmap(N).format(heatmap_name, heatmap_label)
+
     else:
         latex_heatmap = ""
-    
-    
-    
-            
-    lst_chunks = [lst[i:i+N] for i in range(0, len(lst), N)]
-    times_chunks = [times[i:i+N] for i in range(0, len(times), N)]
 
+    lst_chunks = [lst[i : i + N] for i in range(0, len(lst), N)]
+    times_chunks = [times[i : i + N] for i in range(0, len(times), N)]
 
-    latex_full = latex_head.format(name)+\
-                 tab_head(N) + latex_heatmap
+    latex_full = latex_head.format(name) + tab_head(N) + latex_heatmap
 
-    for t,l in zip(times_chunks,lst_chunks):
+    for t, l in zip(times_chunks, lst_chunks):
         latex_full += tab_labels(N).format(*t)
         latex_full += tab_img(N).format(*l)
 
@@ -219,27 +226,22 @@ def make_canvas_snap_shot(lst, times, name, heatmap_name = "", heatmap_label = r
         f.write(latex_full)
 
     os.system("pdflatex {} >/dev/null".format(fnametex))
-   
-    for ext in [".aux", ".log", ".tex"]:
-        os.remove(fname+ext)
 
-    src= ".".join([fname, "pdf"])
+    for ext in [".aux", ".log", ".tex"]:
+        os.remove(fname + ext)
+
+    src = ".".join([fname, "pdf"])
     dst = "/".join([os.path.abspath(os.path.dirname(name)), src])
-  
+
     shutil.move(src, dst)
-    print "moved from {} to {}".format(src, dst)
-    
+    print("moved from {} to {}".format(src, dst))
 
 
 if __name__ == "__main__":
 
+    lst = list(range(3, 26, 2))
+    lst2 = [r"{:.0f} $\%$".format(i) for i in np.linspace(0, 100, len(lst))]
+    for i in lst2:
+        print(i)
 
-    lst = range(3,26, 2)
-    lst2 = [ r"{:.0f} $\%$".format(i) for i in np.linspace(0,100, len(lst))]
-    for i in lst2: print i 
-  
-    
     make_canvas_snap_shot(lst, lst2, "gamma", "heatmap.png")
-
-
-

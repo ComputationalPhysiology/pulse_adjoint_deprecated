@@ -28,19 +28,25 @@ import numpy as np
 import logging
 
 
-class Object : pass
+class Object:
+    pass
+
 
 log_level = logging.WARNING
-def make_logger(name, level = logging.INFO):
+
+
+def make_logger(name, level=logging.INFO):
     import logging
     import dolfin
-    
+
     mpi_filt = lambda: None
+
     def log_if_proc0(record):
         if dolfin.mpi_comm_world().rank == 0:
             return 1
         else:
             return 0
+
     mpi_filt.filter = log_if_proc0
 
     logger = logging.getLogger(name)
@@ -49,34 +55,34 @@ def make_logger(name, level = logging.INFO):
     ch = logging.StreamHandler()
     ch.setLevel(0)
 
-
-    formatter = logging.Formatter('%(message)s')
+    formatter = logging.Formatter("%(message)s")
     ch.setFormatter(formatter)
-    
 
     logger.addHandler(ch)
     logger.addFilter(mpi_filt)
 
-    
     dolfin.set_log_active(False)
     dolfin.set_log_level(dolfin.WARNING)
-    
+
     return logger
 
+
 logger = make_logger("Patient", log_level)
+
 
 def m3_2_ml(vol):
     """Convert volume from m3 to ml
     """
     # 1 m3  = 1000 dm3
     # 1 dm3 = 1 L = 1000 ml
-    # -> 1m3 = 1000*1000 ml 
+    # -> 1m3 = 1000*1000 ml
     if len(vol) == 1:
-	return 1000*1000*vol
+        return 1000 * 1000 * vol
     else:
-	return [1000*1000*v for v in vol]
+        return [1000 * 1000 * v for v in vol]
 
-def calibrate_strain(trace, ref_time=0, relative_strain = True):
+
+def calibrate_strain(trace, ref_time=0, relative_strain=True):
     """
     Takes a strain orientation and strain region and returns the 
     strain tace calculated with index ref_time as reference.
@@ -109,26 +115,25 @@ def calibrate_strain(trace, ref_time=0, relative_strain = True):
 
     """
     if relative_strain:
-        
-        new_trace = np.zeros(len(trace))     
+
+        new_trace = np.zeros(len(trace))
         ea0 = trace[ref_time]
-        
+
         for i in range(len(trace)):
-            
+
             ei0 = trace[i]
-            eia = (ei0 - ea0)/(ea0 + 1)
+            eia = (ei0 - ea0) / (ea0 + 1)
             new_trace[i] = eia
 
-            
-        st = np.roll(new_trace, -ref_time)      
-           
+        st = np.roll(new_trace, -ref_time)
+
     else:
         st = np.roll(trace, -ref_time)
 
-  
     return st
 
-def correct_drift(y, use_spline = True):
+
+def correct_drift(y, use_spline=True):
 
     if isinstance(y, np.ndarray):
         Y = y.tolist()
@@ -139,9 +144,9 @@ def correct_drift(y, use_spline = True):
         y_extra = extrapolate_to_final_strain(y)
         Y.append(y_extra)
 
-    X = range(len(Y))
+    X = list(range(len(Y)))
     # Create a linear interpolant between the first and the new point
-    line = [ i*(Y[-1] - Y[0])/(len(X)-1) for i in X]
+    line = [i * (Y[-1] - Y[0]) / (len(X) - 1) for i in X]
 
     # Subtract the line from the original points
     Y_sub = np.subtract(Y, line)
@@ -158,24 +163,20 @@ def h5py2dict(hdf):
     Convert h5py file to dictionary recursively
     """
     import h5py
-   
+
     if isinstance(hdf, h5py._hl.group.Group):
         t = {}
-        
-        for key in hdf.keys():
+
+        for key in list(hdf.keys()):
             t[key] = h5py2dict(hdf[key])
-    
-                
+
     elif isinstance(hdf, h5py._hl.dataset.Dataset):
         t = np.array(hdf)
 
     return t
 
 
-def compute_strain_weights(strain,
-                           rule = "equal",
-                           direction = "all",
-                           custom_weights = None):
+def compute_strain_weights(strain, rule="equal", direction="all", custom_weights=None):
 
     """Compute weights on the strain regions according to some rule
         
@@ -198,58 +199,57 @@ def compute_strain_weights(strain,
     and "c" respectively will be given all the weights
     """
 
-
     rules = ["equal"]
-    assert rule in rules, \
-        "Weight rule must be one of {}, given is {}".format(rules, rule)
-    
+    assert rule in rules, "Weight rule must be one of {}, given is {}".format(
+        rules, rule
+    )
+
     dirs = ["all", "r", "c", "l"]
-    assert direction in dirs, \
-        "Weight direction must be one of {}, given is {}".format(dirs, direction)
-    
+    assert direction in dirs, "Weight direction must be one of {}, given is {}".format(
+        dirs, direction
+    )
+
     def normalize(lst, missing_idx, eps):
         weights = np.multiply(lst, missing_idx)
         weights[np.where(missing_idx == 0)] = eps
         return weights
-    
+
     # A small number
     eps = 1e-10
-    
-        
-    nregions = len(strain.keys())
-    
+
+    nregions = len(list(strain.keys()))
+
     # Use custom weight or set them all to 1
-    if np.shape(custom_weights) == (nregions,3):
+    if np.shape(custom_weights) == (nregions, 3):
         weigths = np.array(custom_weights)
     else:
         weigths = np.ones((nregions, 3))
-        
-            
+
     missing_idx = find_missing_measurements(strain)
 
     if direction == "c":
-        weigths.T[1,:] = eps
-        weigths.T[2,:] = eps
-        
+        weigths.T[1, :] = eps
+        weigths.T[2, :] = eps
 
     elif direction == "r":
-        weigths.T[0,:] = eps
-        weigths.T[2,:] = eps
-        
+        weigths.T[0, :] = eps
+        weigths.T[2, :] = eps
+
     elif direction == "l":
-        weigths.T[0,:] = eps
-        weigths.T[1,:] = eps
-        
+        weigths.T[0, :] = eps
+        weigths.T[1, :] = eps
+
     return normalize(weigths, missing_idx, eps)
 
 
 def get_regional_midpoints(strain_markers, mesh):
-    
-    coords = {region : {coord:[] for coord in range(3)} for region in range(18)}
+
+    coords = {region: {coord: [] for coord in range(3)} for region in range(18)}
 
     import dolfin
+
     for cell in dolfin.cells(mesh):
-            
+
         # Get coordinates to cell midpoint
         x = cell.midpoint().x()
         y = cell.midpoint().y()
@@ -259,18 +259,17 @@ def get_regional_midpoints(strain_markers, mesh):
         index = cell.index()
 
         region = strain_markers.array()[index]
-        
+
         coords[region][0].append(x)
         coords[region][1].append(y)
         coords[region][2].append(z)
 
-    mean_coords = {region : np.zeros(3) for region in range(18)}
+    mean_coords = {region: np.zeros(3) for region in range(18)}
     for i in range(18):
         for j in range(3):
             mean_coords[i][j] = np.mean(coords[i][j])
-        
-    return mean_coords, coords
 
+    return mean_coords, coords
 
 
 def find_missing_measurements(strains):
@@ -286,27 +285,32 @@ def find_missing_measurements(strains):
 
     """
 
-    missing_idx = np.ones((len(strains.keys()), 3))
-    
-    for region_nr, strain in strains.iteritems():
+    missing_idx = np.ones((len(list(strains.keys())), 3))
+
+    for region_nr, strain in strains.items():
         for direction in range(3):
             # If all measurements are zero, then it is missing
             if not np.any([s[direction] for s in strain]):
-                missing_idx[region_nr-1][direction] = 0
-        
-            
+                missing_idx[region_nr - 1][direction] = 0
+
     return missing_idx
 
 
-
-
-
-
 def calculate_fiber_strain(fib, e_circ, e_rad, e_long, strain_markers, mesh, strains):
-    
+
     import dolfin
-    from dolfin import Measure, Function, TensorFunctionSpace, VectorFunctionSpace, \
-        TrialFunction, TestFunction, inner, assemble_system, solve
+    from dolfin import (
+        Measure,
+        Function,
+        TensorFunctionSpace,
+        VectorFunctionSpace,
+        TrialFunction,
+        TestFunction,
+        inner,
+        assemble_system,
+        solve,
+    )
+
     dX = dolfin.Measure("dx", subdomain_data=strain_markers, domain=mesh)
 
     fiber_space = fib.function_space()
@@ -314,27 +318,25 @@ def calculate_fiber_strain(fib, e_circ, e_rad, e_long, strain_markers, mesh, str
 
     full_strain_space = dolfin.TensorFunctionSpace(mesh, "R", 0)
 
-
     fib1 = dolfin.Function(strain_space)
-    e_c1 =  dolfin.Function(strain_space)
-    e_r1 =  dolfin.Function(strain_space)
-    e_l1 =  dolfin.Function(strain_space)
+    e_c1 = dolfin.Function(strain_space)
+    e_r1 = dolfin.Function(strain_space)
+    e_l1 = dolfin.Function(strain_space)
 
     mean_coords, coords = get_regional_midpoints(strain_markers, mesh)
     # ax = plt.subplot(111, projection='3d')
 
-
     region = 1
     fiber_strain = []
 
-    for region in range(1,18):
+    for region in range(1, 18):
         # For each region
 
         # Find the average unit normal in the fiber direction
         u = dolfin.TrialFunction(strain_space)
         v = TestFunction(strain_space)
-        a = inner(u, v)*dX(region)
-        L_fib = inner(fib, v)*dX(region)
+        a = inner(u, v) * dX(region)
+        L_fib = inner(fib, v) * dX(region)
         A, b = assemble_system(a, L_fib)
         solve(A, fib1.vector(), b)
         fib1_norm = np.linalg.norm(fib1.vector().array())
@@ -344,20 +346,19 @@ def calculate_fiber_strain(fib, e_circ, e_rad, e_long, strain_markers, mesh, str
         # Find the average unit normal in Circumferential direction
         u = TrialFunction(strain_space)
         v = TestFunction(strain_space)
-        a = inner(u, v)*dX(region)
-        L_c = inner(e_circ, v)*dX(region)
+        a = inner(u, v) * dX(region)
+        L_c = inner(e_circ, v) * dX(region)
         A, b = assemble_system(a, L_c)
         solve(A, e_c1.vector(), b)
         e_c1_norm = np.linalg.norm(e_c1.vector().array())
         # Unit normal
         e_c1_arr = e_c1.vector().array() / e_c1_norm
 
-
         # Find the averag unit normal in Radial direction
         u = TrialFunction(strain_space)
         v = TestFunction(strain_space)
-        a = inner(u, v)*dX(region)
-        L_r = inner(e_rad, v)*dX(region)
+        a = inner(u, v) * dX(region)
+        L_r = inner(e_rad, v) * dX(region)
         A, b = assemble_system(a, L_r)
         solve(A, e_r1.vector(), b)
         e_r1_norm = np.linalg.norm(e_r1.vector().array())
@@ -367,14 +368,13 @@ def calculate_fiber_strain(fib, e_circ, e_rad, e_long, strain_markers, mesh, str
         # Find the average unit normal in Longitudinal direction
         u = TrialFunction(strain_space)
         v = TestFunction(strain_space)
-        a = inner(u, v)*dX(region)
-        L_l = inner(e_long, v)*dX(region)
+        a = inner(u, v) * dX(region)
+        L_l = inner(e_long, v) * dX(region)
         A, b = assemble_system(a, L_l)
         solve(A, e_l1.vector(), b)
         e_l1_norm = np.linalg.norm(e_l1.vector().array())
         # Unit normal
         e_l1_arr = e_l1.vector().array() / e_l1_norm
-
 
         # ax.plot([mean_coords[region][0], mean_coords[region][0]+e_c1_arr[0]],[mean_coords[region][1], mean_coords[region][1]+e_c1_arr[1]], [mean_coords[region][2],mean_coords[region][2]+e_c1_arr[2]], 'b', label = "circ")
         # ax.plot([mean_coords[region][0],mean_coords[region][0]+e_r1_arr[0]],[mean_coords[region][1], mean_coords[region][1]+e_r1_arr[1]], [mean_coords[region][2],mean_coords[region][2]+e_r1_arr[2]] , 'r',label = "rad")
@@ -382,10 +382,12 @@ def calculate_fiber_strain(fib, e_circ, e_rad, e_long, strain_markers, mesh, str
         # ax.plot([mean_coords[region][0],mean_coords[region][0]+fib1_arr[0]],[mean_coords[region][1], mean_coords[region][1]+fib1_arr[1]], [mean_coords[region][2],mean_coords[region][2]+fib1_arr[2]] , 'y', label = "fib")
 
         fiber_strain_region = []
- 
+
         for strain in strains[region]:
 
-            mat = np.array([strain[0]*e_c1_arr, strain[1]*e_r1_arr, strain[2]*e_l1_arr]).T
+            mat = np.array(
+                [strain[0] * e_c1_arr, strain[1] * e_r1_arr, strain[2] * e_l1_arr]
+            ).T
             fiber_strain_region.append(np.linalg.norm(np.dot(mat, fib1_arr)))
 
         fiber_strain.append(fiber_strain_region)
@@ -398,26 +400,21 @@ def calculate_fiber_strain(fib, e_circ, e_rad, e_long, strain_markers, mesh, str
     return fiber_strain
 
 
-
-
-
-def extrapolate_to_final_strain(strains, use_scipy = False):
+def extrapolate_to_final_strain(strains, use_scipy=False):
     """
     In the impact patients the final strain is missing.
     This strain should be = 0, and by estimating it's
     value we can estimate the drift.
     """
 
-    
-    
     n = len(strains)
-    x = range(n)
+    x = list(range(n))
     y = strains
 
-
     if use_scipy:
-        # We should move to this later, since this is established code from scipy. 
+        # We should move to this later, since this is established code from scipy.
         from scipy.interpolate import InterpolatedUnivariateSpline
+
         # Use second order spline to approximate the next point
         spline = InterpolatedUnivariateSpline(x, y, k=2)
         y_extra = s(n)
@@ -425,84 +422,83 @@ def extrapolate_to_final_strain(strains, use_scipy = False):
     else:
         s = Spline(x, y, 2)
         y_extra = s.extrapolate()
-    
-   
+
     return y_extra
 
 
 class Spline:
-    def __init__(self, x,y,p):
+    def __init__(self, x, y, p):
 
         assert len(x) == len(y), "Length of x and y must be the same"
 
         # Interior knots, free boundary conditions
         # n = len(x)
 
-        X = x[-2*p:]
-        
-        t_int = [xi for xi in X[p/2 +1:-p/2]]
+        X = x[-2 * p :]
+
+        t_int = [xi for xi in X[p / 2 + 1 : -p / 2]]
 
         # t = [0,0,0,0, 1,1, 2,2, 3,3, 4,4,4,4]
 
         # Make the knot vector p+1 regular
-        self.t = np.concatenate((np.concatenate((X[0]*np.ones(p+1), t_int)), X[-1]*np.ones(p+1)))
+        self.t = np.concatenate(
+            (np.concatenate((X[0] * np.ones(p + 1), t_int)), X[-1] * np.ones(p + 1))
+        )
         self.x = X
-        self.y = y[-2*p:]
+        self.y = y[-2 * p :]
         self.p = p
-        
-        # Coefficients 
+
+        # Coefficients
         A = self.make_B_spline_matrix(self.p, self.t, self.x)
         self.c = np.linalg.solve(A, self.y)
 
     def plot_spline(self):
         N = 40
-        q = np.zeros((N,1))
+        q = np.zeros((N, 1))
         count = 0
         # Spline approximation
-        for xi in np.linspace(0,self.x[-1]-0.00001,N):
+        for xi in np.linspace(0, self.x[-1] - 0.00001, N):
             mu = self.find_mu(self.t, xi, self.p)
-            c0 =  self.c[mu-self.p:mu+1]
-            t0 = self.t[mu-self.p+1:mu+self.p+1]
+            c0 = self.c[mu - self.p : mu + 1]
+            t0 = self.t[mu - self.p + 1 : mu + self.p + 1]
             B = self.algorithm_2_21(mu, self.t, xi, self.p)
-            q[count] = np.dot(B,c0)
+            q[count] = np.dot(B, c0)
             count += 1
 
         plt.figure()
-        plt.plot(self.x,self.y, "r*")
-        plt.plot(np.linspace(0,self.x[-1],N),q, 'g')
+        plt.plot(self.x, self.y, "r*")
+        plt.plot(np.linspace(0, self.x[-1], N), q, "g")
         plt.show()
 
     def extrapolate(self):
         x_extra = self.x[-1] + 1.0
-        
-        mu = self.find_mu(self.t, x_extra, self.p, len(self.t)-self.p-2)
-        c0 =  self.c[mu-self.p:mu+1]
-        t0 = self.t[mu-self.p+1:mu+self.p+1]
+
+        mu = self.find_mu(self.t, x_extra, self.p, len(self.t) - self.p - 2)
+        c0 = self.c[mu - self.p : mu + 1]
+        t0 = self.t[mu - self.p + 1 : mu + self.p + 1]
         B = self.algorithm_2_21(mu, self.t, x_extra, self.p)
-        y_extra = np.dot(B,c0)
+        y_extra = np.dot(B, c0)
 
         return y_extra
-
 
     def plot_extrapolation(self):
 
         N = 40
-        q_extra = np.zeros((N,1))
+        q_extra = np.zeros((N, 1))
         count = 0
-        for xi in np.linspace(self.x[-3],self.x[-1]+1,N):
-            mu = self.find_mu(self.t, xi, self.p, len(self.t)-self.p-2)
-            c0 =  self.c[mu-self.p:mu+1]
-            t0 = self.t[mu-self.p+1:mu+self.p+1]
+        for xi in np.linspace(self.x[-3], self.x[-1] + 1, N):
+            mu = self.find_mu(self.t, xi, self.p, len(self.t) - self.p - 2)
+            c0 = self.c[mu - self.p : mu + 1]
+            t0 = self.t[mu - self.p + 1 : mu + self.p + 1]
             B = self.algorithm_2_21(mu, self.t, xi, self.p)
-            q_extra[count] = np.dot(B,c0)
+            q_extra[count] = np.dot(B, c0)
             count += 1
 
         plt.figure()
-        plt.plot(self.x,self.y, "r*")
-        plt.plot(self.x[-1]+1, q_extra[-1], 'bx')
-        plt.plot(np.linspace(self.x[-3],self.x[-1]+1,N),q_extra, 'g')
+        plt.plot(self.x, self.y, "r*")
+        plt.plot(self.x[-1] + 1, q_extra[-1], "bx")
+        plt.plot(np.linspace(self.x[-3], self.x[-1] + 1, N), q_extra, "g")
         plt.show()
-        
 
     def make_B_spline_matrix(self, p, t, u):
         """ Make Matrix of B splines evaluated at 
@@ -522,26 +518,26 @@ class Spline:
                at parameter values
         """
         EPS = 1e-8
-        # Allocate enough memory 
-        A = np.zeros((len(u), len(t)-(p+1)))
+        # Allocate enough memory
+        A = np.zeros((len(u), len(t) - (p + 1)))
         i = 0
         for ui in u:
             # Find the correct knot span
             if ui == t[-1]:
                 # Choose a slighty smaller value
-                mu = self.find_mu(t, ui-EPS, p)
+                mu = self.find_mu(t, ui - EPS, p)
             else:
                 mu = self.find_mu(t, ui, p)
 
             # Compute the non-zero B-splines evaluted at ui
             Bp = self.algorithm_2_21(mu, t, ui, p)
-            # Insert these values into the matrix        
-            A[i, mu-p:mu+1] = Bp
+            # Insert these values into the matrix
+            A[i, mu - p : mu + 1] = Bp
             i += 1
 
         return A
 
-    def find_mu(self,t, x, p, mu = None):
+    def find_mu(self, t, x, p, mu=None):
         """
         Return index mu of knot such that
         t[mu] < T < t[mu+1]
@@ -571,8 +567,8 @@ class Spline:
         # Flag
         index_ok = False
         # Find the first interval containing x and return the index
-        for i in range(len(t)-1):
-            if (x >= t[i] and x < t[i+1]):
+        for i in range(len(t) - 1):
+            if x >= t[i] and x < t[i + 1]:
                 mu_false = i
                 if i >= p:
                     index_ok = True
@@ -581,9 +577,10 @@ class Spline:
 
         # Index is too small. Unable to pick enough control points and knots.
         if not index_ok:
-            raise ValueError("Interval found, but index is too small."+ 
-            "Try to insert more knots before index {}.".format(mu_false))
-
+            raise ValueError(
+                "Interval found, but index is too small."
+                + "Try to insert more knots before index {}.".format(mu_false)
+            )
 
         return mu
 
@@ -608,13 +605,13 @@ class Spline:
 
         B = np.ones(1)
         for k in range(p):
-            R = self.R_matrix(k+1,x, mu, t)
-            B_temp = np.ones(k+2)
-            B_temp[0] = B[0]*R[0][0]
-            for j in range(1,k+1):
-                B_temp[j] = B[j-1]*R[j-1][1] + B[j]*R[j][0] 
+            R = self.R_matrix(k + 1, x, mu, t)
+            B_temp = np.ones(k + 2)
+            B_temp[0] = B[0] * R[0][0]
+            for j in range(1, k + 1):
+                B_temp[j] = B[j - 1] * R[j - 1][1] + B[j] * R[j][0]
 
-            B_temp[k+1] = B[k]*R[k][1]
+            B_temp[k + 1] = B[k] * R[k][1]
 
             B = B_temp
 
@@ -642,10 +639,10 @@ class Spline:
                in sparse format
         """
 
-        R = np.zeros((k,2))
+        R = np.zeros((k, 2))
         for i in range(k):
-            if (t[mu+1+i]- t[mu+1+i-k]) != 0:
-                R[i][0] = (t[mu+1+i] - x)/(t[mu+1+i]- t[mu+1+i-k])
-                R[i][1] =  (x-t[mu+1+i-k])/(t[mu+1+i]- t[mu+1+i-k])
+            if (t[mu + 1 + i] - t[mu + 1 + i - k]) != 0:
+                R[i][0] = (t[mu + 1 + i] - x) / (t[mu + 1 + i] - t[mu + 1 + i - k])
+                R[i][1] = (x - t[mu + 1 + i - k]) / (t[mu + 1 + i] - t[mu + 1 + i - k])
 
         return R

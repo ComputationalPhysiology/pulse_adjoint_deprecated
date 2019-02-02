@@ -29,7 +29,8 @@ from copy import deepcopy
 from .dolfinimport import *
 from .adjoint_contraction_args import logger
 from .kinematics import *
-from models.compressibility import get_compressibility
+from .models.compressibility import get_compressibility
+
 
 class SolverDidNotConverge(Exception):
     pass
@@ -39,39 +40,39 @@ class LVSolver(object):
     """
     A Cardiac Mechanics Solver
     """
-    
-    def __init__(self, params, use_snes = False):
+
+    def __init__(self, params, use_snes=False):
 
         self.use_snes = use_snes
         for k in ["mesh", "facet_function", "material", "bc"]:
-            assert params.has_key(k), \
-              "{} need to be in solver_parameters".format(k)
+            assert k in params, "{} need to be in solver_parameters".format(k)
 
-        
         self.parameters = params
-
 
         # Krylov solvers does not work
         self.iterative_solver = False
 
         # Update solver parameters
-        if params.has_key("solve"):              
+        if "solve" in params:
             prm = self.default_solver_parameters()
 
-            for k, v in params["solve"].iteritems():
+            for k, v in list(params["solve"].items()):
                 if isinstance(params["solve"][k], dict):
-                    for k_sub, v_sub in params["solve"][k].iteritems():
-                        prm[k][k_sub]= v_sub
+                    for k_sub, v_sub in list(params["solve"][k].items()):
+                        prm[k][k_sub] = v_sub
 
                 else:
                     prm[k] = v
         else:
-            prm= self.default_solver_parameters()
-            
+            prm = self.default_solver_parameters()
+
         self.parameters["solve"] = prm
 
-        self.relax_adjoint_solver = True if not params.has_key("relax_adjoint_solver") \
-                                    else params["relax_adjoint_solver"]
+        self.relax_adjoint_solver = (
+            True
+            if "relax_adjoint_solver" not in params
+            else params["relax_adjoint_solver"]
+        )
 
         self._compressible_model = get_compressibility(self.parameters)
         self._init_spaces()
@@ -82,56 +83,57 @@ class LVSolver(object):
 
     def compressibility(self):
         return self._compressible_model
-        
+
     def postprocess(self):
         return Postprocess(self)
-        
+
     def default_solver_parameters(self):
 
         nsolver = "snes_solver" if self.use_snes else "newton_solver"
 
         if self.use_snes:
-            prm = {"nonlinear_solver": "snes", "snes_solver":{}}
+            prm = {"nonlinear_solver": "snes", "snes_solver": {}}
         else:
-            prm = {"nonlinear_solver": "newton", "newton_solver":{}}
+            prm = {"nonlinear_solver": "newton", "newton_solver": {}}
 
-        prm[nsolver]['absolute_tolerance'] = 1E-8
-        prm[nsolver]['relative_tolerance'] = 1E-12
-        prm[nsolver]['maximum_iterations'] = 15
+        prm[nsolver]["absolute_tolerance"] = 1e-8
+        prm[nsolver]["relative_tolerance"] = 1e-12
+        prm[nsolver]["maximum_iterations"] = 15
         # prm[nsolver]['relaxation_parameter'] = 1.0
         # prm[nsolver]['linear_solver'] = 'superlu_dist'
-        prm[nsolver]['linear_solver'] = 'lu'
-        prm[nsolver]['error_on_nonconvergence'] = True
-        prm[nsolver]['report'] = True if logger.level < INFO else False
+        prm[nsolver]["linear_solver"] = "lu"
+        prm[nsolver]["error_on_nonconvergence"] = True
+        prm[nsolver]["report"] = True if logger.level < INFO else False
         if self.iterative_solver:
-            prm[nsolver]['linear_solver'] = 'gmres'
-            prm[nsolver]['preconditioner'] = 'ilu'
+            prm[nsolver]["linear_solver"] = "gmres"
+            prm[nsolver]["preconditioner"] = "ilu"
 
-            prm[nsolver]['krylov_solver'] = {}
-            prm[nsolver]['krylov_solver']['absolute_tolerance'] = 1E-9
-            prm[nsolver]['krylov_solver']['relative_tolerance'] = 1E-7
-            prm[nsolver]['krylov_solver']['maximum_iterations'] = 1000
-            prm[nsolver]['krylov_solver']['monitor_convergence'] = False
-            prm[nsolver]['krylov_solver']['nonzero_initial_guess'] = False
+            prm[nsolver]["krylov_solver"] = {}
+            prm[nsolver]["krylov_solver"]["absolute_tolerance"] = 1e-9
+            prm[nsolver]["krylov_solver"]["relative_tolerance"] = 1e-7
+            prm[nsolver]["krylov_solver"]["maximum_iterations"] = 1000
+            prm[nsolver]["krylov_solver"]["monitor_convergence"] = False
+            prm[nsolver]["krylov_solver"]["nonzero_initial_guess"] = False
 
-            prm[nsolver]['krylov_solver']['gmres'] = {}
-            prm[nsolver]['krylov_solver']['gmres']['restart'] = 40
+            prm[nsolver]["krylov_solver"]["gmres"] = {}
+            prm[nsolver]["krylov_solver"]["gmres"]["restart"] = 40
 
-            prm[nsolver]['krylov_solver']['preconditioner'] = {}
-            prm[nsolver]['krylov_solver']['preconditioner']['structure'] = 'same_nonzero_pattern'
+            prm[nsolver]["krylov_solver"]["preconditioner"] = {}
+            prm[nsolver]["krylov_solver"]["preconditioner"][
+                "structure"
+            ] = "same_nonzero_pattern"
 
-            prm[nsolver]['krylov_solver']['preconditioner']['ilu'] = {}
-            prm[nsolver]['krylov_solver']['preconditioner']['ilu']['fill_level'] = 0
+            prm[nsolver]["krylov_solver"]["preconditioner"]["ilu"] = {}
+            prm[nsolver]["krylov_solver"]["preconditioner"]["ilu"]["fill_level"] = 0
 
         return prm
-           
-        
-    def get_displacement(self, name = "displacement", annotate = True):
+
+    def get_displacement(self, name="displacement", annotate=True):
         return self.compressibility().get_displacement(name, annotate)
 
-    def get_hydrostatic_pressue(self, name = "hydrostatic_pressure", annotate = True):
+    def get_hydrostatic_pressue(self, name="hydrostatic_pressure", annotate=True):
         return self.compressibility().get_hydrostatic_pressue(name, annotate)
-    
+
     def get_u(self):
         if self._W.sub(0).num_sub_spaces() == 0:
             return self._w
@@ -149,7 +151,7 @@ class LVSolver(object):
 
     def get_state_space(self):
         return self._W
-    
+
     def reinit(self, w, annotate=False):
         """
         *Arguments*
@@ -160,7 +162,6 @@ class LVSolver(object):
         """
         self.get_state().assign(w, annotate=annotate)
         self._init_forms()
-    
 
     def solve(self):
         r"""
@@ -173,23 +174,21 @@ class LVSolver(object):
         """
         # Get old state in case of non-convergence
         w_old = self.get_state().copy(True)
-        problem = NonlinearVariationalProblem(self._G, self._w,
-                                              self._bcs,
-                                              self._dG)
+        problem = NonlinearVariationalProblem(self._G, self._w, self._bcs, self._dG)
 
         parameters["form_compiler"]["representation"] = "uflacs"
         solver = NonlinearVariationalSolver(problem)
         solver.parameters.update(self.parameters["solve"])
-        
+
         try:
-            
+
             nliter, nlconv = solver.solve(annotate=False)
             if not nlconv:
                 raise RuntimeError("Solver did not converge...")
 
         except RuntimeError as ex:
             logger.debug(ex)
-            
+
             # Solver did not converge
             logger.warning("Solver did not converge")
             # Reinitialze forms with old state
@@ -200,7 +199,7 @@ class LVSolver(object):
             raise SolverDidNotConverge(ex)
 
         else:
-           
+
             # The solver converged
             # If we are annotating we need to annotate the solve as well
             if not parameters["adjoint"]["stop_annotating"]:
@@ -208,40 +207,35 @@ class LVSolver(object):
                 if self.relax_adjoint_solver:
                     # Increase the tolerance slightly
                     # (don't know why we need to do this)
-                    nsolver =  "newton_solver"
-                    solver.parameters[nsolver]['relative_tolerance'] /= 0.001
-                    solver.parameters[nsolver]['absolute_tolerance'] /= 0.1
-                    
+                    nsolver = "newton_solver"
+                    solver.parameters[nsolver]["relative_tolerance"] /= 0.001
+                    solver.parameters[nsolver]["absolute_tolerance"] /= 0.1
+
                 # Solve the system with annotation
                 try:
                     nliter, nlconv = solver.solve(annotate=True)
                 except RuntimeError:
                     # Sometimes this throws a runtime error
                     if self.relax_adjoint_solver:
-                        solver.parameters[nsolver]['relative_tolerance'] *= 0.001
-                        solver.parameters[nsolver]['absolute_tolerance'] *= 0.1
+                        solver.parameters[nsolver]["relative_tolerance"] *= 0.001
+                        solver.parameters[nsolver]["absolute_tolerance"] *= 0.1
                     self.reinit(w_old, annotate=True)
-                    raise  SolverDidNotConverge("Adjoint solve step didn't converge")
-
+                    raise SolverDidNotConverge("Adjoint solve step didn't converge")
 
                 else:
                     if self.relax_adjoint_solver:
-                        solver.parameters[nsolver]['relative_tolerance'] *= 0.001
-                        solver.parameters[nsolver]['absolute_tolerance'] *= 0.1
+                        solver.parameters[nsolver]["relative_tolerance"] *= 0.001
+                        solver.parameters[nsolver]["absolute_tolerance"] *= 0.1
                     if not nlconv:
-                        raise  SolverDidNotConverge("Adjoint solve step didn't converge")
+                        raise SolverDidNotConverge("Adjoint solve step didn't converge")
 
-                
             return nliter, nlconv
 
-    
-        
-    
     def _init_spaces(self):
         """
         Initialize function spaces
         """
-                    
+
         self._W = self.compressibility().get_state_space()
         self._w = self.compressibility().get_state()
         self._w_test = self.compressibility().get_state_test()
@@ -255,87 +249,80 @@ class LVSolver(object):
         self._bcs = []
 
         dim = self.parameters["mesh"].topology().dim()
-        
+
         # Displacement
         u, p = split(self._w)
         v, q = split(self._w_test)
 
         # Identity
         self._I = Identity(dim)
-        
+
         # Deformation gradient
         self._F = variable(grad(u) + self._I)
         self._C = self._F.T * self._F
-        self._E = 0.5*(self._C - self._I)
+        self._E = 0.5 * (self._C - self._I)
         J = det(self._F)
-                
-        # Internal energy
-        self._pi_int =  material.strain_energy(self._F)  +\
-                        material.compressibility(p,J)
-                       
-                
-        # ## Internal virtual work
-        self._G = derivative(self._pi_int*dx, self._w, self._w_test)
-        
 
+        # Internal energy
+        self._pi_int = material.strain_energy(self._F) + material.compressibility(p, J)
+
+        # ## Internal virtual work
+        self._G = derivative(self._pi_int * dx, self._w, self._w_test)
 
         # Alternative formualtion
-        
+
         # S, Je = material.SecondPiolaStress(self._F, p, return_J = True)
         # P = self._F * S
         # self._G = inner(P, grad(v))*dx - q*(Je-1)*dx
 
-        
         ## External work
-        self._external_work(u,v)
+        self._external_work(u, v)
 
         self._dG = derivative(self._G, self._w, TrialFunction(self._W))
-        
-        
-        
-    def _external_work(self, u,v):
-        
-        N =  self.parameters["facet_normal"]
-        ds = Measure("exterior_facet", domain = self.parameters["mesh"],
-                     subdomain_data = self.parameters["facet_function"])
+
+    def _external_work(self, u, v):
+
+        N = self.parameters["facet_normal"]
+        ds = Measure(
+            "exterior_facet",
+            domain=self.parameters["mesh"],
+            subdomain_data=self.parameters["facet_function"],
+        )
 
         # Neumann BC
-        if self.parameters["bc"].has_key("neumann"):
+        if "neumann" in self.parameters["bc"]:
             for neumann_bc in self.parameters["bc"]["neumann"]:
                 pressure, marker = neumann_bc
-                n = pressure*cofac(self._F) * N
-                
-                self._G += inner(v, n)*ds(marker)
-         
-                
-        # Other body forces
-        if self.parameters["bc"].has_key("body_force"):           
-            self._G += -derivative(inner(self.parameters["bc"]["body_force"], u)*dx, u, v)
+                n = pressure * cofac(self._F) * N
 
-        
+                self._G += inner(v, n) * ds(marker)
+
+        # Other body forces
+        if "body_force" in self.parameters["bc"]:
+            self._G += -derivative(
+                inner(self.parameters["bc"]["body_force"], u) * dx, u, v
+            )
+
         # Robin BC
-        if self.parameters["bc"].has_key("robin"):
+        if "robin" in self.parameters["bc"]:
             for robin_bc in self.parameters["bc"]["robin"]:
                 if robin_bc is not None:
                     val, marker = robin_bc
-                    self._G += inner(val*u, v)*ds(marker)
-        
-       
+                    self._G += inner(val * u, v) * ds(marker)
+
         # Penalty term
-        if self.parameters["bc"].has_key("penalty"):
-            if hasattr(self.parameters["bc"]["penalty"], '__call__'):
-                
+        if "penalty" in self.parameters["bc"]:
+            if hasattr(self.parameters["bc"]["penalty"], "__call__"):
+
                 penalty = self.parameters["bc"]["penalty"](u)
                 self._G += derivative(penalty, self._w, self._w_test)
 
         # Dirichlet BC
-        if self.parameters["bc"].has_key("dirichlet"):
-            if hasattr(self.parameters["bc"]["dirichlet"], '__call__'):
+        if "dirichlet" in self.parameters["bc"]:
+            if hasattr(self.parameters["bc"]["dirichlet"], "__call__"):
                 self._bcs = self.parameters["bc"]["dirichlet"](self._W)
             else:
                 self._bcs = self._make_dirichlet_bcs()
-
-        
 
     def _make_dirichlet_bcs(self):
         bcs = []
@@ -350,21 +337,19 @@ class LVSolver(object):
                 else:
                     args = [D, val, marker]
                 bcs.append(DirichletBC(*args))
-                
-        return bcs
 
+        return bcs
 
 
 class Postprocess(object):
     def __init__(self, solver):
         self.solver = solver
-        
+
         self._F = self.solver._F
         self._C = self.solver._C
         self._E = self.solver._E
         self._I = self.solver._I
         self._p = self.solver.compressibility().p
-
 
     def internal_energy(self):
         """
@@ -389,8 +374,9 @@ class Postprocess(object):
            \mathbf{P} = \frac{\partial \psi}{\partial \mathbf{F}}
         
         """
-        return self.solver.parameters["material"].FirstPiolaStress(self._F, self._p, deviatoric)
-        
+        return self.solver.parameters["material"].FirstPiolaStress(
+            self._F, self._p, deviatoric
+        )
 
     def second_piola_stress(self, deviatoric=False):
         r"""
@@ -401,9 +387,10 @@ class Postprocess(object):
            \mathbf{S} =  \mathbf{F}^{-1} \sigma \mathbf{F}^{-T}
 
         """
-     
-        return  self.solver.parameters["material"].SecondPiolaStress(self._F, self._p, deviatoric)
 
+        return self.solver.parameters["material"].SecondPiolaStress(
+            self._F, self._p, deviatoric
+        )
 
     def chaucy_stress(self, deviatoric=False):
         r"""
@@ -422,31 +409,31 @@ class Postprocess(object):
            \sigma = \mathbf{F} \frac{\partial \psi}{\partial \mathbf{F}}
         
         """
-        
-        return self.solver.parameters["material"].CauchyStress(self._F, self._p, deviatoric)
+
+        return self.solver.parameters["material"].CauchyStress(
+            self._F, self._p, deviatoric
+        )
 
     def deformation_gradient(self):
         return self._F
-    
 
     def J(self):
         return det(self._F)
 
-  
     def strain_energy(self):
         """
         Return the total strain energy
         """
         return self.solver.parameters["material"].strain_energy(self._F)
-    
-    def GreenLagrange(self, F_ref = None):
-        
+
+    def GreenLagrange(self, F_ref=None):
+
         if F_ref is None:
             F = self._F
         else:
-            F = self._F*inv(F_ref)
-            
-        C = F.T*F
+            F = self._F * inv(F_ref)
+
+        C = F.T * F
         E = 0.5 * (C - self._I)
         return E
 
@@ -454,12 +441,11 @@ class Postprocess(object):
         if F_ref is None:
             F = self._F
         else:
-            F = self._F*inv(F_ref)
-            
-        b = F*F.T
+            F = self._F * inv(F_ref)
+
+        b = F * F.T
         e = 0.5 * (self._I - inv(b))
         return e
-        
 
     def fiber_strain(self):
         r"""Compute Fiber strain
@@ -472,9 +458,8 @@ class Postprocess(object):
         and :math:`f` the fiber field on the current configuration
 
         """
-        f =  self.solver.parameters["material"].f0
-        return inner(self.GreenLagrange()*f/f**2, f)
-        
+        f = self.solver.parameters["material"].f0
+        return inner(self.GreenLagrange() * f / f ** 2, f)
 
     def fiber_stress(self):
         r"""Compute Fiber stress
@@ -490,45 +475,41 @@ class Postprocess(object):
 
         f0 = self.solver.parameters["material"].get_component("fiber")
         return self.cauchy_stress_component(f0)
-    
+
     def cauchy_stress_component(self, n0, deviatoric=False):
 
         # Push forward to current configuration
-        n = project(self._F*n0, n0.function_space())
+        n = project(self._F * n0, n0.function_space())
         from pulse_adjoint.unloading.utils import normalize_vector_field
+
         n_norm = normalize_vector_field(n)
-        return inner((self.chaucy_stress(deviatoric)*n_norm), n_norm)
+        return inner((self.chaucy_stress(deviatoric) * n_norm), n_norm)
         # return inner((self.chaucy_stress(deviatoric)*n)/n**2, n)
 
     def almansi_strain_component(self, n0, F_ref=None):
 
-        n = project(self._F*n0, n0.function_space())
+        n = project(self._F * n0, n0.function_space())
         from pulse_adjoint.unloading.utils import normalize_vector_field
+
         n_norm = normalize_vector_field(n)
-        return inner((self.AlmansiStrain(F_ref=F_ref)*n_norm), n_norm)
+        return inner((self.AlmansiStrain(F_ref=F_ref) * n_norm), n_norm)
 
     def piola2_stress_component(self, n0):
-        
-        return inner((self.second_piola_stress()*n0)/n0**2, n0)
+
+        return inner((self.second_piola_stress() * n0) / n0 ** 2, n0)
 
     def piola1_stress_component(self, n0):
 
-        return inner((self.first_piola_stress()*n0)/n0**2, n0)
-
+        return inner((self.first_piola_stress() * n0) / n0 ** 2, n0)
 
     def green_strain_component(self, n0, F_ref=None):
-        return inner(self.GreenLagrange(F_ref)*n0/n0**2, n0)
+        return inner(self.GreenLagrange(F_ref) * n0 / n0 ** 2, n0)
 
     def deformation_gradient_component(self, n0):
-        return inner(self._F*n0/n0**2, n0)
+        return inner(self._F * n0 / n0 ** 2, n0)
 
     def gradu_component(self, n0):
-        return inner((self._F - self._I)*n0/n0**2, n0)
-
-
-
-
-
+        return inner((self._F - self._I) * n0 / n0 ** 2, n0)
 
 
 class LVSolver3Field(LVSolver):
@@ -537,59 +518,58 @@ class LVSolver3Field(LVSolver):
     u,p,pinner as the three field variables
 
     """
+
     def __init__(self, *args, **kwargs):
 
-        args[0]["compressibility"] = {"type":"threefieldlv"}
+        args[0]["compressibility"] = {"type": "threefieldlv"}
         args[0].pop("solve", None)
         LVSolver.__init__(self, *args, **kwargs)
-    
+
     def _init_forms(self):
-        
+
         material = self.parameters["material"]
-        
-        
-        
+
         V0 = self.parameters["volume"]
 
-        ds = Measure("exterior_facet", domain = self.parameters["mesh"],
-                     subdomain_data = self.parameters["facet_function"])
+        ds = Measure(
+            "exterior_facet",
+            domain=self.parameters["mesh"],
+            subdomain_data=self.parameters["facet_function"],
+        )
         dsendo = ds(self.parameters["markers"]["ENDO"][0])
         self._bcs = []
 
         dim = self.parameters["mesh"].topology().dim()
-        
+
         # Displacement
         u, p, pinn = split(self._w)
         v, q, qinn = split(self._w_test)
 
         # Identity
         self._I = Identity(dim)
-        
+
         # Deformation gradient
         self._F = variable(grad(u) + self._I)
         self._C = self._F.T * self._F
-        self._E = 0.5*(self._C - self._I)
+        self._E = 0.5 * (self._C - self._I)
         J = det(self._F)
 
-
-        area = assemble( Constant(1.0) * dsendo)
-        N =  self.parameters["facet_normal"]
+        area = assemble(Constant(1.0) * dsendo)
+        N = self.parameters["facet_normal"]
         X = SpatialCoordinate(self.parameters["mesh"])
-        self._V_u = (-1.0/3.0)*dot((X+u), J*inv(self._F).T*N)    
+        self._V_u = (-1.0 / 3.0) * dot((X + u), J * inv(self._F).T * N)
 
-
-       
         # Internal energ
-        self._pi_int =  (material.strain_energy(self._F)  -p*(J-1))*dx \
-                        + (Constant(1.0/area) * pinn * V0 * dsendo) \
-                        - (pinn * self._V_u *dsendo)
-                        
-                
+        self._pi_int = (
+            (material.strain_energy(self._F) - p * (J - 1)) * dx
+            + (Constant(1.0 / area) * pinn * V0 * dsendo)
+            - (pinn * self._V_u * dsendo)
+        )
+
         # ## Internal virtual work
         self._G = derivative(self._pi_int, self._w, self._w_test)
 
         # External work
-        self._external_work(u,v)
+        self._external_work(u, v)
 
         self._dG = derivative(self._G, self._w, TrialFunction(self._W))
-        

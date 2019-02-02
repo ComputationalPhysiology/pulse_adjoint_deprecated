@@ -46,12 +46,13 @@ from .utils import list_sum
 from .numpy_mpi import *
 from .adjoint_contraction_args import logger
 
-__all__ = ["RegionalStrainTarget", "FullStrainTarget",
-           "VolumeTarget", "Regularization"]
+__all__ = ["RegionalStrainTarget", "FullStrainTarget", "VolumeTarget", "Regularization"]
+
 
 class OptimizationTarget(object):
     """Base class for optimization target
     """
+
     def __init__(self, mesh):
         """
         Initialize base class for optimization targets
@@ -67,13 +68,12 @@ class OptimizationTarget(object):
         ## These spaces are only used if you want to project
         ## or interpolate the displacement before assigning it
         # Space for interpolating the displacement if needed
-        self._interpolation_space = VectorFunctionSpace(mesh,"CG", 1)
+        self._interpolation_space = VectorFunctionSpace(mesh, "CG", 1)
         # Displacement space
-        self._disp_space = VectorFunctionSpace(mesh,"CG", 2)
-        
+        self._disp_space = VectorFunctionSpace(mesh, "CG", 2)
+
         # The volume of the mesh
-        self.meshvol = Constant(assemble(Constant(1.0)*dx(mesh)),
-                                name = "mesh volume")
+        self.meshvol = Constant(assemble(Constant(1.0) * dx(mesh)), name="mesh volume")
 
         # Test and trial functions for the target space
         self._trial = TrialFunction(self.target_space)
@@ -87,9 +87,7 @@ class OptimizationTarget(object):
         self.data = []
 
         # List for saved data
-        self.results = {"func_value": [],
-                        "target": [],
-                        "simulated":[]}
+        self.results = {"func_value": [], "target": [], "simulated": []}
         self.reset()
 
     def reset(self):
@@ -102,20 +100,23 @@ class OptimizationTarget(object):
         self.results["func_value"].append(self.func_value)
         self.results["target"].append(Vector(self.target_fun.vector()))
         self.results["simulated"].append(Vector(self.simulated_fun.vector()))
-        
+
     def next_target(self, it, annotate=False):
         self.assign_target(self.data[it], annotate)
-        
+
     def set_target_functions(self):
         """Initialize the functions
         """
-        
-        self.target_fun = Function(self.target_space,
-                                   name = "Target {}".format(self._name))
-        self.simulated_fun = Function(self.target_space,
-                                      name = "Simulated {}".format(self._name))
-        self.functional = Function(self.realspace,
-                                   name = "{} Functional".format(self._name))
+
+        self.target_fun = Function(
+            self.target_space, name="Target {}".format(self._name)
+        )
+        self.simulated_fun = Function(
+            self.target_space, name="Simulated {}".format(self._name)
+        )
+        self.functional = Function(
+            self.realspace, name="{} Functional".format(self._name)
+        )
         self._set_form()
 
     def load_target_data(self, target_data, n):
@@ -128,14 +129,13 @@ class OptimizationTarget(object):
         f = Function(self.target_space)
         assign_to_vector(f.vector(), np.array(target_data[n]))
         self.data.append(f)
-        
+
     def _set_form(self):
         """The default form is just the least square
         difference
         """
-        self._form = (self.target_fun - self.simulated_fun)**2
+        self._form = (self.target_fun - self.simulated_fun) ** 2
 
-    
     def assign_target(self, target, annotate=False):
         """Assing target value to target function
 
@@ -143,13 +143,13 @@ class OptimizationTarget(object):
         """
         logger.debug("Assign target for {}".format(self._name))
         self.target_fun.assign(target, annotate=annotate)
-        
 
     def assign_functional(self):
         logger.debug("Assign functional for {}".format(self._name))
-        solve(self._trial_r*self._test_r*dx == \
-            self._test_r*self._form*dx, \
-            self.functional)
+        solve(
+            self._trial_r * self._test_r * dx == self._test_r * self._form * dx,
+            self.functional,
+        )
 
     def get_functional(self):
         """Return the integral form of the functional
@@ -157,8 +157,7 @@ class OptimizationTarget(object):
         the value of the functional is the value of the
         integral.
         """
-        return (self.functional/self.meshvol)*dx
-
+        return (self.functional / self.meshvol) * dx
 
     def get_simulated(self):
         return self.simulated_fun
@@ -169,17 +168,24 @@ class OptimizationTarget(object):
     def get_value(self):
         return gather_broadcast(self.functional.vector().array())[0]
 
-    
-        
 
 class RegionalStrainTarget(OptimizationTarget):
     """Class for regional strain optimization
     target
-    """                                  
-    def __init__(self, mesh, crl_basis, dmu, weights=None,
-                 nregions = None,tensor="gradu",
-                 F_ref = None, approx = "original",
-                 map_strain = False):
+    """
+
+    def __init__(
+        self,
+        mesh,
+        crl_basis,
+        dmu,
+        weights=None,
+        nregions=None,
+        tensor="gradu",
+        F_ref=None,
+        approx="original",
+        map_strain=False,
+    ):
         """
         Initialize regional strain target
 
@@ -209,26 +215,24 @@ class RegionalStrainTarget(OptimizationTarget):
         self.approx = approx
         self._map_strain = map_strain
         if map_strain:
-            from unloading.utils import normalize_vector_field
-
+            from .unloading.utils import normalize_vector_field
 
         dim = mesh.geometry().dim()
         self.dim = dim
         self._F_ref = F_ref if F_ref is not None else Identity(dim)
-        
-        
+
         logger.debug("Load local basis.")
         logger.debug("Map local basis to new reference: {}".format(map_strain))
         self.crl_basis = []
         for l in ["circumferential", "radial", "longitudinal"]:
             msg = "{} : ".format(l)
 
-            if crl_basis.has_key(l):
+            if l in crl_basis:
                 msg += "True"
                 logger.debug(msg)
 
                 if map_strain:
-                    
+
                     Fe = self._F_ref * crl_basis[l]
                     logger.debug("Project")
                     e_ = project(Fe)
@@ -236,55 +240,55 @@ class RegionalStrainTarget(OptimizationTarget):
                     e = normalize_vector_field(e_)
                 else:
                     e = crl_basis[l]
-                    
+
                 self.crl_basis.append(e)
-                
+
             else:
                 msg += "False"
                 logger.debug(msg)
 
         self.nbasis = len(self.crl_basis)
 
-
         assert self.nbasis > 0, "Number of basis functions must be greater than zero"
-        self.regions = np.array(list(set(gather_broadcast(dmu.subdomain_data().array()))))
-        
+        self.regions = np.array(
+            list(set(gather_broadcast(dmu.subdomain_data().array())))
+        )
+
         self.nregions = len(self.regions)
         if weights is None:
-            self.weights_arr = np.ones((self.nregions,self.nbasis))
+            self.weights_arr = np.ones((self.nregions, self.nbasis))
         else:
             self.weights_arr = weights
 
-             
-        self.target_space = VectorFunctionSpace(mesh, "R", 0, dim = self.nbasis)
+        self.target_space = VectorFunctionSpace(mesh, "R", 0, dim=self.nbasis)
         self.weight_space = TensorFunctionSpace(mesh, "R", 0)
         self.dmu = dmu
 
-
-        self.meshvols = [Constant(assemble(Constant(1.0)*dmu(int(i))),
-                                  name = "mesh volume") for i in self.regions]
+        self.meshvols = [
+            Constant(assemble(Constant(1.0) * dmu(int(i))), name="mesh volume")
+            for i in self.regions
+        ]
 
         OptimizationTarget.__init__(self, mesh)
 
     def print_head(self):
         return "\t{:<10}".format("I_strain")
+
     def print_line(self):
         I = self.get_value()
         return "\t{:<10.2e}".format(I)
 
     def save(self):
-        
+
         self.func_value += self.get_value()
         self.results["func_value"].append(self.func_value)
         target = []
         simulated = []
         for i in range(self.nregions):
-            
+
             target.append(Vector(self.target_fun[i].vector()))
             simulated.append(Vector(self.simulated_fun[i].vector()))
 
-        
-        
         self.results["target"].append(target)
         self.results["simulated"].append(simulated)
 
@@ -298,10 +302,10 @@ class RegionalStrainTarget(OptimizationTarget):
         strains = []
         for i in self.regions:
             f = Function(self.target_space)
-            if target_data.has_key(int(i)):
+            if int(i) in target_data:
                 assign_to_vector(f.vector(), np.array(target_data[int(i)][n]))
                 strains.append(f)
-            
+
         self.data.append(strains)
 
     def set_target_functions(self):
@@ -309,48 +313,52 @@ class RegionalStrainTarget(OptimizationTarget):
         Initialize the functions
 
         """
-        
-        self.target_fun = [Function(self.target_space,
-                                    name = "Target Strains_{}".format(i+1)) \
-                           for i in range(self.nregions)]
 
-        self.simulated_fun = [Function(self.target_space,
-                                       name = "Simulated Strains_{}".format(i+1)) \
-                              for i in range(self.nregions)]
+        self.target_fun = [
+            Function(self.target_space, name="Target Strains_{}".format(i + 1))
+            for i in range(self.nregions)
+        ]
 
-        self.functional = [Function(self.realspace,
-                                    name = "Strains_{} Functional".format(i+1)) \
-                           for i in range(self.nregions)]
-        
-        self.weights = [Function(self.weight_space, \
-                                 name = "Strains Weights_{}".format(i+1)) \
-                        for i in range(self.nregions)]
+        self.simulated_fun = [
+            Function(self.target_space, name="Simulated Strains_{}".format(i + 1))
+            for i in range(self.nregions)
+        ]
 
+        self.functional = [
+            Function(self.realspace, name="Strains_{} Functional".format(i + 1))
+            for i in range(self.nregions)
+        ]
 
-        self._set_weights()        
+        self.weights = [
+            Function(self.weight_space, name="Strains Weights_{}".format(i + 1))
+            for i in range(self.nregions)
+        ]
+
+        self._set_weights()
         self._set_form()
 
     def _set_weights(self):
 
         for i in range(self.nregions):
-            weight = np.zeros(self.nbasis**2)
-            weight[0::(self.dim+1)] = self.weights_arr[i]
+            weight = np.zeros(self.nbasis ** 2)
+            weight[0 :: (self.dim + 1)] = self.weights_arr[i]
             assign_to_vector(self.weights[i].vector(), weight)
-
-
 
     def _set_form(self):
 
-    
-        self._form = [(dot(self.weights[i],self.simulated_fun[i] \
-                           - self.target_fun[i]))**2 \
-                     for i in range(self.nregions)]
+        self._form = [
+            (dot(self.weights[i], self.simulated_fun[i] - self.target_fun[i])) ** 2
+            for i in range(self.nregions)
+        ]
 
     def get_value(self):
-        return sum([gather_broadcast(self.functional[i].vector().array())[0] \
-                    for i in range(self.nregions)])
+        return sum(
+            [
+                gather_broadcast(self.functional[i].vector().array())[0]
+                for i in range(self.nregions)
+            ]
+        )
 
-        
     def assign_target(self, target, annotate=False):
         """Assing target regional strain
 
@@ -360,7 +368,7 @@ class RegionalStrainTarget(OptimizationTarget):
 
         logger.debug("Assign target for {}".format(self._name))
         for fun, target in zip(self.target_fun, target):
-            fun.assign(target, annotate = annotate)
+            fun.assign(target, annotate=annotate)
 
     def assign_simulated(self, u):
         """Assing simulated regional strain
@@ -371,59 +379,56 @@ class RegionalStrainTarget(OptimizationTarget):
 
         logger.debug("Assign simulated for {}".format(self._name))
         if self.approx == "interpolate":
-            u_int = interpolate(project(u, self._disp_space),
-                                self._interpolation_space)
-            
+            u_int = interpolate(project(u, self._disp_space), self._interpolation_space)
+
         elif self.approx == "project":
-            u_int =project(u, self._interpolation_space)
+            u_int = project(u, self._interpolation_space)
 
         else:
             u_int = u
 
-            
         I = Identity(self.dim)
-        F = (grad(u_int) + I)*inv(self._F_ref)
+        F = (grad(u_int) + I) * inv(self._F_ref)
         J = det(F)
         # Compute the strains
         if self._tensor == "gradu":
-            tensor = pow(J, -float(1)/self.dim)*F - I
+            tensor = pow(J, -float(1) / self.dim) * F - I
         elif self._tensor == "E":
-            C = pow(J, -float(2)/self.dim) * F.T * F
+            C = pow(J, -float(2) / self.dim) * F.T * F
             # C = F.T * F
             tensor = 0.5 * (C - I)
 
-
         if len(self.crl_basis) > 0:
-            
-            tensor_diag = as_vector([inner(tensor*e, e) for e in self.crl_basis])
 
+            tensor_diag = as_vector([inner(tensor * e, e) for e in self.crl_basis])
 
-        
             # Make a project for dolfin-adjoint recording
             for i, r in enumerate(self.regions):
-                
-                solve(inner(self._trial, self._test)*self.dmu(int(r)) == \
-                      inner(self._test, tensor_diag)*self.dmu(int(r)), \
-                      self.simulated_fun[i],
-                      solver_parameters={"linear_solver": "gmres"})
+
+                solve(
+                    inner(self._trial, self._test) * self.dmu(int(r))
+                    == inner(self._test, tensor_diag) * self.dmu(int(r)),
+                    self.simulated_fun[i],
+                    solver_parameters={"linear_solver": "gmres"},
+                )
         else:
-            
+
             logger.warning("No local basis exist. Regional strain cannot be computed")
 
-    
     def assign_functional(self):
 
         logger.debug("Assign functional for {}".format(self._name))
         for i, r in enumerate(self.regions):
-            solve(self._trial_r*self._test_r/self.meshvol*dx == \
-                  self._test_r*self._form[i]/self.meshvols[i]*self.dmu(int(r)), \
-                  self.functional[i])
+            solve(
+                self._trial_r * self._test_r / self.meshvol * dx
+                == self._test_r * self._form[i] / self.meshvols[i] * self.dmu(int(r)),
+                self.functional[i],
+            )
 
-       
     def get_functional(self):
-        return (list_sum(self.functional)/self.meshvol)*dx
+        return (list_sum(self.functional) / self.meshvol) * dx
 
-                                          
+
 class DisplacementTarget(OptimizationTarget):
     def __init__(self, mesh):
         self._name = "Displacement"
@@ -438,21 +443,23 @@ class DisplacementTarget(OptimizationTarget):
         """
 
         # Make a project for dolfin-adjoint recording
-        solve(inner(self._trial, self._test)*self.dmu == \
-              inner(u, self._test)*self.dmu, \
-              self.simulated_fun)
+        solve(
+            inner(self._trial, self._test) * self.dmu
+            == inner(u, self._test) * self.dmu,
+            self.simulated_fun,
+        )
 
-        
-    
+
 class FullStrainTarget(OptimizationTarget):
     """Class for full strain field
     optimization target
     """
+
     def __init__(self, mesh, crl_basis):
         self._name = "Full Strain"
         self.dmu = dx(mesh)
         self.crl_basis = crl_basis
-        self.target_space = VectorFunctionSpace(mesh, "CG", 1, dim = 3)
+        self.target_space = VectorFunctionSpace(mesh, "CG", 1, dim=3)
         OptimizationTarget.__init__(self, mesh)
 
     def assign_simulated(self, u):
@@ -460,23 +467,25 @@ class FullStrainTarget(OptimizationTarget):
 
         :param u: New displacement
         """
-        
+
         # Compute the strains
         gradu = grad(u)
-        grad_u_diag = as_vector([inner(e,gradu*e) for e in self.crl_basis])
+        grad_u_diag = as_vector([inner(e, gradu * e) for e in self.crl_basis])
 
         # Make a project for dolfin-adjoint recording
-        solve(inner(self._trial, self._test)*self.dmu == \
-              inner(grad_u_diag, self._test)*self.dmu, \
-              self.simulated_fun)
-    
+        solve(
+            inner(self._trial, self._test) * self.dmu
+            == inner(grad_u_diag, self._test) * self.dmu,
+            self.simulated_fun,
+        )
+
 
 class VolumeTarget(OptimizationTarget):
     """Class for volume optimization
     target
     """
-    
-    def __init__(self, mesh, dmu, chamber = "LV", approx = "project"):
+
+    def __init__(self, mesh, dmu, chamber="LV", approx="project"):
         """Initialize the functions
 
         :param mesh: The mesh
@@ -489,26 +498,28 @@ class VolumeTarget(OptimizationTarget):
 
         self.dmu = dmu
         self.chamber = chamber
-        
+
         self.target_space = FunctionSpace(mesh, "R", 0)
-        self.endoarea = Constant(assemble(Constant(1.0)*dmu),
-                                 name = "endo area")
+        self.endoarea = Constant(assemble(Constant(1.0) * dmu), name="endo area")
 
         assert approx in ["project", "interpolate", "original"]
         self.approx = approx
         OptimizationTarget.__init__(self, mesh)
 
     def print_head(self):
-        return "\t{:<18}\t{:<20}\t{:<10}".format("Target {} Volume".format(self.chamber),
-                                                 "Simulated {} Volume".format(self.chamber),
-                                                 "I_{}".format(self.chamber))
+        return "\t{:<18}\t{:<20}\t{:<10}".format(
+            "Target {} Volume".format(self.chamber),
+            "Simulated {} Volume".format(self.chamber),
+            "I_{}".format(self.chamber),
+        )
+
     def print_line(self):
         v_sim = gather_broadcast(self.simulated_fun.vector().array())[0]
         v_meas = gather_broadcast(self.target_fun.vector().array())[0]
         I = self.get_value()
-        
+
         return "\t{:<18.2f}\t{:<20.2f}\t{:<10.2e}".format(v_meas, v_sim, I)
-        
+
     def load_target_data(self, target_data, n):
         """Load the target data
 
@@ -527,40 +538,44 @@ class VolumeTarget(OptimizationTarget):
         """
         logger.debug("Assign simulated for {}".format(self._name))
         if u is None:
-            vol = (-1.0/3.0)*dot(self._X,self._N)
-            
+            vol = (-1.0 / 3.0) * dot(self._X, self._N)
+
         else:
             if self.approx == "interpolate":
-                u_int = interpolate(project(u, self._disp_space),
-                                    self._interpolation_space)
-            
+                u_int = interpolate(
+                    project(u, self._disp_space), self._interpolation_space
+                )
+
             elif self.approx == "project":
-                u_int =project(u, self._interpolation_space)
+                u_int = project(u, self._interpolation_space)
 
             else:
                 u_int = u
-            
+
             # Compute volume
             F = grad(u_int) + Identity(3)
             J = det(F)
-            vol = (-1.0/3.0)*dot(self._X + u_int, J*inv(F).T*self._N)
+            vol = (-1.0 / 3.0) * dot(self._X + u_int, J * inv(F).T * self._N)
 
         # Make a project for dolfin-adjoint recording
-        solve(inner(self._trial, self._test)/self.endoarea*self.dmu == \
-              inner(vol, self._test)*self.dmu, self.simulated_fun)
-    
+        solve(
+            inner(self._trial, self._test) / self.endoarea * self.dmu
+            == inner(vol, self._test) * self.dmu,
+            self.simulated_fun,
+        )
+
     def _set_form(self):
-        self._form =  ((self.target_fun - self.simulated_fun)/self.target_fun)**2
-        
-    
+        self._form = ((self.target_fun - self.simulated_fun) / self.target_fun) ** 2
+
 
 class Regularization(object):
     """Class for regularization
     of the control parameter
     """
-    def __init__(self, mesh, spacestr = "CG_1",
-                 lmbda = 0.0, regtype = "L2_grad",
-                 mshfun = None):
+
+    def __init__(
+        self, mesh, spacestr="CG_1", lmbda=0.0, regtype="L2_grad", mshfun=None
+    ):
         """Initialize regularization object
 
         :param space: The mesh
@@ -570,17 +585,18 @@ class Regularization(object):
         """
         # assert spacestr in ["CG_1", "regional", "R_0"], \
         #     "Unknown regularization space {}".format(space)
-        
+
         self.spacestr = spacestr
         self.lmbda = lmbda
         self._value = 0.0
 
-    
-        self._mshfun = mshfun if mshfun is not None \
-                       else MeshFunction("size_t",mesh,  mesh.geometry().dim(), mesh.domains()) 
+        self._mshfun = (
+            mshfun
+            if mshfun is not None
+            else MeshFunction("size_t", mesh, mesh.geometry().dim(), mesh.domains())
+        )
 
-        self.meshvol = Constant(assemble(Constant(1.0)*dx(mesh)),
-                                name = "mesh volume")
+        self.meshvol = Constant(assemble(Constant(1.0) * dx(mesh)), name="mesh volume")
         self._regtype = regtype
         # A real space for projecting the functional
         self._realspace = FunctionSpace(mesh, "R", 0)
@@ -590,35 +606,34 @@ class Regularization(object):
         else:
             family, degree = spacestr.split("_")
             self._space = FunctionSpace(mesh, family, int(degree))
-        
-            
-        
-        
+
         self.dx = dx(mesh)
-        self.results = {"func_value":[]}
+        self.results = {"func_value": []}
         self.reset()
 
     def print_head(self):
         return "\t{:<10}".format("I_reg")
+
     def print_line(self):
         I = self.get_value()
         return "\t{:<10.2e}".format(I)
 
     def reset(self):
-       
+
         self.func_value = 0.0
         self._value = 0.0
 
     def save(self):
-        
+
         self.func_value += self.get_value()
         self.results["func_value"].append(self.func_value)
 
     def set_target_functions(self):
-        
-        self.functional = Function(self._realspace, name = "regularization_functional")
+
+        self.functional = Function(self._realspace, name="regularization_functional")
         if self.spacestr == "regional":
-            from setup_optimization import RegionalParameter
+            from .setup_optimization import RegionalParameter
+
             self._m = RegionalParameter(self._mshfun)
         else:
             self._m = Function(self._space)
@@ -632,55 +647,53 @@ class Regularization(object):
         """
 
         if self._regtype == "L2":
-            
-            return (inner(self._m, self._m)/self.meshvol)*self.dx
+
+            return (inner(self._m, self._m) / self.meshvol) * self.dx
 
         else:
             if self.spacestr == "CG_1":
-                
-                return (inner(grad(self._m), grad(self._m))/self.meshvol)*self.dx
+
+                return (inner(grad(self._m), grad(self._m)) / self.meshvol) * self.dx
 
             elif self.spacestr == "regional":
 
-
-                
-                expr_arr = ["0"]*self._m.value_size()
+                expr_arr = ["0"] * self._m.value_size()
 
                 # Sum all the components to find the mean
-                expr_arr[0]="1"
+                expr_arr[0] = "1"
                 m_sum = dot(self._m, Expression(tuple(expr_arr), degree=1))
-                expr_arr[0]="0"
-                
-                for i in range(1,self._m.value_size()):
-                     expr_arr[i]="1"
-                     m_sum += dot(self._m, Expression(tuple(expr_arr), degree=1))
-                     expr_arr[i]="0"
+                expr_arr[0] = "0"
+
+                for i in range(1, self._m.value_size()):
+                    expr_arr[i] = "1"
+                    m_sum += dot(self._m, Expression(tuple(expr_arr), degree=1))
+                    expr_arr[i] = "0"
 
                 # Compute the mean
                 m_avg = m_sum / self._m.value_size()
 
                 # Compute the variance
-                expr_arr[0]="1"
-                m_reg= (dot(self._m, Expression(tuple(expr_arr), degree=1)) - m_avg)**2 \
-                       /self._m.value_size()
-                expr_arr[0]="0"
-                for i in range(1,self._m.value_size()):
-                     expr_arr[i]="1"
-                     m_reg += (dot(self._m, Expression(tuple(expr_arr), degree=1)) - m_avg)**2\
-                              /self._m.value_size()
-                     expr_arr[i]="0"
+                expr_arr[0] = "1"
+                m_reg = (
+                    dot(self._m, Expression(tuple(expr_arr), degree=1)) - m_avg
+                ) ** 2 / self._m.value_size()
+                expr_arr[0] = "0"
+                for i in range(1, self._m.value_size()):
+                    expr_arr[i] = "1"
+                    m_reg += (
+                        dot(self._m, Expression(tuple(expr_arr), degree=1)) - m_avg
+                    ) ** 2 / self._m.value_size()
+                    expr_arr[i] = "0"
 
                 # Create a functional term
-                return (m_reg/self.meshvol)*self.dx
-              
-                
-            else:
-                return Constant(0.0)*self.dx
+                return (m_reg / self.meshvol) * self.dx
 
-            
-    def assign(self, m, annotate = False):
-        self._m.assign(m, annotate = annotate)
-        
+            else:
+                return Constant(0.0) * self.dx
+
+    def assign(self, m, annotate=False):
+        self._m.assign(m, annotate=annotate)
+
     def get_functional(self):
         """Get the functional form 
         (included regularization parameter)
@@ -690,13 +703,12 @@ class Regularization(object):
         :rtype: (:py:class:`ufl.Form`)
 
         """
-   
+
         form = self.get_form()
         self._value = assemble(form)
-   
-        return self.lmbda*form
 
-        
+        return self.lmbda * form
+
     def get_value(self):
         """Get the value of the regularization term
         without regularization parameter
@@ -707,84 +719,74 @@ class Regularization(object):
 
         """
         return self._value
-        
-
-
-
 
 
 if __name__ == "__main__":
 
-    from setup_parameters import setup_general_parameters
+    from .setup_parameters import setup_general_parameters
+
     setup_general_parameters()
     from mesh_generation import load_geometry_from_h5
+
     geo = load_geometry_from_h5("../tests/data/mesh_simple_1.h5")
 
-   
     V = VectorFunctionSpace(geo.mesh, "CG", 2)
     u0 = Function(V)
     u1 = Function(V, "../tests/data/inflate_mesh_simple_1.xml")
 
-
-
     V0 = VectorFunctionSpace(geo.mesh, "CG", 1)
-    
-    
-    
-    dS = Measure("exterior_facet",
-                 subdomain_data = geo.ffun,
-                 domain = geo.mesh)(geo.markers["ENDO"][0])
 
-    
+    dS = Measure("exterior_facet", subdomain_data=geo.ffun, domain=geo.mesh)(
+        geo.markers["ENDO"][0]
+    )
+
     basis = {}
     for l in ["circumferential", "radial", "longitudinal"]:
         basis[l] = getattr(geo, l)
-        
+
     dX = Measure("dx", subdomain_data=geo.sfun, domain=geo.mesh)
     nregions = len(set(geo.sfun.array()))
-
 
     for u in [u0, u1]:
         for approx in ["project", "interpolate", "original"]:
 
-
             # ui = u0
             ui = u1
-        
+
             if approx == "interpolate":
-                u_int = interpolate(project(ui, V),V0)
-            
+                u_int = interpolate(project(ui, V), V0)
+
             elif approx == "project":
                 u_int = project(ui, V0)
 
             else:
                 u_int = ui
 
-                       
             F_ref = grad(u_int) + Identity(3)
-            
 
-            print "\nApprox = {}:".format(approx)
+            print(("\nApprox = {}:".format(approx)))
             target_vol = VolumeTarget(geo.mesh, dS, "LV", approx)
             target_vol.set_target_functions()
             target_vol.assign_simulated(u)
-            
+
             vol = gather_broadcast(target_vol.simulated_fun.vector().array())[0]
-            print "Volume = ", vol
+            print(("Volume = ", vol))
 
-
-            target_strain = RegionalStrainTarget(geo.mesh,
-                                                 basis, 
-                                                 dX,
-                                                 nregions = nregions,
-                                                 tensor = "gradu",
-                                                 F_ref = F_ref,
-                                                 approx=approx)
+            target_strain = RegionalStrainTarget(
+                geo.mesh,
+                basis,
+                dX,
+                nregions=nregions,
+                tensor="gradu",
+                F_ref=F_ref,
+                approx=approx,
+            )
 
             target_strain.set_target_functions()
             target_strain.assign_simulated(u)
 
-            strain = [gather_broadcast(target_strain.simulated_fun[i].vector().array()) \
-                      for i in range(nregions)]
-            print "Regional strain = ", strain
-        
+            strain = [
+                gather_broadcast(target_strain.simulated_fun[i].vector().array())
+                for i in range(nregions)
+            ]
+            print(("Regional strain = ", strain))

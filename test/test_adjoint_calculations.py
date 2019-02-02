@@ -23,7 +23,8 @@ from pulse_adjoint.run_optimization import (run_passive_optimization_step,
                                             run_active_optimization_step,
                                             run_passive_optimization)
 
-from pulse_adjoint.setup_optimization import initialize_patient_data, setup_simulation
+from pulse_adjoint.setup_optimization import (initialize_patient_data,
+                                              setup_simulation)
 from pulse_adjoint.adjoint_contraction_args import *
 from pulse_adjoint.utils import Text, pformat, passive_inflation_exists
 from utils import setup_params, my_taylor_test, store_results
@@ -41,7 +42,6 @@ active_models = ["active_strain", "active_stress"]
 
 from pulse_adjoint import LVTestPatient
 patient = LVTestPatient()
-
 
 def passive(params):
     
@@ -97,7 +97,7 @@ def active(params):
     adj_reset()
 
     logger.info(Text.blue("\nTest Active Optimization"))
-    print params["sim_file"]
+    print(params["sim_file"])
     params["phase"] = "active_contraction"
     params["active_contraction_iteration_number"] = 0
     measurements, solver_parameters, p_lv, gamma \
@@ -107,7 +107,7 @@ def active(params):
     dolfin.parameters["adjoint"]["test_derivative"] = True
     logger.info("Replay dolfin1")
     replay_dolfin(tol=1e-12)
-    
+
     rd, gamma = run_active_optimization_step(params, 
                                              patient, 
                                              solver_parameters, 
@@ -162,11 +162,13 @@ def test_adjoint_calculations(mesh_type, space, phase, active_model):
         assert False
     
 if __name__ == "__main__":
+
+    parameters['adjoint']['stop_annotating'] = False
     # test_adjoint_calculations("lv", "CG_1", "passive", "active_strain")
     # test_adjoint_calculations("lv", "regional", "passive", "active_strain")
     
-    # test_adjoint_calculations("lv", "CG_1", "active", "active_strain")
-    test_adjoint_calculations("lv", "regional", "active", "active_strain")
+    test_adjoint_calculations("lv", "CG_1", "active", "active_strain")
+    # test_adjoint_calculations("lv", "regional", "active", "active_strain")
     
     # test_adjoint_calculations("lv", "CG_1", "active", "active_stress")
     # test_adjoint_calculations("lv", "regional", "active", "active_stress")

@@ -1,3 +1,3 @@
-import active
-import material
-import compressibility
+from . import active
+from . import material
+from . import compressibility

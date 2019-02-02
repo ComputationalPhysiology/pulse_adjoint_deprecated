@@ -32,22 +32,18 @@ from ..kinematics import *
 
 
 class ActiveModel(Invariants):
-    def __init__(self, gamma=None,
-                 f0 = None, s0 = None,
-                 n0 = None, T_ref=None,
-                 isochoric=True, *args):
+    def __init__(
+        self, gamma=None, f0=None, s0=None, n0=None, T_ref=None, isochoric=True, *args
+    ):
 
         # Fiber system
         self._f0 = f0
         self._s0 = s0
         self._n0 = n0
 
-        
-        self._gamma = da.Constant(0, name="gamma") if gamma \
-                      is None else gamma
-        
-        self._T_ref =  df.Constant(T_ref) if T_ref\
-                       else df.Constant(1.0)
+        self._gamma = da.Constant(0, name="gamma") if gamma is None else gamma
+
+        self._T_ref = df.Constant(T_ref) if T_ref else df.Constant(1.0)
 
         Invariants.__init__(self, isochoric, *args)
 
@@ -56,6 +52,7 @@ class ActiveModel(Invariants):
 
     def Wactive(self, *args, **kwargs):
         return 0
+
     def eta(self):
         return 0
 
@@ -66,6 +63,7 @@ class ActiveModel(Invariants):
         constant function (DG_0)
         """
         from ..setup_optimization import RegionalParameter
+
         # Activation
         if isinstance(self._gamma, RegionalParameter):
             # This means a regional gamma
@@ -74,8 +72,7 @@ class ActiveModel(Invariants):
         else:
             gamma = self._gamma
 
-        return self._T_ref*gamma
-
+        return self._T_ref * gamma
 
     def get_gamma(self):
         """
@@ -86,7 +83,7 @@ class ActiveModel(Invariants):
         return self._gamma
 
     def get_component(self, component):
-        
+
         assert component in ["fiber", "sheet", "sheet_normal"]
         if component == "fiber":
             return self._f0
@@ -95,13 +92,14 @@ class ActiveModel(Invariants):
         else:
             return self._n0
 
-    
 
 class ActiveStress(ActiveModel):
     """
     Active stress model
     """
+
     _model = "active_stress"
+
     def __init__(self, *args, **kwargs):
 
         # Fraction of transverse stress
@@ -112,18 +110,18 @@ class ActiveStress(ActiveModel):
 
     def eta(self):
         return self._eta
-        
-    def Wactive(self, F, diff = 0):
 
-        C = F.T*F
+    def Wactive(self, F, diff=0):
+
+        C = F.T * F
         f0 = self.get_component("fiber")
-        I4f = inner(C*f0, f0)
+        I4f = inner(C * f0, f0)
         I1 = tr(C)
         gamma = self.get_activation()
         eta = self.eta()
-        
+
         if diff == 0:
-            return df.Constant(0.5)*gamma*( (I4f-1) + eta * ( (I1 - 3) - (I4f - 1)) )
+            return df.Constant(0.5) * gamma * ((I4f - 1) + eta * ((I1 - 3) - (I4f - 1)))
 
         elif diff == 1:
             return gamma
@@ -133,19 +131,18 @@ class ActiveStress(ActiveModel):
 
     def I1(self, F, *args):
         return self._I1(F)
-    
-    def I4(self, F, component = "fiber", *args):
-        
+
+    def I4(self, F, component="fiber", *args):
+
         a0 = self.get_component(component)
         return self._I4(F, a0)
-    
+
     def Fa(self):
         return SecondOrderIdentity(self._f0)
-    
+
     def Fe(self, F):
         return F
-    
-    
+
 
 class ActiveStrain(ActiveModel):
     """
@@ -155,8 +152,8 @@ class ActiveStrain(ActiveModel):
     Assuming transversally isotropic material for now
 
     """
+
     _model = "active_strain"
-    
 
     def _mgamma(self):
         gamma = self.get_activation()
@@ -178,13 +175,11 @@ class ActiveStrain(ActiveModel):
         d = get_dimesion(F)
         mgamma = self._mgamma()
 
-        I1e = pow(mgamma, 4-d) * I1 +\
-              (1/mgamma**2 - pow(mgamma, 4-d)) * I4f
-        
-        return  I1e
+        I1e = pow(mgamma, 4 - d) * I1 + (1 / mgamma ** 2 - pow(mgamma, 4 - d)) * I4f
 
+        return I1e
 
-    def I4(self, F, component = "fiber"):
+    def I4(self, F, component="fiber"):
         r"""
         Quasi-invariant in the elastic configuration
         Let :math:`d` be the geometric dimension.
@@ -217,46 +212,43 @@ class ActiveStrain(ActiveModel):
 
         """
 
-        a0  = self.get_component(component)
+        a0 = self.get_component(component)
         I4f = self._I4(F, a0)
         mgamma = self._mgamma()
 
-        I4a0 = 1/mgamma**2 * I4f
-    
+        I4a0 = 1 / mgamma ** 2 * I4f
+
         return I4a0
 
     def Fa(self):
 
-        
-        f0  = self.get_component("fiber")
+        f0 = self.get_component("fiber")
         d = get_dimesion(f0)
-        f0f0 = df.outer(f0,f0)
+        f0f0 = df.outer(f0, f0)
         I = Identity(3)
 
         mgamma = self._mgamma()
-        Fa = mgamma*f0f0 + pow(mgamma, -1.0/float(d-1)) * (I - f0f0)
-        
+        Fa = mgamma * f0f0 + pow(mgamma, -1.0 / float(d - 1)) * (I - f0f0)
+
         return Fa
-    
+
     def Fe(self, F):
 
         Fa = self.Fa()
-        Fe = F*df.inv(Fa)
+        Fe = F * df.inv(Fa)
 
         return Fe
 
-    
-        
+
 if __name__ == "__main__":
 
     from patient_data import LVTestPatient
+
     patient = LVTestPatient()
 
-    
-
     from pulse_adjoint.setup_parameters import setup_general_parameters
+
     setup_general_parameters()
-    
 
     V = df.VectorFunctionSpace(patient.mesh, "CG", 2)
     u0 = df.Function(V)
@@ -265,23 +257,22 @@ if __name__ == "__main__":
     I = df.Identity(3)
     F0 = df.grad(u0) + I
     # F1 = df.grad(u1) + I
-    
-    f0  = patient.fiber
-    s0 = None#patient.sheet
+
+    f0 = patient.fiber
+    s0 = None  # patient.sheet
     n0 = patient.sheet_normal
     T_ref = None
-    gamma = None #da.Constant(0.0)
+    gamma = None  # da.Constant(0.0)
     dev_iso_split = False
-    
-    active_args = (gamma, f0, s0, n0,
-                   T_ref, dev_iso_split)
+
+    active_args = (gamma, f0, s0, n0, T_ref, dev_iso_split)
 
     for Active in [ActiveStrain, ActiveStress]:
-        
+
         active = Active(*active_args)
 
-        print active.type()
-        
+        print(active.type())
+
         active.Fa()
         active.Fa()
 
@@ -301,6 +292,6 @@ if __name__ == "__main__":
         active.get_activation()
 
         active.is_isochoric()
-        
+
     # from IPython import embed; embed()
     exit()

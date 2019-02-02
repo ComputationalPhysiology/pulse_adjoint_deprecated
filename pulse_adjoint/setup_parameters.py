@@ -27,6 +27,7 @@
 from .dolfinimport import *
 from .adjoint_contraction_args import *
 
+
 def check_parameters(params):
     """Check that parameters are consistent.
     If not change the parameters and print out
@@ -37,15 +38,15 @@ def check_parameters(params):
     """
 
     mesh_type = params["Patient_parameters"]["mesh_type"]
-    
+
     if mesh_type == "lv":
-    
+
         if params["Optimization_targets"]["rv_volume"]:
             logger.warning("Cannot optimize RV volume using an LV geometry")
             params["Optimization_targets"]["rv_volume"] = False
-            
 
-def setup_adjoint_contraction_parameters(material_model = "holzapfel_ogden"):
+
+def setup_adjoint_contraction_parameters(material_model="holzapfel_ogden"):
 
     params = setup_application_parameters(material_model)
 
@@ -69,12 +70,12 @@ def setup_adjoint_contraction_parameters(material_model = "holzapfel_ogden"):
 
     unload_params = setup_unloading_parameters()
     params.add(unload_params)
-        
+
     check_parameters(params)
-    
+
     return params
-    
-    
+
+
 def setup_solver_parameters():
     """
     Have a look at `dolfin.NonlinearVariationalSolver.default_parameters`
@@ -84,10 +85,10 @@ def setup_solver_parameters():
     solver = "newton"
     solver_str = "{}_solver".format(solver)
     # solver_parameters = {"snes_solver":{}}
-    solver_parameters = {solver_str:{}}
+    solver_parameters = {solver_str: {}}
 
     solver_parameters["nonlinear_solver"] = solver
-    #solver_parameters[solver_str]["method"] = "newtontr"
+    # solver_parameters[solver_str]["method"] = "newtontr"
     solver_parameters[solver_str]["maximum_iterations"] = 50
     solver_parameters[solver_str]["absolute_tolerance"] = 1.0e-5
     solver_parameters[solver_str]["linear_solver"] = "lu"
@@ -95,11 +96,9 @@ def setup_solver_parameters():
     # solver_parameters[solver_str]['relaxation_parameter'] = 0.5
     # set_log_active(True)
     # set_log_level(INFO)
-    
 
     return solver_parameters
-    
-   
+
 
 def setup_general_parameters():
     """
@@ -115,7 +114,7 @@ def setup_general_parameters():
     # dolfin.parameters["adjoint"]["test_derivative"] = True
     # dolfin.parameters["std_out_all_processes"] = False
     # dolfin.parameters["num_threads"] = 8
-    
+
     dolfin.set_log_active(False)
     dolfin.set_log_level(INFO)
 
@@ -158,22 +157,18 @@ def setup_patient_parameters():
     +------------------+-----------------+---------------+
 
     """
-    
+
     params = Parameters("Patient_parameters")
     params.add("patient", "Joakim")
     params.add("patient_type", "full")
-    params.add("weight_rule",
-               DEFAULT_WEIGHT_RULE,
-               WEIGHT_RULES)
-    params.add("weight_direction",
-               DEFAULT_WEIGHT_DIRECTION,
-               WEIGHT_DIRECTIONS)
+    params.add("weight_rule", DEFAULT_WEIGHT_RULE, WEIGHT_RULES)
+    params.add("weight_direction", DEFAULT_WEIGHT_DIRECTION, WEIGHT_DIRECTIONS)
     params.add("resolution", "low_res")
     params.add("pressure_path", "")
     params.add("mesh_path", "")
     params.add("echo_path", "")
     params.add("mesh_group", "")
-    
+
     params.add("subsample", False)
     params.add("fiber_angle_epi", -60)
     params.add("fiber_angle_endo", 60)
@@ -185,10 +180,11 @@ def setup_patient_parameters():
     # "-1" means end-diastole
     # Any number between 0 and passive filling duration
     # also work (passive filling duration would correspond)
-    # to end-diastole. 
+    # to end-diastole.
     params.add("geometry_index", "0")
 
     return params
+
 
 def setup_optimizationtarget_parameters():
     """
@@ -225,6 +221,7 @@ def setup_optimizationtarget_parameters():
     params.add("displacement", False)
     return params
 
+
 def setup_active_optimization_weigths():
     """
     Set the weight on each target (if used) for the active phase.
@@ -252,8 +249,7 @@ def setup_active_optimization_weigths():
     
     """
     params = Parameters("Active_optimization_weigths")
-    
-    
+
     params.add("volume", 0.95)
     params.add("rv_volume", 0.95)
     params.add("regional_strain", 0.05)
@@ -262,8 +258,9 @@ def setup_active_optimization_weigths():
     params.add("GC_strain", 0.05)
     params.add("displacement", 1.0)
     params.add("regularization", 0.01)
-        
+
     return params
+
 
 def setup_passive_optimization_weigths():
     """
@@ -291,9 +288,9 @@ def setup_passive_optimization_weigths():
     +----------------------+-----------------------+
     
     """
-    
+
     params = Parameters("Passive_optimization_weigths")
-    
+
     params.add("volume", 1.0)
     params.add("rv_volume", 1.0)
     params.add("regional_strain", 0.0)
@@ -301,10 +298,11 @@ def setup_passive_optimization_weigths():
     params.add("GL_strain", 0.05)
     params.add("displacement", 1.0)
     params.add("regularization", 0.0)
-    
+
     return params
-    
-def setup_application_parameters(material_model = "holzapfel_ogden"):
+
+
+def setup_application_parameters(material_model="holzapfel_ogden"):
     """
     Setup the main parameters for the pipeline
 
@@ -355,43 +353,39 @@ def setup_application_parameters(material_model = "holzapfel_ogden"):
     params = Parameters("Application_parmeteres")
 
     ## Output ##
-    
+
     # Location of output
     params.add("sim_file", "result.h5")
     # Store the results in the file within a folder
     params.add("h5group", "")
 
     ## Parameters ##
-    
+
     # Spring constant at base (Note: works one for base_bc = fix_x)
     params.add("base_spring_k", 1.0)
 
     # Spring constatnt at pericardium (if zero - divergence free)
     params.add("pericardium_spring", 0.0)
-    
 
-    
-    
     # Space for material parameter(s)
     # If optimization of multiple material parameters are selected,
     # then R_0 is currently the only applicable space
     params.add("matparams_space", "R_0", ["CG_1", "R_0", "regional"])
-    
 
     ## Models ##
 
     # Active model
-    params.add("active_model", "active_stress", ["active_strain",
-                                                 "active_strain_rossi",
-                                                 "active_stress"])
-
+    params.add(
+        "active_model",
+        "active_stress",
+        ["active_strain", "active_strain_rossi", "active_stress"],
+    )
 
     # Material model
-    params.add("material_model", material_model,
-               ["holzapfel_ogden",
-                "neo_hookean",
-                "guccione"])
-    
+    params.add(
+        "material_model", material_model, ["holzapfel_ogden", "neo_hookean", "guccione"]
+    )
+
     # Material parameters
     material_parameters = setup_material_parameters(material_model)
     params.add(material_parameters)
@@ -403,17 +397,16 @@ def setup_application_parameters(material_model = "holzapfel_ogden"):
     params.add("state_space", "P_2:P_1")
 
     # Model for compressibiliy
-    params.add("compressibility", "incompressible", ["incompressible", 
-                                                     "stabalized_incompressible", 
-                                                     "penalty", "hu_washizu"])
+    params.add(
+        "compressibility",
+        "incompressible",
+        ["incompressible", "stabalized_incompressible", "penalty", "hu_washizu"],
+    )
     # Incompressibility penalty (applicable if model is not incompressible)
     params.add("incompressibility_penalty", 0.0)
 
     # Boundary condition at base
-    params.add("base_bc", "fix_x", ["from_seg_base",
-                                    "fix_x",
-                                    "fixed"])
-
+    params.add("base_bc", "fix_x", ["from_seg_base", "fix_x", "fixed"])
 
     ## Iterators ##
 
@@ -422,23 +415,22 @@ def setup_application_parameters(material_model = "holzapfel_ogden"):
 
     # Iteration for active phase
     params.add("active_contraction_iteration_number", 0)
-    
 
     ## Additional setup ##
 
     # Do you want to find the unloaded geometry and use that?
     params.add("unload", False)
-    
+
     # For passive optimization, include all passive points ('all')
     # or only the final point ('-1'), or specific point ('point')
     params.add("passive_weights", "all")
-    
+
     # Update weights so that the initial value of the functional is 0.1
     params.add("adaptive_weights", True)
-    
+
     # Space for active parameter
-    params.add("gamma_space", "CG_1")#, ["CG_1", "R_0", "regional"])
-    
+    params.add("gamma_space", "CG_1")  # , ["CG_1", "R_0", "regional"])
+
     # If you want to use pointswise strains as input (only synthetic)
     params.add("use_deintegrated_strains", False)
 
@@ -467,15 +459,14 @@ def setup_application_parameters(material_model = "holzapfel_ogden"):
 
     # If you optimize against strain which reference geometry should be used
     # to compute the strains.  "0" is the starting geometry, "ED" is the end-diastolic
-    # geometry, while if you are using unloading, you can also use that geometry as referece. 
+    # geometry, while if you are using unloading, you can also use that geometry as referece.
     params.add("strain_reference", "0", ["0", "ED", "unloaded"])
-    
+
     # Relaxation parameters. If smaller than one, the step size
     # in the direction will be smaller, and perhaps avoid the solver
     # to crash.
     params.add("passive_relax", 1.0)
     params.add("active_relax", 1.0)
-
 
     # When computing the volume/strain, do you want to the project or  interpolate
     # the diplacement onto a CG 1 space, or do you want to keep the original
@@ -486,7 +477,6 @@ def setup_application_parameters(material_model = "holzapfel_ogden"):
     params.add("strain_tensor", "gradu", ["E", "gradu"])
     params.add("map_strain", False)
 
-
     # e.g merge region 1,2 into one region -> "1,2"
     # e.g merge region 1,2 into one region and
     # region 3,4 into one region -> "1,2:3,4"
@@ -494,13 +484,14 @@ def setup_application_parameters(material_model = "holzapfel_ogden"):
     # Note: only applicable for regional parameters
     params.add("merge_passive_control", "")
     params.add("merge_active_control", "")
-    
+
     return params
+
 
 def setup_material_parameters(material_model):
 
     material_parameters = Parameters("Material_parameters")
-    
+
     if material_model == "guccione":
         material_parameters.add("C", 2.0)
         material_parameters.add("bf", 8.0)
@@ -508,20 +499,19 @@ def setup_material_parameters(material_model):
         material_parameters.add("bfs", 4.0)
 
     elif material_model == "neo_hookean":
-        
+
         material_parameters.add("mu", 0.385)
-        
+
     else:
         # material_model == "holzapfel_ogden":
-        
+
         material_parameters.add("a", 2.28)
         material_parameters.add("a_f", 1.685)
         material_parameters.add("b", 9.726)
         material_parameters.add("b_f", 15.779)
 
     return material_parameters
-    
-    
+
 
 def setup_optimization_parameters():
     """
@@ -573,10 +563,10 @@ def setup_optimization_parameters():
     params.add("passive_opt_tol", 1e-10)
     params.add("passive_maxiter", 30)
     params.add("scale", 1.0)
-    
+
     params.add("gamma_min", 0.0)
     params.add("gamma_max", 1.0)
-    
+
     params.add("matparams_min", 1.0)
     params.add("matparams_max", 50.0)
 
@@ -592,7 +582,6 @@ def setup_optimization_parameters():
     # Add values seprated with comma,
     # e.g fix first and third control "3.11,2.14"
     params.add("fixed_matparams_values", "")
-    
 
     return params
 
@@ -600,7 +589,7 @@ def setup_optimization_parameters():
 def setup_fixed_material_parameters(material_model):
 
     fixed_matparams = Parameters("Fixed_parameters")
-    
+
     if material_model == "holzapfel_ogden":
         fixed_matparams.add("a", False)
         fixed_matparams.add("a_f", True)
@@ -628,8 +617,7 @@ def setup_unloading_parameters():
 
     params = Parameters("Unloading_parameters")
 
-    params.add("method", "hybrid",
-               ["hybrid","fixed_point","raghavan"])
+    params.add("method", "hybrid", ["hybrid", "fixed_point", "raghavan"])
     # Terminate if difference in reference (unloaded) volume
     # is less than tol
     params.add("tol", 0.05)
@@ -639,7 +627,6 @@ def setup_unloading_parameters():
     params.add("continuation", False)
     # Estimate initial guess based on loaded configuration
     params.add("estimate_initial_guess", True)
-    
 
     unload_options = Parameters("unload_options")
     unload_options.add("maxiter", 10)
@@ -647,7 +634,7 @@ def setup_unloading_parameters():
     unload_options.add("ub", 2.0)
     unload_options.add("lb", 0.5)
     unload_options.add("regen_fibers", False)
-    
+
     params.add(unload_options)
 
     return params

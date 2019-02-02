@@ -33,15 +33,15 @@ from ..utils import get_dimesion
 from ..adjoint_contraction_args import logger
 
 
-
 def get_dimesion(F):
-    
+
     if DOLFIN_VERSION_MAJOR > 1.6:
         dim = find_geometric_dimension(F)
     else:
         dim = F.geometric_dimension()
 
     return dim
+
 
 def subplus(x):
     r"""
@@ -52,8 +52,9 @@ def subplus(x):
        \max\{x,0\}
 
     """
-    
+
     return conditional(ge(x, 0.0), x, 0.0)
+
 
 def heaviside(x):
     r"""
@@ -64,8 +65,9 @@ def heaviside(x):
        \frac{\mathrm{d}}{\mathrm{d}x} \max\{x,0\}
 
     """
-    
+
     return conditional(ge(x, 0.0), 1.0, 0.0)
+
 
 class Material(object):
     """
@@ -94,49 +96,57 @@ class Material(object):
         Fraction of transverse active tesion for active stress formulation.
         0 = active only along fiber, 1 = equal forces in all directions (default=0.0).
     """
-    def __init__(self, f0 = None, gamma = None, params = None,
-                 active_model = "active_strain", s0 = None,
-                 n0 = None, T_ref = None, dev_iso_split = True,
-                 compressible_model = "incompressible",
-                 eta = 0.0, *args, **kwargs):
 
+    def __init__(
+        self,
+        f0=None,
+        gamma=None,
+        params=None,
+        active_model="active_strain",
+        s0=None,
+        n0=None,
+        T_ref=None,
+        dev_iso_split=True,
+        compressible_model="incompressible",
+        eta=0.0,
+        *args,
+        **kwargs
+    ):
 
         # Parameters
         if params is None:
             params = self.default_parameters()
 
-        for k,v in params.iteritems():
+        for k, v in params.items():
             setattr(self, k, v)
 
-                
         self.parameters = params
-        for k,v in params.iteritems():
-                
+        for k, v in params.items():
+
             if isinstance(v, (float, int)):
                 setattr(self, k, Constant(v))
-                
+
             elif isinstance(v, RegionalParameter):
-                   
-                setattr(self, k, Function(v.get_ind_space(), name = k))
+
+                setattr(self, k, Function(v.get_ind_space(), name=k))
                 mat = getattr(self, k)
                 matfun = v.get_function()
                 ind_space = v.get_ind_space()
                 mat.assign(project(matfun, ind_space))
-                
+
             else:
                 setattr(self, k, v)
-                    
 
         # Active model
-        assert active_model in \
-            ["active_stress", "active_strain"], \
-            "The active model '{}' is not implemented.".format(active_model)
-        
-        active_args = (gamma, f0, s0, n0,
-                       T_ref, dev_iso_split)
+        assert active_model in [
+            "active_stress",
+            "active_strain",
+        ], "The active model '{}' is not implemented.".format(active_model)
+
+        active_args = (gamma, f0, s0, n0, T_ref, dev_iso_split)
         # Activation
         if active_model == "active_stress":
-            self.active = ActiveStress(*active_args, eta = eta)
+            self.active = ActiveStress(*active_args, eta=eta)
         else:
             self.active = ActiveStrain(*active_args)
 
@@ -166,6 +176,7 @@ class Material(object):
         for each segment.
         """
         return self.active.get_gamma()
+
     def get_activation(self):
         """
         Return the contraciton paramter.
@@ -173,6 +184,7 @@ class Material(object):
         constant function (DG_0)
         """
         return self.active.get_activation()
+
     def get_component(self, component="fiber"):
         return self.active.get_component(component)
 
@@ -200,50 +212,42 @@ class Material(object):
         :type F: :py:class:`dolfin.Function`
 
         """
-              
 
         # Invariants
-        I1  = self.active.I1(F)
+        I1 = self.active.I1(F)
         I4f = self.active.I4(F)
 
         # Active stress
-        Wactive = self.active.Wactive(F, diff = 0)
-        
+        Wactive = self.active.Wactive(F, diff=0)
+
         dim = get_dimesion(F)
-        W1   = self.W_1(I1, diff = 0, dim = dim)
-        W4f  = self.W_4(I4f, diff = 0)
-        
-              
-        W = W1 + W4f + Wactive 
-        
+        W1 = self.W_1(I1, diff=0, dim=dim)
+        W4f = self.W_4(I4f, diff=0)
+
+        W = W1 + W4f + Wactive
+
         return W
 
-    
-
-
-
-    def CauchyStress(self, F, p=None, deviatoric = False):
+    def CauchyStress(self, F, p=None, deviatoric=False):
 
         I = Identity(3)
-
 
         F = variable(F)
         J = variable(det(F))
 
-        
         # First Piola Kirchoff
         if deviatoric:
             P = self.FirstPiolaStress(F, None)
         else:
             P = self.FirstPiolaStress(F, p)
-                
+
         # Cauchy stress
         T = InversePiolaTransform(P, F)
 
         return T
-        
+
         # if self.is_isochoric():#deviatoric:
-            
+
         #     #T = J**(-2.0/3.0) * (T - (1.0/3.0) * tr(T)*I )
 
         #     if deviatoric:
@@ -252,88 +256,79 @@ class Material(object):
         #     else:
         #         psi_vol = self.compressibility(p,J)
         #         T_vol = diff(psi_vol, J)*I
-                
+
         #         logger.debug("Return total Cauchy stress")
         #         return T + T_vol
         # else:
-            
+
         #     if deviatoric:
         #         logger.debug("Return deviatoric Cauchy stress")
         #         return J**(-2.0/3.0) * (T - (1.0/3.0) * tr(T)*I )
 
         #     else:
         #         return T
-    
+
     def SecondPiolaStress(self, F, p=None, deviatoric=False, *args, **kwargs):
 
         dim = get_dimesion(F)
         I = Identity(dim)
 
         f0 = self.active.get_component("fiber")
-        f0f0 = outer(f0,f0)
-        
-        I1  = variable(self.active.I1(F))
+        f0f0 = outer(f0, f0)
+
+        I1 = variable(self.active.I1(F))
         I4f = variable(self.active.I4(F))
 
         Fe = self.active.Fe(F)
         Fa = self.active.Fa()
-        Ce = Fe.T*Fe
+        Ce = Fe.T * Fe
 
-        fe = Fe*f0
-        fefe = outer(fe,fe)
+        fe = Fe * f0
+        fefe = outer(fe, fe)
 
         # Elastic volume ratio
         J = variable(det(Fe))
         # Active volume ration
         Ja = det(Fa)
-        Ce_bar = pow(J, -2.0/float(dim))*Ce
-        
-        w1   = self.W_1(I1, diff = 1, dim = dim)
-        w4f  = self.W_4(I4f, diff = 1)
+        Ce_bar = pow(J, -2.0 / float(dim)) * Ce
 
-        
-        
+        w1 = self.W_1(I1, diff=1, dim=dim)
+        w4f = self.W_4(I4f, diff=1)
+
         # Total Stress
-        S_bar = Ja * (2 * w1*I + 2 * w4f * f0f0 ) * inv(Fa).T
+        S_bar = Ja * (2 * w1 * I + 2 * w4f * f0f0) * inv(Fa).T
 
         if self.is_isochoric():
 
             # Deviatoric
-            Dev_S_bar = S_bar  - (1.0/3.0)*inner(S_bar, Ce_bar)*inv(Ce_bar)
+            Dev_S_bar = S_bar - (1.0 / 3.0) * inner(S_bar, Ce_bar) * inv(Ce_bar)
 
-            S_mat = J**(-2.0/3.0)*Dev_S_bar 
+            S_mat = J ** (-2.0 / 3.0) * Dev_S_bar
         else:
             S_mat = S_bar
-            
 
         # Volumetric
         if p is None or deviatoric:
-            S_vol = zero((dim,dim))
+            S_vol = zero((dim, dim))
         else:
-            psi_vol = self.compressibility(p,J)
-            S_vol = J*diff(psi_vol, J)*inv(Ce)
-            
-        
+            psi_vol = self.compressibility(p, J)
+            S_vol = J * diff(psi_vol, J) * inv(Ce)
 
         # Active stress
-        wactive = self.active.Wactive(F, diff = 1)
+        wactive = self.active.Wactive(F, diff=1)
         eta = self.active.eta()
-        
-        S_active = wactive * ( f0f0 + eta * (I - f0f0))
-        
+
+        S_active = wactive * (f0f0 + eta * (I - f0f0))
 
         S = S_mat + S_vol + S_active
-        
-      
+
         return S
-        
-        
 
     def FirstPiolaStress(self, F, p=None, *args, **kwargs):
 
         I = Identity(3)
-        
-        F = variable(F)        
+
+        F = variable(F)
         # First Piola Kirchoff
         psi_iso = self.strain_energy(F)
         P_iso = diff(psi_iso, F)
@@ -342,13 +337,14 @@ class Material(object):
             return P_iso
         else:
             J = variable(det(F))
-            psi_vol = self.compressibility(p,J)
-            P_vol = J*diff(psi_vol, J)*inv(F).T
-            
+            psi_vol = self.compressibility(p, J)
+            P_vol = J * diff(psi_vol, J) * inv(F).T
+
             P = P_iso + P_vol
-        
+
             return P
-        
+
+
 class HolzapfelOgden(Material):
     r"""
     Transversally isotropic version of the
@@ -377,6 +373,7 @@ class HolzapfelOgden(Material):
 
     """
     _model = "holzapfel_ogden"
+
     @staticmethod
     def default_parameters():
         """
@@ -384,16 +381,8 @@ class HolzapfelOgden(Material):
 
         Taken from Table 1 row 3 of [1]
         """
-        
-        return {"a":2.28, "a_f":1.685, 
-                "b":9.726, "b_f":15.779}
 
-
-
-            
-
-        
-        
+        return {"a": 2.28, "a_f": 1.685, "b": 9.726, "b_f": 15.779}
 
     # def CauchyStress(self, F, p=None, deviatoric=False):
 
@@ -402,13 +391,12 @@ class HolzapfelOgden(Material):
 
     #     # Active stress
     #     wactive = self.active.Wactive(F, diff = 1)
-        
+
     #     dim = get_dimesion(F)
     #     I = Identity(dim)
     #     w1   = self.W_1(I1, diff = 1, dim = dim)
     #     w4f  = self.W_4(I4f, diff = 1)
 
-        
     #     Fe = self.active.Fe(F)
     #     Be = Fe*Fe.T
     #     B = F*F.T
@@ -418,24 +406,19 @@ class HolzapfelOgden(Material):
 
     #     fefe = outer(fe, fe)
     #     ff = outer(f,f)
-        
-        
-              
+
     #     # T = 2*w1*Be + 2*w4f*fefe + wactive*ff
     #     # T = 2*w4f*ff + wactive*ff  #2*w1*B
-    #     T = wactive*ff 
+    #     T = wactive*ff
     #     if deviatoric:
     #         return T - tr(T)*I
-        
-        
+
     #     if p is None:
     #         return T
 
     #     else:
     #         return T - p*I
-            
-        
-        
+
     def W_1(self, I_1, diff=0, *args, **kwargs):
         r"""
         Isotropic contribution.
@@ -460,16 +443,15 @@ class HolzapfelOgden(Material):
         
         """
 
-       
         a = self.a
         b = self.b
 
         if diff == 0:
-            return a/(2.0*b) * (exp(b*(I_1 - 3)) - 1)
+            return a / (2.0 * b) * (exp(b * (I_1 - 3)) - 1)
         elif diff == 1:
-            return a/2.0 * exp(b*(I_1 - 3))
+            return a / 2.0 * exp(b * (I_1 - 3))
         elif diff == 2:
-            return a*b/2.0 * exp(b * (I_1 - 3))
+            return a * b / 2.0 * exp(b * (I_1 - 3))
 
     def W_4(self, I_4, diff=0, *args, **kwargs):
         r"""
@@ -509,124 +491,122 @@ class HolzapfelOgden(Material):
             return 0
 
         if diff == 0:
-            return a/(2.0*b) * heaviside(I_4 - 1) * (exp(b*pow(I_4 - 1, 2)) - 1)
-        
+            return a / (2.0 * b) * heaviside(I_4 - 1) * (exp(b * pow(I_4 - 1, 2)) - 1)
+
         elif diff == 1:
-            return a * subplus(I_4 - 1) \
-                     * exp(b * pow(I_4 - 1, 2))
+            return a * subplus(I_4 - 1) * exp(b * pow(I_4 - 1, 2))
         elif diff == 2:
-            return a * heaviside(I_4 - 1) \
-                     * (1 + 2.0 * b * pow(I_4 - 1, 2)) \
-                     * exp(b * pow(I_4 - 1, 2))
-        
-    
-        
+            return (
+                a
+                * heaviside(I_4 - 1)
+                * (1 + 2.0 * b * pow(I_4 - 1, 2))
+                * exp(b * pow(I_4 - 1, 2))
+            )
 
 
-class Guccione(Material) :
+class Guccione(Material):
     """
     Guccione material model. 
 
     """
+
     _model = "guccione"
+
     @staticmethod
-    def default_parameters() :
-        p = { 'C' : 2.0,
-              'bf' : 8.0,
-              'bt' : 2.0,
-              'bfs' : 4.0 }
+    def default_parameters():
+        p = {"C": 2.0, "bf": 8.0, "bt": 2.0, "bfs": 4.0}
         return p
 
     def SecondPiolaStress(self, F, p, *args, **kwargs):
 
         P = self.FirstPiolaStress(F, p)
-        S = inv(F)*P
+        S = inv(F) * P
         return S
-        
 
-        
-    def is_isotropic(self) :
+    def is_isotropic(self):
         """
         Return True if the material is isotropic.
         """
-        
+
         p = self.parameters
-        return p['bt'] == 1.0 and p['bf'] == 1.0 and p['bfs'] == 1.0
+        return p["bt"] == 1.0 and p["bf"] == 1.0 and p["bfs"] == 1.0
 
-
-    def strain_energy(self, F_) :
+    def strain_energy(self, F_):
         """
         UFL form of the strain energy.
-        """        
+        """
         params = self.parameters
 
         # Elastic part of deformation gradient
         F = self.active.Fe(F_)
-        C = F.T*F
+        C = F.T * F
 
         I = Identity(3)
         J = det(F)
         dim = get_dimesion(F)
-        
-        if self.is_isochoric():
-            C_bar = pow(J, -float(2)/dim)*C
-            E = 0.5*(C_bar - I)
-            
-        else:
-            
-            E = 0.5*(C - I)
 
-        
-        CC  = Constant(params['C'], name='C')
-        
+        if self.is_isochoric():
+            C_bar = pow(J, -float(2) / dim) * C
+            E = 0.5 * (C_bar - I)
+
+        else:
+
+            E = 0.5 * (C - I)
+
+        CC = Constant(params["C"], name="C")
+
         e1 = self.active.get_component("fiber")
         e2 = self.active.get_component("sheet")
         e3 = self.active.get_component("sheet_normal")
-        
-        if self.is_isotropic() :
+
+        if self.is_isotropic():
             # isotropic case
             Q = inner(E, E)
-        else :
+        else:
             # fully anisotropic
-            bt  = Constant(params['bt'], name='bt')
-            bf  = Constant(params['bf'], name='bf')
-            bfs = Constant(params['bfs'], name='bfs')
+            bt = Constant(params["bt"], name="bt")
+            bf = Constant(params["bf"], name="bf")
+            bfs = Constant(params["bfs"], name="bfs")
 
-            E11, E12, E13 = inner(E*e1, e1), inner(E*e1, e2), inner(E*e1, e3)
-            E21, E22, E23 = inner(E*e2, e1), inner(E*e2, e2), inner(E*e2, e3)
-            E31, E32, E33 = inner(E*e3, e1), inner(E*e3, e2), inner(E*e3, e3)
+            E11, E12, E13 = inner(E * e1, e1), inner(E * e1, e2), inner(E * e1, e3)
+            E21, E22, E23 = inner(E * e2, e1), inner(E * e2, e2), inner(E * e2, e3)
+            E31, E32, E33 = inner(E * e3, e1), inner(E * e3, e2), inner(E * e3, e3)
 
-            Q = bf*E11**2 + bt*(E22**2 + E33**2 + 2*E23**2 ) \
-                + bfs*(2*E12**2 + 2*E13**2 )
-            
+            Q = (
+                bf * E11 ** 2
+                + bt * (E22 ** 2 + E33 ** 2 + 2 * E23 ** 2)
+                + bfs * (2 * E12 ** 2 + 2 * E13 ** 2)
+            )
+
         # passive strain energy
-        Wpassive = CC/2.0 * (exp(Q) - 1)
-        Wactive = self.active.Wactive(F, diff = 0)        
-        
-        return Wpassive + Wactive 
+        Wpassive = CC / 2.0 * (exp(Q) - 1)
+        Wactive = self.active.Wactive(F, diff=0)
 
-    
+        return Wpassive + Wactive
+
+
 class NeoHookean(Material):
     """
     Class for Neo Hookean material
     """
+
     _model = "neo_hookean"
 
     @staticmethod
     def default_parameters():
         return {"mu": 15.0}
 
-    def W_1(self, I_1, diff = 0, dim = 3, *args, **kwargs):
-        
+    def W_1(self, I_1, diff=0, dim=3, *args, **kwargs):
+
         mu = self.mu
 
         if diff == 0:
-            return  0.5*mu*(I_1-dim)
+            return 0.5 * mu * (I_1 - dim)
         elif diff == 1:
-            return 0.5*mu
+            return 0.5 * mu
         elif diff == 2:
             return 0
-        
+
     def W_4(self, *args, **kwargs):
         return 0
 
@@ -635,72 +615,76 @@ class LinearElastic(Material):
     """
     Class for linear elastic material
     """
+
     _model = "linear_elastic"
 
     @staticmethod
     def default_parameters():
-        return {"mu": 100.0,
-                "lmbda": 1.0}
+        return {"mu": 100.0, "lmbda": 1.0}
 
     def strain_energy(self, F_):
-
 
         F = self.active.Fe(F_)
 
         dim = get_dimesion(F)
         gradu = F - Identity(dim)
         epsilon = Constant(0.5) * (gradu + gradu.T)
-        W = self.lmbda/2*(tr(epsilon)**2) + self.mu*tr(epsilon*epsilon)
+        W = self.lmbda / 2 * (tr(epsilon) ** 2) + self.mu * tr(epsilon * epsilon)
 
         # Active stress
-        Wactive = self.active.Wactive(F, diff = 0)
-        
+        Wactive = self.active.Wactive(F, diff=0)
+
         return W + Wactive
+
 
 class StVenantKirchhoff(Material):
     """
     Class for linear elastic material
     """
+
     _model = "saint_venant_kirchhoff"
 
     @staticmethod
     def default_parameters():
-        return {"mu": 300.0,
-                "lmbda": 1.0}
+        return {"mu": 300.0, "lmbda": 1.0}
 
     def strain_energy(self, F_):
 
         F = self.active.Fe(F_)
-        
+
         dim = get_dimesion(F)
 
         I = Identity(3)
         J = det(F)
         dim = get_dimesion(F)
         if self.active.is_isochoric():
-            F_bar = pow(J, -float(1)/dim)*F
+            F_bar = pow(J, -float(1) / dim) * F
         else:
             F_bar = F
 
-        
-        C_bar = F_bar.T*F_bar
-        E = 0.5*(C_bar - I)
-        
-        W = self.lmbda/2*(tr(E)**2) + self.mu*tr(E*E)
+        C_bar = F_bar.T * F_bar
+        E = 0.5 * (C_bar - I)
+
+        W = self.lmbda / 2 * (tr(E) ** 2) + self.mu * tr(E * E)
 
         # Active stress
-        Wactive = self.active.Wactive(F, diff = 0)
-        
+        Wactive = self.active.Wactive(F, diff=0)
+
         return W + Wactive
 
 
 if __name__ == "__main__":
 
     from patient_data import LVTestPatient
+
     patient = LVTestPatient()
 
-    from setup_parameters import (setup_adjoint_contraction_parameters,
-                                  setup_material_parameters, setup_general_parameters)
+    from setup_parameters import (
+        setup_adjoint_contraction_parameters,
+        setup_material_parameters,
+        setup_general_parameters,
+    )
+
     setup_general_parameters()
     params = setup_adjoint_contraction_parameters()
     params["phase"] == "all"
@@ -713,31 +697,35 @@ if __name__ == "__main__":
     # material_model = "neo_hookean"
 
     from setup_optimization import make_solver_params
-    solver_parameters, pressure, paramvec= make_solver_params(params, patient)
-    
+
+    solver_parameters, pressure, paramvec = make_solver_params(params, patient)
+
     gamma = Constant(100.0)
 
     matparams = setup_material_parameters(material_model)
     matparams["a_f"] = 0.0
-    args = (patient.fiber,
-            gamma,
-            matparams,
-            active_model,
-            patient.sheet,
-            patient.sheet_normal,
-            params["T_ref"])
+    args = (
+        patient.fiber,
+        gamma,
+        matparams,
+        active_model,
+        patient.sheet,
+        patient.sheet_normal,
+        params["T_ref"],
+    )
 
     if material_model == "holzapfel_ogden":
         material = HolzapfelOgden(*args)
 
     elif material_model == "guccione":
         material = Guccione(*args)
-        
+
     elif material_model == "neo_hookean":
         material = NeoHookean(*args)
 
+    from IPython import embed
 
-    from IPython import embed; embed()
+    embed()
     exit()
     # print "Is isochoric: ", material.is_isochoric()
     # print assemble( material.strain_energy(u0) * dx)
@@ -751,39 +739,30 @@ if __name__ == "__main__":
     F = grad(u0) + Identity(3)
     T = material.CauchyStress(F)
     f0 = patient.fiber
-    f = F*f0
-    
+    f = F * f0
 
     # f0 = patient.fiber
     # F = DeformationGradient(u1)
     # f = F*f0
-    
+
     # T = material.CauchyStress(u1)
     # W = FunctionSpace(patient.mesh, "CG", 1)
-    meshvol = assemble(Constant(1.0)*dx(domain=patient.mesh))
-    Tf = assemble( inner(T*f/f**2, f) * dx) / meshvol
-    print Tf
+    meshvol = assemble(Constant(1.0) * dx(domain=patient.mesh))
+    Tf = assemble(inner(T * f / f ** 2, f) * dx) / meshvol
+    print(Tf)
     # from IPython import embed; embed()
     exit()
 
-    
     # print assemble( inner(T, e) * dx)
-    
-    # solver_parameters["material"] = material
 
+    # solver_parameters["material"] = material
 
     # from lvsolver import LVSolver
     # solver = LVSolver(solver_parameters)
     # solver.parameters["solve"]["snes_solver"]["report"] = True
 
-    
     # solver.solve()
-    
 
     # pressure["p_lv"].t = 0.1
 
     # solver.solve()
-
-
-   
-    

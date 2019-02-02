@@ -45,7 +45,7 @@ try:
     import dolfin_adjoint
     from dolfin_adjoint import *
     from dolfin_adjoint import ReducedFunctional
-    
+
 
 except:
     # FIXME: Should we raise some sort of warning?

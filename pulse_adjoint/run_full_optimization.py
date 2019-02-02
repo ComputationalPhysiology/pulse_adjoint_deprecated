@@ -25,102 +25,105 @@
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 from dolfin_adjoint import adj_reset
-from .setup_optimization import (setup_adjoint_contraction_parameters,
-                                 setup_general_parameters,
-                                 initialize_patient_data,
-                                 save_patient_data_to_simfile,
-                                 update_unloaded_patient)
+from .setup_optimization import (
+    setup_adjoint_contraction_parameters,
+    setup_general_parameters,
+    initialize_patient_data,
+    save_patient_data_to_simfile,
+    update_unloaded_patient,
+)
 
-from .run_optimization import (run_passive_optimization,
-                               run_active_optimization,
-                               run_unloaded_optimization)
+from .run_optimization import (
+    run_passive_optimization,
+    run_active_optimization,
+    run_unloaded_optimization,
+)
 
-from .utils import  Text, pformat
+from .utils import Text, pformat
 from .io import passive_inflation_exists, contract_point_exists
 
 from .adjoint_contraction_args import *
 from .unloading import UnloadedMaterial
 
+
 def save_logger(params):
 
     import os
+
     outdir = os.path.dirname(params["sim_file"])
-    logfile = "output.log" if outdir == "" else outdir + "/output.log"    
-    logging.basicConfig(filename=logfile,
-                        filemode='a',
-                        format='%(message)s',
-                        datefmt='%H:%M:%S',
-                        level=logging.INFO)
-    
-    ffc_logger = logging.getLogger('FFC')
+    logfile = "output.log" if outdir == "" else outdir + "/output.log"
+    logging.basicConfig(
+        filename=logfile,
+        filemode="a",
+        format="%(message)s",
+        datefmt="%H:%M:%S",
+        level=logging.INFO,
+    )
+
+    ffc_logger = logging.getLogger("FFC")
     ffc_logger.setLevel(logging.WARNING)
-    ufl_logger = logging.getLogger('UFL')
+    ufl_logger = logging.getLogger("UFL")
     ufl_logger.setLevel(logging.WARNING)
- 
+
     import datetime
-    time = datetime.datetime.strftime(datetime.datetime.now(), '%Y-%m-%d %H:%M:%S')
+
+    time = datetime.datetime.strftime(datetime.datetime.now(), "%Y-%m-%d %H:%M:%S")
     logger.info("Time: {}".format(time))
-    
+
 
 def main(params, passive_only=False):
 
-    save_logger(params)   
-    
+    save_logger(params)
+
     setup_general_parameters()
 
-    
     logger.info(Text.blue("Start Adjoint Contraction"))
     logger.info(pformat(params.to_dict()))
     logger.setLevel(params["log_level"])
 
     ############# GET PATIENT DATA ##################
     patient = initialize_patient_data(params["Patient_parameters"])
-    
-    
+
     # Save mesh and fibers to result file
     save_patient_data_to_simfile(patient, params["sim_file"])
 
-
     ############# RUN MATPARAMS OPTIMIZATION ##################
-    
+
     # Make sure that we choose passive inflation phase
-    params["phase"] =  PHASES[0]
+    params["phase"] = PHASES[0]
     if not passive_inflation_exists(params):
 
         if params["unload"]:
-            
+
             run_unloaded_optimization(params, patient)
-           
+
         else:
             run_passive_optimization(params, patient)
-            
+
         adj_reset()
 
-    
     if passive_only:
         logger.info("Running passive optimization only. Terminate....")
         import sys
+
         sys.exit()
 
     if params["unload"]:
 
         patient = update_unloaded_patient(params, patient)
-        
-
 
     ################## RUN GAMMA OPTIMIZATION ###################
 
     # Make sure that we choose active contraction phase
-    params["phase"] =  PHASES[1]
+    params["phase"] = PHASES[1]
     run_active_optimization(params, patient)
-   
-        
-if __name__ == '__main__':
+
+
+if __name__ == "__main__":
 
     # parser = get_parser()
     # args = parser.parse_args()
     # main(args)
-    
+
     params = setup_adjoint_contraction_parameters()
     main(params)
-    

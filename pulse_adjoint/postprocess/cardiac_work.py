@@ -107,7 +107,7 @@ class CardiacWork(object):
        we end up with a work per unit volum, i.e unit Joule/:math:`m^3`.    
     
     """
-    
+
     def __init__(self, V, W):
         """
         Intitialize CardiacWork class
@@ -119,11 +119,9 @@ class CardiacWork(object):
 
         self._V = V
         self._W = W
-        
+
         self.reset()
         self._print_head()
-        
-
 
     def __call__(self, strain_tensor, stress_tensor, case, e_k):
         """FIXME! briefly describe function
@@ -136,29 +134,28 @@ class CardiacWork(object):
         :rtype: 
 
         """
-        
+
         assert case in ["full", "comp"], "Unknown case {}".format(case)
-        
+
         self._strain_tensor = strain_tensor
         self._stress_tensor = stress_tensor
-        
+
         # Strain rate (ish)
-        self._dstrain = self._strain_tensor-self._strain_tensor_prev
+        self._dstrain = self._strain_tensor - self._strain_tensor_prev
         # Average stress
-        self._stress_avg = 0.5*(self._stress_tensor + self._stress_tensor_prev)
+        self._stress_avg = 0.5 * (self._stress_tensor + self._stress_tensor_prev)
 
         # Compute cardiac work
         self.compute_cardiac_work(case, e_k)
-        
 
     def reset(self):
 
-        self._strain_tensor_prev = dolfin.Function(self._V, name = "strain_tensor_prev")
-        self._stress_tensor_prev = dolfin.Function(self._V, name = "stress_tensor_prev")
+        self._strain_tensor_prev = dolfin.Function(self._V, name="strain_tensor_prev")
+        self._stress_tensor_prev = dolfin.Function(self._V, name="stress_tensor_prev")
         self._work = []
         self._power = []
-        
-    def compute_cardiac_work(self, case, e_k = None):
+
+    def compute_cardiac_work(self, case, e_k=None):
         """
         Compute Cardac work, and store the values in a list.
         The results can be access through self.get_results()
@@ -173,10 +170,7 @@ class CardiacWork(object):
         :type e_k: :py:class:`dolfin.Function`
 
         """
-        
-        
-        
-        
+
         S = self._get_stress(case, e_k)
         dE = self._get_strain_rate(case, e_k)
 
@@ -184,20 +178,21 @@ class CardiacWork(object):
         P = self._compute_power(S, dE)
 
         self._power.append(P.copy())
-        
+
         # The work is just the cumulative sum
         from ..utils import list_sum
+
         self._work.append(list_sum(self._power))
 
-    
         # self._print_line()
         self._assign_prev()
 
     def get_power(self):
         return self._power[-1]
+
     def get_work(self):
         return self._work[-1]
-    
+
     def _assign_prev(self):
 
         S = dolfin.project(self._stress_tensor, self._V)
@@ -206,34 +201,30 @@ class CardiacWork(object):
         self._stress_tensor_prev.assign(S)
 
     def _compute_power(self, S, dE):
-        
+
         return dolfin.project(dolfin.inner(S, dE), self._W)
 
     def _print_head(self):
 
-        print("\n\t{:<10}\t{:<10}\t{:<10}".format("Region", "Power", "Work"))
-        
+        print(("\n\t{:<10}\t{:<10}\t{:<10}".format("Region", "Power", "Work")))
+
     def _print_line(self):
 
-        print("\t{:<10.2f}\t{:<10.2f}".format(self._power[-1],
-                                              self._work[-1]))
+        print(("\t{:<10.2f}\t{:<10.2f}".format(self._power[-1], self._work[-1])))
 
+    def _get_stress(self, case, e_k=None):
 
-    def _get_stress(self, case, e_k = None):
-        
         if case == "full":
             S = self._stress_avg
 
         elif case == "comp":
             msg = "Please provide a vectorfield to the contructor"
             assert e_k is not None, msg
-            S = dolfin.inner(self._stress_avg*e_k, e_k)
-            
+            S = dolfin.inner(self._stress_avg * e_k, e_k)
 
         return S
-            
-    
-    def _get_strain_rate(self, case, e_k = None):
+
+    def _get_strain_rate(self, case, e_k=None):
 
         if case == "full":
             dE = self._dstrain
@@ -241,17 +232,15 @@ class CardiacWork(object):
         elif case == "comp":
             msg = "Please provide a vectorfield to the contructor"
             assert e_k is not None, msg
-            dE = dolfin.inner(self._dstrain*e_k, e_k)
+            dE = dolfin.inner(self._dstrain * e_k, e_k)
 
         return dE
-            
+
     def get_results(self):
-        
+
         return {"power": self._power, "work": self._work}
-        
-            
-            
-    
+
+
 class CardiacWorkEcho(CardiacWork):
     r"""
     This is a class for computing cardiac work, when
@@ -292,10 +281,10 @@ class CardiacWorkEcho(CardiacWork):
     contractions." American Journal of Physiology-Heart and Circulatory 
     Physiology 305.7 (2013): H996-H1003.
     """
-    
+
     def reset(self):
-        
-        self._strain_tensor_prev = dolfin.Function(self._V, name = "strain_tensor_prev")
+
+        self._strain_tensor_prev = dolfin.Function(self._V, name="strain_tensor_prev")
         self._stress_tensor_prev = 0.0
         self._work = []
         self._power = []
@@ -303,12 +292,12 @@ class CardiacWorkEcho(CardiacWork):
     def _get_stress(self, case, *args):
 
         if case == "full":
-            return -self._stress_avg*dolfin.Identity(self._V.mesh().geometry().dim())
+            return -self._stress_avg * dolfin.Identity(self._V.mesh().geometry().dim())
 
         else:
             return -self._stress_avg
 
-    def _get_strain_rate(self, case, e_k = None):
+    def _get_strain_rate(self, case, e_k=None):
 
         if case == "full":
             return self._dstrain
@@ -317,7 +306,7 @@ class CardiacWorkEcho(CardiacWork):
         elif case == "comp":
             msg = "Please provide a vectorfield to the contructor"
             assert e_k is not None, msg
-            dE = dolfin.inner(self._dstrain*e_k, e_k)
+            dE = dolfin.inner(self._dstrain * e_k, e_k)
 
         return dE
 
@@ -326,32 +315,30 @@ class CardiacWorkEcho(CardiacWork):
         E = dolfin.project(self._strain_tensor, self._V)
         self._strain_tensor_prev.assign(E)
         self._stress_tensor_prev = self._stress_tensor
-              
 
-              
 
 class StrainEnergy(object):
     def __init__(self):
-        
+
         self._print_head()
 
     def __call__(self, psi, dx):
-        
-        meshvol = dolfin.assemble(dolfin.Constant(1.0)*dx)
-        psi_avg = dolfin.assemble(psi*dx)/meshvol
+
+        meshvol = dolfin.assemble(dolfin.Constant(1.0) * dx)
+        psi_avg = dolfin.assemble(psi * dx) / meshvol
         self._strain_energy.append(psi_avg)
         self._print_line()
+
     def _print_head(self):
 
-        print("\n\t{:<10}".format("Work"))
-        
+        print(("\n\t{:<10}".format("Work")))
 
     def _print_line(self):
-        print("\n\t{:<10}".format(self.strain_energy[-1]))
-        
+        print(("\n\t{:<10}".format(self.strain_energy[-1])))
+
     def reset(self):
         self._strain_energy = []
-        
+
     def get_results(self):
         return {"work": self._strain_energy}
 
@@ -359,9 +346,9 @@ class StrainEnergy(object):
 def work_trace(pressure, strain):
 
     import numpy as np
+
     assert len(pressure) == len(strain)
 
-    pressure_avg = np.add(pressure[:-1], pressure[1:])/2.0
+    pressure_avg = np.add(pressure[:-1], pressure[1:]) / 2.0
     dstrain = -np.diff(s)
-    work = np.cumsum(dstrain*pressure_avg)
-    
+    work = np.cumsum(dstrain * pressure_avg)

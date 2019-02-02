@@ -1,11 +1,9 @@
-import latex_utils
-import plot
-import tables
-import utils
-import load
-import vtk_utils
+from . import latex_utils
+from . import plot
+from . import tables
+from . import utils
+from . import load
+from . import vtk_utils
 
-from cardiac_work import *
-from postprocess import PostProcess
-
-
+from .cardiac_work import *
+from .postprocess import PostProcess

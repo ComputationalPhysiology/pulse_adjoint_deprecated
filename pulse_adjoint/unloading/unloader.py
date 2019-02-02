@@ -38,9 +38,7 @@ from os.path import join
 
 import dolfin as df
 
-from utils import *
-
-
+from .utils import *
 
 
 try:
@@ -51,62 +49,86 @@ except:
 __all__ = ["FixedPoint", "Raghavan", "Hybrid"]
 
 
-def step(geometry, pressure, k, u, residual, big_res,
-         is_biv = False, material_parameters = None, solver_parameters = {},
-         n = 2, solve_tries=1, approx = "project", merge_control="", regen_fibers=False):
-    
+def step(
+    geometry,
+    pressure,
+    k,
+    u,
+    residual,
+    big_res,
+    is_biv=False,
+    material_parameters=None,
+    solver_parameters={},
+    n=2,
+    solve_tries=1,
+    approx="project",
+    merge_control="",
+    regen_fibers=False,
+):
+
     logger.info("\n\nk = {}".format(k))
-    
+
     # Create new reference geometry by moving according to rule
     U = df.Function(u.function_space())
-    assign_to_vector(U.vector(), k*gather_broadcast(u.vector().array()))
+    assign_to_vector(U.vector(), k * gather_broadcast(u.vector().array()))
     new_geometry = update_geometry(geometry, U, regen_fibers)
 
-
-    matparams = update_material_parameters(material_parameters,
-                                           new_geometry.mesh, merge_control)
+    matparams = update_material_parameters(
+        material_parameters, new_geometry.mesh, merge_control
+    )
 
     if isinstance(matparams["a"], float):
         logger.info("material parameters = {}".format(matparams["a"]))
     else:
-        logger.info("material parameters = {}".format(gather_broadcast(matparams["a"].vector().array())))
+        logger.info(
+            "material parameters = {}".format(
+                gather_broadcast(matparams["a"].vector().array())
+            )
+        )
     # Make the solver
-    from ..setup_optimization import (make_solver_parameters,
-                                                  check_patient_attributes)
+    from ..setup_optimization import make_solver_parameters, check_patient_attributes
+
     check_patient_attributes(new_geometry)
     params, p_expr = make_solver_parameters(solver_parameters, new_geometry, matparams)
 
     from ..lvsolver import LVSolver as Solver
-    solver =  Solver(params)
-    
+
+    solver = Solver(params)
+
     try:
         # Inflate new geometry to target pressure
-        u0 = inflate_to_pressure(pressure, solver, p_expr, is_biv,
-                                 solve_tries, n, annotate = False)
+        u0 = inflate_to_pressure(
+            pressure, solver, p_expr, is_biv, solve_tries, n, annotate=False
+        )
     except:
         logger.info("Failed to increase pressure")
         return big_res
-    
+
     # Move mesh to ED
     mesh = df.Mesh(new_geometry.mesh)
     move(mesh, u0, 1.0, approx)
-    
+
     # Compute the residual
     res = residual.calculate_residual(mesh)
     logger.info("\nResidual:\t{}\n".format(res))
     return res
-    
+
 
 class MeshUnloader(object):
-    def __init__(self, geometry, pressure,
-                 material_parameters=None,
-                 h5name = "test.h5",
-                 options = {"maxiter": 50, "regen_fibers":False,
-                            "tol": 1e-4, "solve_tries" : 20},
-                 h5group = "", remove_old = False,
-                 solver_parameters = {}, approx = "project", merge_control=""):
+    def __init__(
+        self,
+        geometry,
+        pressure,
+        material_parameters=None,
+        h5name="test.h5",
+        options={"maxiter": 50, "regen_fibers": False, "tol": 1e-4, "solve_tries": 20},
+        h5group="",
+        remove_old=False,
+        solver_parameters={},
+        approx="project",
+        merge_control="",
+    ):
 
-        
         self.geometry = geometry
         self.pressure = pressure
 
@@ -116,57 +138,67 @@ class MeshUnloader(object):
         self.h5group = h5group
 
         if os.path.isfile(h5name) and remove_old:
-            if mpi_comm_world().rank == 0: os.remove(h5name)
+            if mpi_comm_world().rank == 0:
+                os.remove(h5name)
 
         self.n = int(np.rint(np.max(np.divide(pressure, 0.4))))
-        
+
         self.is_biv = isinstance(pressure, tuple) and len(pressure) == 2
-        
+
         self.solve = solve_biv if self.is_biv else solve_lv
-        
 
         self.parameters = self.default_parameters()
         self.parameters.update(**options)
-                
+
         self.solver_parameters = self.setup_solver_parameters()
         self.solver_parameters.update(solver_parameters)
         self.solver_parameters["phase"] = "unloading"
 
-        
-        self.material_parameters = material_parameters if material_parameters \
-                                   is not None else self.solver_parameters["Material_parameters"]
+        self.material_parameters = (
+            material_parameters
+            if material_parameters is not None
+            else self.solver_parameters["Material_parameters"]
+        )
 
-        msg = ("\n\n"+" Unloading options ".center(72, "-") + "\n\n" +
-               "\tTarget pressure: {}\n".format(pressure) + \
-               "\tBiV: {}, LV only: {}\n".format(self.is_biv, not self.is_biv) + \
-               "\tApproximation: {}\n".format(approx) +\
-               "\tmaxiter = {}\n".format(self.parameters["maxiter"]) + \
-               "\ttolerance = {}\n".format(self.parameters["tol"]) + \
-               "\tregenerate_fibers (serial only)= {}\n\n".format(self.parameters["regen_fibers"]) + \
-               "".center(72, "-") + "\n")
+        msg = (
+            "\n\n"
+            + " Unloading options ".center(72, "-")
+            + "\n\n"
+            + "\tTarget pressure: {}\n".format(pressure)
+            + "\tBiV: {}, LV only: {}\n".format(self.is_biv, not self.is_biv)
+            + "\tApproximation: {}\n".format(approx)
+            + "\tmaxiter = {}\n".format(self.parameters["maxiter"])
+            + "\ttolerance = {}\n".format(self.parameters["tol"])
+            + "\tregenerate_fibers (serial only)= {}\n\n".format(
+                self.parameters["regen_fibers"]
+            )
+            + "".center(72, "-")
+            + "\n"
+        )
         logger.info(msg)
 
-        
     def setup_solver_parameters(self):
 
         from ..setup_parameters import setup_adjoint_contraction_parameters
+
         params = setup_adjoint_contraction_parameters()
         return params
-        
 
     def default_parameters(self):
         """
         Default parameters.
         """
 
-        return {"maxiter": 10,
-                "tol": 1e-4 ,
-                "lb": 0.5, 
-                "ub": 2.0,
-                "regen_fibers":False,
-                "solve_tries":20 }
+        return {
+            "maxiter": 10,
+            "tol": 1e-4,
+            "lb": 0.5,
+            "ub": 2.0,
+            "regen_fibers": False,
+            "solve_tries": 20,
+        }
 
-    def save(self, obj, name, h5group = ""):
+    def save(self, obj, name, h5group=""):
         """
         Save object to and HDF file. 
 
@@ -184,37 +216,40 @@ class MeshUnloader(object):
         group = join(self.h5group, h5group)
         save(obj, self.h5name, name, group)
 
-            
-
-
-    def unload(self, save =True):
+    def unload(self, save=True):
         """
         Unload the geometry
         """
 
-
         if save:
             self.save(self.geometry.mesh, "original_geometry/mesh", "0")
-            #self.save(self.geometry.fiber, "original_geometry/fiber", "0")
+            # self.save(self.geometry.fiber, "original_geometry/fiber", "0")
 
-        logger.info("".center(72,"-"))
-        logger.info("Start unloading".center(72,"-"))
-        logger.info("".center(72,"-"))
-        
-        logger.info(("\nLV Volume of original geometry = "\
-                     "{:.3f} ml".format(get_volume(self.geometry))))
+        logger.info("".center(72, "-"))
+        logger.info("Start unloading".center(72, "-"))
+        logger.info("".center(72, "-"))
+
+        logger.info(
+            (
+                "\nLV Volume of original geometry = "
+                "{:.3f} ml".format(get_volume(self.geometry))
+            )
+        )
         if self.is_biv:
-            logger.info(("RV Volume of original geometry = "\
-                         "{:.3f} ml".format(get_volume(self.geometry, chamber="rv"))))
+            logger.info(
+                (
+                    "RV Volume of original geometry = "
+                    "{:.3f} ml".format(get_volume(self.geometry, chamber="rv"))
+                )
+            )
 
-        
         residual = ResidualCalculator(self.geometry.mesh)
         u = self.initial_solve(True)
         self.U = df.Function(u.function_space())
-        
+
         self.unload_step(u, residual, True)
 
-        logger.info("".center(72, "#")+"\nUnloading suceeding")
+        logger.info("".center(72, "#") + "\nUnloading suceeding")
 
     def get_backward_displacement(self):
         """
@@ -224,48 +259,58 @@ class MeshUnloader(object):
         W = df.VectorFunctionSpace(self.U.function_space().mesh(), "CG", 1)
 
         if 0:
-            # Ideally we would do this 
+            # Ideally we would do this
             u_int = df.interpolate(self.U, W)
         else:
             # This only works with dolfin-adjoint
             u_int = df.project(self.U, W)
-            
-        u = df.Function(W, name = "backward_displacement")
-        u.vector()[:] = -1*u_int.vector()
+
+        u = df.Function(W, name="backward_displacement")
+        u.vector()[:] = -1 * u_int.vector()
         return u
 
-    def initial_solve(self, save = True):
+    def initial_solve(self, save=True):
         """
         Inflate the original geometry to the target pressure and return 
         the displacement field. 
         """
-        
+
         # Do an initial solve
         logger.info("\nDo an intial solve")
 
-        from ..setup_optimization import (make_solver_parameters,
-                                          check_patient_attributes)
+        from ..setup_optimization import (
+            make_solver_parameters,
+            check_patient_attributes,
+        )
+
         check_patient_attributes(self.geometry)
-        params, p_expr = make_solver_parameters(self.solver_parameters, self.geometry,
-                                                self.material_parameters, df.Constant(0.0))
+        params, p_expr = make_solver_parameters(
+            self.solver_parameters,
+            self.geometry,
+            self.material_parameters,
+            df.Constant(0.0),
+        )
 
         from ..lvsolver import LVSolver as Solver
-        solver =  Solver(params)
+
+        solver = Solver(params)
         solver.solve()
-        
-        u = inflate_to_pressure(self.pressure, solver, p_expr, self.is_biv, 
-                                self.parameters["solve_tries"],
-                                self.n, annotate = False)
-        
+
+        u = inflate_to_pressure(
+            self.pressure,
+            solver,
+            p_expr,
+            self.is_biv,
+            self.parameters["solve_tries"],
+            self.n,
+            annotate=False,
+        )
+
         return u
 
-        
     def get_unloaded_geometry(self):
 
-        
         return update_geometry(self.geometry, self.U, self.parameters["regen_fibers"])
-
-
 
 
 class Raghavan(MeshUnloader):
@@ -329,40 +374,57 @@ class Raghavan(MeshUnloader):
 
     """
 
-    
-    def unload_step(self, u, residual, save = True):
+    def unload_step(self, u, residual, save=True):
 
         big_res = 100.0
         residuals = {}
-    
+
         def iterate(k):
 
-            res = step(self.geometry, self.pressure, k, u, residual,
-                       big_res, self.is_biv, self.material_parameters,
-                       self.solver_parameters, self.n, self.parameters["solve_tries"],
-                       self.approx, self.merge_control, self.parameters["regen_fibers"])
+            res = step(
+                self.geometry,
+                self.pressure,
+                k,
+                u,
+                residual,
+                big_res,
+                self.is_biv,
+                self.material_parameters,
+                self.solver_parameters,
+                self.n,
+                self.parameters["solve_tries"],
+                self.approx,
+                self.merge_control,
+                self.parameters["regen_fibers"],
+            )
             residuals[k] = res
             return res
 
-
         logger.info("\nStart iterating....")
-        res = minimize_scalar(iterate, method="bounded", bounds=(self.parameters["lb"],self.parameters["ub"]),
-                              options={"xatol":self.parameters["tol"],
-                                       "maxiter":self.parameters["maxiter"]})
+        res = minimize_scalar(
+            iterate,
+            method="bounded",
+            bounds=(self.parameters["lb"], self.parameters["ub"]),
+            options={
+                "xatol": self.parameters["tol"],
+                "maxiter": self.parameters["maxiter"],
+            },
+        )
 
         logger.info("Minimzation terminated sucessfully".center(72, "-"))
         logger.info("Found:\n\tk={:.6f}\n\tResidual={:.3e}\n".format(res.x, res.fun))
         logger.info("Save new reference geometry")
 
+        assign_to_vector(self.U.vector(), res.x * gather_broadcast(u.vector().array()))
+        new_geometry = update_geometry(
+            self.geometry, self.U, self.parameters["regen_fibers"]
+        )
 
-        assign_to_vector(self.U.vector(), res.x*gather_broadcast(u.vector().array()))
-        new_geometry = update_geometry(self.geometry, self.U, self.parameters["regen_fibers"])
-        
         if save:
             self.save(new_geometry.mesh, "reference_geometry/mesh", "")
-            #self.save(new_geometry.fiber, "reference_geometry/fiber", "")
+            # self.save(new_geometry.fiber, "reference_geometry/fiber", "")
 
-    
+
 class Hybrid(MeshUnloader):
     """
     Assumes that the given geometry is loaded 
@@ -429,26 +491,34 @@ class Hybrid(MeshUnloader):
        (2006): 1414-1419.
 
     """
-    def unload_step(self, u, residual, save = True):
+
+    def unload_step(self, u, residual, save=True):
 
         big_res = 100.0
         residuals = {}
 
         U_prev = df.Function(u.function_space())
 
-        fixed_point_unloader = FixedPoint(self.geometry, self.pressure,
-                                          self.material_parameters,
-                                          self.h5name,
-                                          self.parameters,
-                                          self.h5group, False,
-                                          self.solver_parameters)
+        fixed_point_unloader = FixedPoint(
+            self.geometry,
+            self.pressure,
+            self.material_parameters,
+            self.h5name,
+            self.parameters,
+            self.h5group,
+            False,
+            self.solver_parameters,
+        )
         fixed_point_unloader.U = self.U
 
         res = np.inf
         iter = 0
         done = False
-        while not done and iter < self.parameters["maxiter"] \
-              and  res > self.parameters["tol"]  :
+        while (
+            not done
+            and iter < self.parameters["maxiter"]
+            and res > self.parameters["tol"]
+        ):
 
             u_arr = gather_broadcast(u.vector().array())
             assign_to_vector(self.U.vector(), u_arr)
@@ -456,42 +526,61 @@ class Hybrid(MeshUnloader):
                 u, res = fixed_point_unloader.unload_step(u, residual, True, True, iter)
             except UnableToChangePressureExeption as ex:
                 logger.info(ex)
-                logger.info("Fixed-point method failed".center(72,"-"))
+                logger.info("Fixed-point method failed".center(72, "-"))
                 logger.info("Swith to the raghavan method")
-                
+
                 def iterate(k):
 
-                    res = step(self.geometry, self.pressure, k, u, residual,
-                               big_res, self.is_biv, self.material_parameters,
-                               self.solver_parameters, self.n,
-                               self.parameters["solve_tries"], self.approx)
+                    res = step(
+                        self.geometry,
+                        self.pressure,
+                        k,
+                        u,
+                        residual,
+                        big_res,
+                        self.is_biv,
+                        self.material_parameters,
+                        self.solver_parameters,
+                        self.n,
+                        self.parameters["solve_tries"],
+                        self.approx,
+                    )
                     residuals[k] = res
                     return res
 
-
                 logger.info("\nStart iterating....")
-                res = minimize_scalar(iterate, method="bounded", bounds=(0.5,2.0),
-                                      options={"xatol":self.parameters["tol"],
-                                               "maxiter":self.parameters["maxiter"]})
-                
+                res = minimize_scalar(
+                    iterate,
+                    method="bounded",
+                    bounds=(0.5, 2.0),
+                    options={
+                        "xatol": self.parameters["tol"],
+                        "maxiter": self.parameters["maxiter"],
+                    },
+                )
+
                 logger.info("Minimzation terminated sucessfully".center(72, "-"))
-                logger.info("Found:\n\tk={:.6f}\n\tResidual={:.3e}\n".format(res.x, res.fun))
+                logger.info(
+                    "Found:\n\tk={:.6f}\n\tResidual={:.3e}\n".format(res.x, res.fun)
+                )
                 logger.info("Save new reference geometry")
-                u_arr = np.multiply(res.x,gather_broadcast(u.vector().array()))
+                u_arr = np.multiply(res.x, gather_broadcast(u.vector().array()))
                 assign_to_vector(self.U.vector(), u_arr)
-                new_geometry = update_geometry(self.geometry, self.U,
-                                               self.parameters["regen_fibers"])
-            
+                new_geometry = update_geometry(
+                    self.geometry, self.U, self.parameters["regen_fibers"]
+                )
+
                 if save:
                     self.save(new_geometry.mesh, "reference_geometry/mesh", "")
-                    #self.save(new_geometry.fiber, "reference_geometry/fiber", "")
-                    
+                    # self.save(new_geometry.fiber, "reference_geometry/fiber", "")
+
                 done = True
             else:
                 U_arr = gather_broadcast(self.U.vector().array())
                 assign_to_vector(U_prev.vector(), U_arr)
 
                 iter += 1
+
 
 class FixedPoint(MeshUnloader):
     """
@@ -547,15 +636,15 @@ class FixedPoint(MeshUnloader):
         vessels." Journal of computational and Applied mathematics 246 (2013): 10-17.
 
     """
-    def unload_step(self, u, residual, save = True, return_u = False, iter = 0):
+
+    def unload_step(self, u, residual, save=True, return_u=False, iter=0):
         """
         Unload step
         """
 
-        res = np.inf      
-        while iter < self.parameters["maxiter"] \
-              and  res > self.parameters["tol"] :
-            
+        res = np.inf
+        while iter < self.parameters["maxiter"] and res > self.parameters["tol"]:
+
             logger.info("\nIteration: {}".format(iter))
 
             u_arr = gather_broadcast(u.vector().array())
@@ -565,62 +654,89 @@ class FixedPoint(MeshUnloader):
             if save:
                 self.save(self.U, "displacement", str(iter))
 
-            
             # Create new reference geomtry
             logger.debug("Create new reference geometry")
             new_geometry = self.get_unloaded_geometry()
 
             # Compute volume of new reference geometry
-            logger.info(("LV Volume of new reference geometry = "\
-                         "{:.3f} ml".format(get_volume(new_geometry))))
+            logger.info(
+                (
+                    "LV Volume of new reference geometry = "
+                    "{:.3f} ml".format(get_volume(new_geometry))
+                )
+            )
             if self.is_biv:
-                logger.info(("RV Volume of new reference geometry = "\
-                             "{:.3f} ml".format(get_volume(new_geometry, chamber="rv"))))
-        
+                logger.info(
+                    (
+                        "RV Volume of new reference geometry = "
+                        "{:.3f} ml".format(get_volume(new_geometry, chamber="rv"))
+                    )
+                )
 
             if save:
                 self.save(new_geometry.mesh, "reference_geometry/mesh", str(iter))
-                #self.save(new_geometry.fiber, "reference_geometry/fiber", str(iter))
-            
+                # self.save(new_geometry.fiber, "reference_geometry/fiber", str(iter))
 
-            matparams = update_material_parameters(self.material_parameters,
-                                                   new_geometry.mesh, self.merge_control)
-    
+            matparams = update_material_parameters(
+                self.material_parameters, new_geometry.mesh, self.merge_control
+            )
+
             # Make the solver
-            from ..setup_optimization import (make_solver_parameters,
-                                                          check_patient_attributes)
+            from ..setup_optimization import (
+                make_solver_parameters,
+                check_patient_attributes,
+            )
+
             check_patient_attributes(new_geometry)
-            params, p_expr = make_solver_parameters(self.solver_parameters, new_geometry, matparams)
+            params, p_expr = make_solver_parameters(
+                self.solver_parameters, new_geometry, matparams
+            )
 
             from ..lvsolver import LVSolver as Solver
-            solver =  Solver(params)
+
+            solver = Solver(params)
             logger.info("Initial solve")
             solver.solve()
-        
-            # Solve
-            u = inflate_to_pressure(self.pressure, solver, p_expr, self.is_biv,
-                                    self.parameters["solve_tries"],
-                                    self.n, annotate = False)
 
-            logger.debug(("LV Volume of new inflated geometry +u= "\
-                         "{:.3f} ml".format(get_volume(new_geometry, u))))
+            # Solve
+            u = inflate_to_pressure(
+                self.pressure,
+                solver,
+                p_expr,
+                self.is_biv,
+                self.parameters["solve_tries"],
+                self.n,
+                annotate=False,
+            )
+
+            logger.debug(
+                (
+                    "LV Volume of new inflated geometry +u= "
+                    "{:.3f} ml".format(get_volume(new_geometry, u))
+                )
+            )
             # Move the mesh accoring to the new displacement
             mesh = df.Mesh(new_geometry.mesh)
             move(mesh, u, 1.0, self.approx)
 
-        
-            #Compute the volume of the ned ED geometry
+            # Compute the volume of the ned ED geometry
             ed_geometry = copy_geometry(mesh, self.geometry)
-            logger.info(("LV Volume of new inflated geometry = "\
-                         "{:.3f} ml".format(get_volume(ed_geometry))))
+            logger.info(
+                (
+                    "LV Volume of new inflated geometry = "
+                    "{:.3f} ml".format(get_volume(ed_geometry))
+                )
+            )
             if self.is_biv:
-                logger.info(("RV Volume of new inflated geometry = "\
-                             "{:.3f} ml".format(get_volume(ed_geometry, chamber="rv"))))
-                
-                
+                logger.info(
+                    (
+                        "RV Volume of new inflated geometry = "
+                        "{:.3f} ml".format(get_volume(ed_geometry, chamber="rv"))
+                    )
+                )
+
             if save:
                 self.save(mesh, "ed_geometry", str(iter))
-
 
             # Copmute the residual
             if residual is not None:
@@ -628,22 +744,18 @@ class FixedPoint(MeshUnloader):
                 logger.info("\nResidual:\t{}\n".format(res))
             else:
                 res = 0.0
-            
+
             iter += 1
 
             if return_u:
                 return u, res
 
-            
-
-
-
 
 if __name__ == "__main__":
     from mesh_generation.mesh_utils import load_geometry_from_h5
+
     geo = load_geometry_from_h5("DS.h5")
     p_ED = 0.5
-    
-    unloader = FixedPoint(geo, p_ED, options = {"maxiter":1})
+
+    unloader = FixedPoint(geo, p_ED, options={"maxiter": 1})
     unloader.unload()
-    

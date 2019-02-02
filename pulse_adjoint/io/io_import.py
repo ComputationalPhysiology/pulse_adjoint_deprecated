@@ -26,17 +26,36 @@
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 try:
     import h5py
-    has_h5py=True
-except:
-    
-    print "Warning. Cannot import h5py"
+
+    has_h5py = True
+except ImportError:
+
+    print("Warning. Cannot import h5py")
     has_h5py = False
 
-import  os, mpi4py, petsc4py, yaml
+import os
+import yaml
+
+try:
+    import mpi4py
+
+    has_mpi4py = True
+except ImportError:
+    has_mpi4py = False
+
+
+import petsc4py
+
+# import  os, mpi4py, petsc4py, yaml
 import numpy as np
-import dolfin, dolfin_adjoint
+import dolfin
+import dolfin_adjoint
 from ..utils import Text
-from ..adjoint_contraction_args import (logger,  ACTIVE_CONTRACTION,
-                                        CONTRACTION_POINT,
-                                        PASSIVE_INFLATION_GROUP, PHASES)
+from ..adjoint_contraction_args import (
+    logger,
+    ACTIVE_CONTRACTION,
+    CONTRACTION_POINT,
+    PASSIVE_INFLATION_GROUP,
+    PHASES,
+)
 from ..numpy_mpi import *
