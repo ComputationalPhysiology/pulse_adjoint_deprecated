@@ -30,16 +30,16 @@ so that dolfin-adjoint can run the backward solve.
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 import numpy as np
+from pulse.mechanicsproblem import SolverDidNotConverge
+from pulse.numpy_mpi import *
 
 from .heart_problem import PassiveHeartProblem, ActiveHeartProblem
 from .dolfinimport import *
 from .optimization_targets import *
 from .adjoint_contraction_args import *
-from .numpy_mpi import *
+
 from .utils import Text, list_sum, Object, TablePrint, UnableToChangePressureExeption
 from .setup_optimization import RegionalParameter
-from .lvsolver import SolverDidNotConverge
-
 
 class BasicForwardRunner(object):
     """
@@ -165,7 +165,7 @@ class BasicForwardRunner(object):
 
             # And we save it for later reference
             phm.solver.solve()
-            self.states.append(phm.solver.get_state().copy(True))
+            self.states.append(phm.solver.state.copy(True))
 
         # Print the functional
         logger.info(self._print_functional())
@@ -189,7 +189,7 @@ class BasicForwardRunner(object):
         for it, p in enumerate(self.bcs["pressure"][1:], start=1):
 
             sol = next(phm)
-            self.states.append(phm.solver.get_state().copy(True))
+            self.states.append(phm.solver.state.copy(True))
 
             if (
                 self.params["passive_weights"] == "all"
@@ -385,7 +385,7 @@ class ActiveForwardRunner(BasicForwardRunner):
 
         logger.debug("Try to step up gamma")
 
-        w_old = self.cphm.get_state()
+        w_old = self.cphm.solver.state
         gamma_old = self.gamma_previous.copy(True)
         logger.info(
             "Gamma old = {}".format(gather_broadcast(gamma_old.vector().array()))
@@ -413,7 +413,7 @@ class ActiveForwardRunner(BasicForwardRunner):
             # Stepping up gamma succeded
             logger.debug("Stepping up gamma succeded")
             # Get the current state
-            w = self.cphm.get_state()
+            w = self.cphm.solver.state
 
             self.gamma_previous.assign(m)
             logger.debug(Text.yellow("Start annotating"))
@@ -422,19 +422,19 @@ class ActiveForwardRunner(BasicForwardRunner):
             # Assign the state where we have only one step with gamma left, and make sure
             # that dolfin adjoint record this.
             logger.debug("Assign the new state and gamma")
-            self.cphm.solver.get_state().assign(w, annotate=annotate)
+            self.cphm.solver.state.assign(w, annotate=annotate)
 
             # Now we make the final solve
             self.cphm.solver.parameters["material"].get_gamma().assign(m)
 
-            w = self.cphm.get_state()
+            w = self.cphm.solver.state
 
             logger.debug("Solve the forward problem with the new gamma")
 
             forward_result = BasicForwardRunner.solve_the_forward_problem(
                 self, self.cphm, annotate, "active"
             )
-            w = self.cphm.get_state()
+            w = self.cphm.solver.state
 
             return forward_result, False
 
@@ -566,7 +566,7 @@ class PassiveForwardRunner(BasicForwardRunner):
         phm = PassiveHeartProblem(self.bcs, self.solver_parameters, self.pressure)
 
         if return_state:
-            w_old = phm.get_state().copy(deepcopy=True)
+            w_old = phm.solver.state.copy(deepcopy=True)
 
         # Do an initial solve for the initial point
         parameters["adjoint"]["stop_annotating"] = True

@@ -28,7 +28,7 @@ from pulse_adjoint.setup_optimization import (initialize_patient_data,
 from pulse_adjoint.adjoint_contraction_args import *
 from pulse_adjoint.utils import Text, pformat, passive_inflation_exists
 from utils import setup_params, my_taylor_test, store_results
-from pulse_adjoint.numpy_mpi import *
+from pulse.numpy_mpi import *
 
 import pytest
 import itertools
@@ -164,10 +164,10 @@ def test_adjoint_calculations(mesh_type, space, phase, active_model):
 if __name__ == "__main__":
 
     parameters['adjoint']['stop_annotating'] = False
-    # test_adjoint_calculations("lv", "CG_1", "passive", "active_strain")
+    test_adjoint_calculations("lv", "CG_1", "passive", "active_strain")
     # test_adjoint_calculations("lv", "regional", "passive", "active_strain")
     
-    test_adjoint_calculations("lv", "CG_1", "active", "active_strain")
+    # test_adjoint_calculations("lv", "CG_1", "active", "active_strain")
     # test_adjoint_calculations("lv", "regional", "active", "active_strain")
     
     # test_adjoint_calculations("lv", "CG_1", "active", "active_stress")

@@ -24,6 +24,9 @@
 # SIMULA RESEARCH LABORATORY MAKES NO REPRESENTATIONS AND EXTENDS NO
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
+from pulse.numpy_mpi import *
+from pulse.mechanicsproblem import SolverDidNotConverge
+
 from .dolfinimport import *
 from .setup_optimization import (
     setup_simulation,
@@ -45,11 +48,10 @@ from .utils import (
 )
 from .forward_runner import ActiveForwardRunner, PassiveForwardRunner
 from .optimization_targets import *
-from .numpy_mpi import *
 from .adjoint_contraction_args import *
 from .io import write_opt_results_to_h5
 from .optimal_control import OptimalControl
-from .lvsolver import SolverDidNotConverge
+
 
 
 def get_constant(value_size, value_rank, val):

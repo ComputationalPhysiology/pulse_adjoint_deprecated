@@ -25,10 +25,13 @@
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 import numpy as np
+import pulse
+from pulse.numpy_mpi import *
+
+
 from .dolfinimport import *
 from .utils import Object, Text, print_line, print_head
 from .adjoint_contraction_args import *
-from .numpy_mpi import *
 from .setup_parameters import *
 
 
@@ -48,22 +51,9 @@ def merge_control(patient, control_str):
 
 def get_material_model(material_model):
 
-    if material_model == "holzapfel_ogden":
-        from .models.material import HolzapfelOgden
-
-        Material = HolzapfelOgden
-
-    elif material_model == "guccione":
-        from .models.material import Guccione
-
-        Material = Guccione
-
-    elif material_model == "neo_hookean":
-        from .models.material import NeoHookean
-
-        Material = NeoHookean
-
-    return Material
+    assert material_model in pulse.material_model_names
+    idx = pulse.material_model_names.index(material_model)
+    return pulse.material_models[idx]
 
 
 def update_unloaded_patient(params, patient):
@@ -279,9 +269,9 @@ def make_solver_parameters(
     ##  Material
     Material = get_material_model(params["material_model"])
     material = Material(
-        patient.fiber,
-        gamma,
-        matparams,
+        f0=patient.fiber,
+        activation=gamma,
+        parameters=matparams,
         s0=patient.sheet,
         n0=patient.sheet_normal,
         **params

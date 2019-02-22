@@ -50,6 +50,7 @@ import petsc4py
 import numpy as np
 import dolfin
 import dolfin_adjoint
+from pulse.numpy_mpi import *
 from ..utils import Text
 from ..adjoint_contraction_args import (
     logger,
@@ -58,4 +59,4 @@ from ..adjoint_contraction_args import (
     PASSIVE_INFLATION_GROUP,
     PHASES,
 )
-from ..numpy_mpi import *
+

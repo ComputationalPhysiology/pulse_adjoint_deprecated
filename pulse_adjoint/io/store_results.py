@@ -62,11 +62,11 @@ def write_opt_results_to_h5(
         # States
         for i, w in enumerate(for_result_opt["states"]):
 
-            solver.get_state().vector().zero()
-            solver.get_state().vector().axpy(1.0, w.vector())
-            h5file.write(solver.get_state(), "/".join([h5group, "states/{}".format(i)]))
+            solver.state.vector().zero()
+            solver.state.vector().axpy(1.0, w.vector())
+            h5file.write(solver.state, "/".join([h5group, "states/{}".format(i)]))
 
-            u, p = solver.get_state().split(deepcopy=True)
+            u, p = solver.state.split(deepcopy=True)
             h5file.write(u, "/".join([h5group, "displacement/{}".format(i)]))
             h5file.write(p, "/".join([h5group, "lagrange_multiplier/{}".format(i)]))
 

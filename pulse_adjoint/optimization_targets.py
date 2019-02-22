@@ -40,10 +40,9 @@ with::
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 import numpy as np
-
+from pulse import numpy_mpi
 from .dolfinimport import *
 from .utils import list_sum
-from .numpy_mpi import *
 from .adjoint_contraction_args import logger
 
 __all__ = ["RegionalStrainTarget", "FullStrainTarget", "VolumeTarget", "Regularization"]
@@ -127,7 +126,7 @@ class OptimizationTarget(object):
 
         """
         f = Function(self.target_space)
-        assign_to_vector(f.vector(), np.array(target_data[n]))
+        numpy_mpi.assign_to_vector(f.vector(), np.array(target_data[n]))
         self.data.append(f)
 
     def _set_form(self):
@@ -166,7 +165,7 @@ class OptimizationTarget(object):
         return self.target_fun
 
     def get_value(self):
-        return gather_broadcast(self.functional.vector().array())[0]
+        return numpy_mpi.gather_broadcast(self.functional.vector().array())[0]
 
 
 class RegionalStrainTarget(OptimizationTarget):
@@ -251,7 +250,7 @@ class RegionalStrainTarget(OptimizationTarget):
 
         assert self.nbasis > 0, "Number of basis functions must be greater than zero"
         self.regions = np.array(
-            list(set(gather_broadcast(dmu.subdomain_data().array())))
+            list(set(numpy_mpi.gather_broadcast(dmu.subdomain_data().array())))
         )
 
         self.nregions = len(self.regions)
@@ -260,12 +259,12 @@ class RegionalStrainTarget(OptimizationTarget):
         else:
             self.weights_arr = weights
 
-        self.target_space = VectorFunctionSpace(mesh, "R", 0, dim=self.nbasis)
-        self.weight_space = TensorFunctionSpace(mesh, "R", 0)
+        self.target_space = dolfin.VectorFunctionSpace(mesh, "R", 0, dim=self.nbasis)
+        self.weight_space = dolfin.TensorFunctionSpace(mesh, "R", 0)
         self.dmu = dmu
 
         self.meshvols = [
-            Constant(assemble(Constant(1.0) * dmu(int(i))), name="mesh volume")
+            dolfin.Constant(dolfin.assemble(dolfin.Constant(1.0) * dmu(int(i))), name="mesh volume")
             for i in self.regions
         ]
 
@@ -303,7 +302,7 @@ class RegionalStrainTarget(OptimizationTarget):
         for i in self.regions:
             f = Function(self.target_space)
             if int(i) in target_data:
-                assign_to_vector(f.vector(), np.array(target_data[int(i)][n]))
+                numpy_mpi.assign_to_vector(f.vector(), np.array(target_data[int(i)][n]))
                 strains.append(f)
 
         self.data.append(strains)
@@ -342,7 +341,7 @@ class RegionalStrainTarget(OptimizationTarget):
         for i in range(self.nregions):
             weight = np.zeros(self.nbasis ** 2)
             weight[0 :: (self.dim + 1)] = self.weights_arr[i]
-            assign_to_vector(self.weights[i].vector(), weight)
+            numpy_mpi.assign_to_vector(self.weights[i].vector(), weight)
 
     def _set_form(self):
 
@@ -354,7 +353,7 @@ class RegionalStrainTarget(OptimizationTarget):
     def get_value(self):
         return sum(
             [
-                gather_broadcast(self.functional[i].vector().array())[0]
+                numpy_mpi.gather_broadcast(self.functional[i].vector().array())[0]
                 for i in range(self.nregions)
             ]
         )
@@ -514,8 +513,8 @@ class VolumeTarget(OptimizationTarget):
         )
 
     def print_line(self):
-        v_sim = gather_broadcast(self.simulated_fun.vector().array())[0]
-        v_meas = gather_broadcast(self.target_fun.vector().array())[0]
+        v_sim = numpy_mpi.gather_broadcast(self.simulated_fun.vector().array())[0]
+        v_meas = numpy_mpi.gather_broadcast(self.target_fun.vector().array())[0]
         I = self.get_value()
 
         return "\t{:<18.2f}\t{:<20.2f}\t{:<10.2e}".format(v_meas, v_sim, I)
@@ -528,7 +527,7 @@ class VolumeTarget(OptimizationTarget):
 
         """
         f = Function(self.target_space)
-        assign_to_vector(f.vector(), np.array([target_data[n]]))
+        numpy_mpi.assign_to_vector(f.vector(), np.array([target_data[n]]))
         self.data.append(f)
 
     def assign_simulated(self, u):
@@ -769,7 +768,7 @@ if __name__ == "__main__":
             target_vol.set_target_functions()
             target_vol.assign_simulated(u)
 
-            vol = gather_broadcast(target_vol.simulated_fun.vector().array())[0]
+            vol = numpy_mpi.gather_broadcast(target_vol.simulated_fun.vector().array())[0]
             print(("Volume = ", vol))
 
             target_strain = RegionalStrainTarget(
@@ -786,7 +785,7 @@ if __name__ == "__main__":
             target_strain.assign_simulated(u)
 
             strain = [
-                gather_broadcast(target_strain.simulated_fun[i].vector().array())
+                numpy_mpi.gather_broadcast(target_strain.simulated_fun[i].vector().array())
                 for i in range(nregions)
             ]
             print(("Regional strain = ", strain))

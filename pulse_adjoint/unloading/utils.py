@@ -26,10 +26,10 @@
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 __author__ = "Henrik Finsberg (henriknf@simula.no)"
 import os
+from pulse.numpy_mpi import *
 import dolfin as df
 import numpy as np
-from .. import numpy_mpi
-from ..numpy_mpi import *
+
 from ..adjoint_contraction_args import logger
 
 try:

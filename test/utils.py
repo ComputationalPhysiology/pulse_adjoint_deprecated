@@ -18,15 +18,15 @@
 import os
 from dolfin import *
 from dolfin_adjoint import *
-
+from pulse.numpy_mpi import *
 
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
 import numpy as np
 
-import pulse_adjoint.models.material as mat
-from pulse_adjoint.lvsolver import LVSolver
+# import pulse_adjoint.models.material as mat
+# from pulse_adjoint.lvsolver import LVSolver
 from pulse_adjoint.utils import Text, QuadratureSpace
 from pulse_adjoint.setup_optimization import (setup_general_parameters,
                                               setup_adjoint_contraction_parameters,
@@ -38,7 +38,7 @@ from pulse_adjoint.setup_optimization import (setup_general_parameters,
                                               make_solver_params)
 
 
-from pulse_adjoint.numpy_mpi import*
+
 from pulse_adjoint.optimization_targets import OptimizationTarget, Regularization,  RegionalStrainTarget, VolumeTarget
 from pulse_adjoint.forward_runner import PassiveForwardRunner, ActiveForwardRunner
 from pulse_adjoint.adjoint_contraction_args import PASSIVE_INFLATION_GROUP, PHASES, logger

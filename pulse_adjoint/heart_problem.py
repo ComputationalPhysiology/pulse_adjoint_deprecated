@@ -27,14 +27,62 @@
 import math
 import numpy as np
 import collections
+import dolfin
+import dolfin_adjoint
 
-from .dolfinimport import *
 from .adjoint_contraction_args import *
-from .numpy_mpi import *
-from .utils import Text, UnableToChangePressureExeption
-from .lvsolver import LVSolver, SolverDidNotConverge
-from .iterate import iterate
 
+from .utils import Text, UnableToChangePressureExeption
+from pulse.iterate import iterate
+from pulse import numpy_mpi
+
+def create_mechanics_problem(solver_parameters):
+    import pulse
+    # from pulse import (MechanicsProblem, HeartGeometry, BoundaryConditions,
+                       # NeumannBC, RobinBC, MarkerFunctions, Marker, CRLBasis)
+    from pulse.material import HolzapfelOgden
+
+    mfun = pulse.MarkerFunctions(ffun=solver_parameters['facet_function'],
+                                 cfun=solver_parameters['mesh_function'])
+    
+    material = solver_parameters['material']
+    microstructure = pulse.Microstructure(f0=material.f0,
+                                          s0=material.s0,
+                                          n0=material.f0)
+    
+    crl_basis = pulse.CRLBasis(c0=solver_parameters['crl_basis']['circumferential'],
+                               r0=solver_parameters['crl_basis']['radial'],
+                               l0=solver_parameters['crl_basis']['longitudinal'])
+    
+    geometry = pulse.HeartGeometry(mesh=solver_parameters['mesh'],
+                                   markers=solver_parameters['markers'],
+                                   marker_functions=mfun,
+                                   microstructure=microstructure,
+                                   crl_basis=crl_basis)
+
+    neumann = []
+    for i, n in enumerate(solver_parameters['bc']['neumann']):
+        neumann.append(pulse.NeumannBC(traction=n[0],
+                                       marker=n[1], name=f'neumann_{i}'))
+
+    robin = []
+    for i, n in enumerate(solver_parameters['bc']['robin']):
+        robin.append(pulse.RobinBC(value=n[0], marker=n[1]))
+
+
+    if hasattr(solver_parameters['bc']['dirichlet'], '__len__'):
+        dirichlet = solver_parameters['bc']['dirichlet']
+    else:
+        dirichlet = (solver_parameters['bc']['dirichlet'],)
+
+    bcs = pulse.BoundaryConditions(dirichlet=dirichlet,
+                                   neumann=neumann,
+                                   robin=robin)
+
+    problem = pulse.MechanicsProblem(geometry, material, bcs)
+
+    return problem
+    
 
 class BasicHeartProblem(collections.Iterator):
     """
@@ -44,44 +92,49 @@ class BasicHeartProblem(collections.Iterator):
     def __init__(self, bcs, solver_parameters, pressure):
 
         self._init_pressures(bcs["pressure"], pressure["p_lv"], "lv")
-        self.p_lv.assign(Constant(float(self.lv_pressure[0])))
+        self.p_lv.assign(dolfin_adjoint.Constant(float(self.lv_pressure[0])))
 
         if "p_rv" in pressure:
             self.has_rv = True
             self._init_pressures(bcs["rv_pressure"], pressure["p_rv"], "rv")
-            self.p_rv.assign(Constant(float(self.rv_pressure[0])))
+            self.p_rv.assign(dolfin_adjoint.Constant(float(self.rv_pressure[0])))
         else:
             self.has_rv = False
 
         # Mechanical solver Active strain Holzapfel and Ogden
-        self.solver = LVSolver(solver_parameters)
+        self.solver = create_mechanics_problem(solver_parameters)
 
     def increase_pressure(self):
 
         p_lv_next = next(self.lv_pressure_gen)
         if self.has_rv:
             p_rv_next = next(self.rv_pressure_gen)
-            target_pressure = (p_lv_next, p_rv_next)
+            target = (p_lv_next, p_rv_next)
             pressure = {"p_lv": self.p_lv, "p_rv": self.p_rv}
+            control = (self.p_lv, self.p_rv)
         else:
-            target_pressure = p_lv_next
+            target = p_lv_next
             pressure = {"p_lv": self.p_lv}
+            control = self.p_lv
 
-        iterate("pressure", self.solver, target_pressure, pressure, continuation=True)
+        iterate(problem=self.solver,
+                target=target,
+                control=control, continuation=True)
+        # iterate("pressure", self.solver, target_pressure, pressure, continuation=True)
 
     def get_state(self, copy=True):
         """
         Return a copy of the state
         """
         if copy:
-            return self.solver.get_state().copy(True)
+            return self.solver.state.copy(deepcopy=True)
         else:
-            return self.solver.get_state()
+            return self.solver.state
 
     def get_gamma(self, copy=True):
 
         gamma = self.solver.parameters["material"].get_gamma()
-        if isinstance(gamma, Constant):
+        if isinstance(gamma, dolfin_adjoint.Constant):
             return gamma
 
         if copy:
@@ -105,11 +158,11 @@ class BasicHeartProblem(collections.Iterator):
 
 
 def get_mean(f):
-    return gather_broadcast(f.vector().array()).mean()
+    return numpy_mpi.gather_broadcast(f.vector().array()).mean()
 
 
 def get_max(f):
-    return gather_broadcast(f.vector().array()).max()
+    return numpy_mpi.gather_broadcast(f.vector().array()).max()
 
 
 def get_max_diff(f1, f2):
@@ -130,14 +183,14 @@ class ActiveHeartProblem(BasicHeartProblem):
         self.acin = params["active_contraction_iteration_number"]
         fname = "active_state_{}.h5".format(self.acin)
         if os.path.isfile(fname):
-            if mpi_comm_world().rank == 0:
+            if dolfin.mpi_comm_world().rank == 0:
                 os.remove(fname)
 
         BasicHeartProblem.__init__(self, bcs, solver_parameters, pressure)
 
         # Load the state from the previous iteration
-        w_temp = Function(self.solver.get_state_space(), name="w_temp")
-        with HDF5File(mpi_comm_world(), params["sim_file"], "r") as h5file:
+        w_temp = dolfin_adjoint.Function(self.solver.state_space, name="w_temp")
+        with dolfin.HDF5File(dolfin.mpi_comm_world(), params["sim_file"], "r") as h5file:
 
             # Get previous state
             if params["active_contraction_iteration_number"] == 0:
@@ -172,7 +225,7 @@ class ActiveHeartProblem(BasicHeartProblem):
         fname = "active_state_{}.h5".format(self.acin)
         if os.path.isfile(fname):
             i = 0
-            with HDF5File(mpi_comm_world(), fname, "r") as h5file:
+            with dolfin.HDF5File(dolfin.mpi_comm_world(), fname, "r") as h5file:
                 group_exist = h5file.has_dataset("0")
                 while group_exist:
                     i += 1
@@ -196,7 +249,7 @@ class ActiveHeartProblem(BasicHeartProblem):
             gammas
         ), "Number of states does not math number of gammas"
 
-        with HDF5File(mpi_comm_world(), fname, file_mode) as h5file:
+        with dolfin.HDF5File(dolfin.mpi_comm_world(), fname, file_mode) as h5file:
 
             for (w, g) in zip(states, gammas):
                 h5file.write(w, state_group.format(key))
@@ -220,7 +273,7 @@ class ActiveHeartProblem(BasicHeartProblem):
         w = self.solver.get_state().copy(True)
         g = self.solver.get_gamma().copy(True)
 
-        with HDF5File(mpi_comm_world(), fname, "r") as h5file:
+        with dolfin.HDF5File(dolfin.mpi_comm_world(), fname, "r") as h5file:
 
             for i in range(nstates):
 

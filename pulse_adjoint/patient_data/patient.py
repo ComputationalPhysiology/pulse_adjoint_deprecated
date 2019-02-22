@@ -25,9 +25,8 @@
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 import numpy as np
-import os, argparse, math, yaml
-
-from ..numpy_mpi import *
+import os
+from pulse.numpy_mpi import *
 
 from .utils import logger
 from . import load, utils

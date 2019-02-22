@@ -40,6 +40,7 @@ from .unloader import *
 from .utils import *
 
 from pulse.geometry_utils import load_geometry_from_h5, save_geometry_to_h5
+from pulse.numpy_mpi import *
 
 from ..setup_optimization import (
     setup_adjoint_contraction_parameters,
@@ -49,7 +50,7 @@ from ..setup_optimization import (
 )
 from ..run_optimization import run_passive_optimization_step, solve_oc_problem, store
 
-from ..numpy_mpi import *
+
 
 
 class UnloadedMaterial(object):

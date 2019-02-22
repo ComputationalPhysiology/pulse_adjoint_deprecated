@@ -59,10 +59,11 @@ that can be used to solve the optimal control problem
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 import numpy as np
 from dolfin import Timer
+from pulse.numpy_mpi import gather_broadcast, assign_to_vector
 from .adjoint_contraction_args import logger
 from .utils import print_line, print_head
 from .adjoint_contraction_args import *
-from .numpy_mpi import gather_broadcast, assign_to_vector
+
 
 
 try:
