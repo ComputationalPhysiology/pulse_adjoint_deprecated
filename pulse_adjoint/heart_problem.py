@@ -33,7 +33,7 @@ import dolfin_adjoint
 from .adjoint_contraction_args import *
 
 from .utils import Text, UnableToChangePressureExeption
-from pulse.iterate import iterate
+from pulse.iterate import iterate, delist
 from pulse import numpy_mpi
 
 def create_mechanics_problem(solver_parameters):
@@ -110,17 +110,14 @@ class BasicHeartProblem(collections.Iterator):
         if self.has_rv:
             p_rv_next = next(self.rv_pressure_gen)
             target = (p_lv_next, p_rv_next)
-            pressure = {"p_lv": self.p_lv, "p_rv": self.p_rv}
             control = (self.p_lv, self.p_rv)
         else:
             target = p_lv_next
-            pressure = {"p_lv": self.p_lv}
             control = self.p_lv
 
         iterate(problem=self.solver,
                 target=target,
                 control=control, continuation=True)
-        # iterate("pressure", self.solver, target_pressure, pressure, continuation=True)
 
     def get_state(self, copy=True):
         """
@@ -133,7 +130,7 @@ class BasicHeartProblem(collections.Iterator):
 
     def get_gamma(self, copy=True):
 
-        gamma = self.solver.parameters["material"].get_gamma()
+        gamma = self.solver.material.activation
         if isinstance(gamma, dolfin_adjoint.Constant):
             return gamma
 
@@ -270,8 +267,8 @@ class ActiveHeartProblem(BasicHeartProblem):
         states = []
         gammas = []
 
-        w = self.solver.get_state().copy(True)
-        g = self.solver.get_gamma().copy(True)
+        w = self.solver.state.copy(True)
+        g = self.solver.material.activation.copy(True)
 
         with dolfin.HDF5File(dolfin.mpi_comm_world(), fname, "r") as h5file:
 
@@ -294,16 +291,14 @@ class ActiveHeartProblem(BasicHeartProblem):
 
         old_states, old_gammas = self.load_states()
 
-        gammas, states = iterate(
-            "gamma",
-            self.solver,
-            gamma_current,
-            gamma,
+        states, gammas = iterate(
+            problem=self.solver,
+            control=gamma,
+            target=gamma_current,
             continuation=True,
             old_states=old_states,
-            old_gammas=old_gammas,
+            old_controls=old_gammas
         )
-
         # Store these gammas and states which can be used
         # as initial guess for the newton solver in a later
         # iteration
@@ -312,7 +307,7 @@ class ActiveHeartProblem(BasicHeartProblem):
         if assign_prev_state:
             # Assign the previous state
             self.solver.reinit(states[-1])
-            self.solver.parameters["material"].get_gamma().assign(gammas[-1])
+            self.solver.material.activation.assign(gammas[-1])
 
         return self.get_state(False)
 

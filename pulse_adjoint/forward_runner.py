@@ -32,6 +32,7 @@ so that dolfin-adjoint can run the backward solve.
 import numpy as np
 from pulse.mechanicsproblem import SolverDidNotConverge
 from pulse.numpy_mpi import *
+from pulse import numpy_mpi
 
 from .heart_problem import PassiveHeartProblem, ActiveHeartProblem
 from .dolfinimport import *
@@ -176,7 +177,7 @@ class BasicForwardRunner(object):
 
         if phase == "active":
             # Add regulatization term to the functional
-            m = phm.solver.parameters["material"].get_gamma()
+            m = phm.solver.material.activation
 
         else:
 
@@ -365,7 +366,7 @@ class ActiveForwardRunner(BasicForwardRunner):
             if k in list(self.optimization_targets.keys()) or k == "regularization":
                 self.opt_weights[k] = v
 
-        self.solver_parameters["material"].get_gamma().assign(
+        self.solver_parameters["material"].activation.assign(
             gamma_previous, annotate=True
         )
 
@@ -388,7 +389,7 @@ class ActiveForwardRunner(BasicForwardRunner):
         w_old = self.cphm.solver.state
         gamma_old = self.gamma_previous.copy(True)
         logger.info(
-            "Gamma old = {}".format(gather_broadcast(gamma_old.vector().array()))
+            "Gamma old = {}".format(numpy_mpi.gather_broadcast(gamma_old.vector().array()))
         )
 
         try:
@@ -402,9 +403,9 @@ class ActiveForwardRunner(BasicForwardRunner):
             self.cphm.solver.reinit(w_old)
             # Assign the old gamma
             logger.info(
-                "Gamma old = {}".format(gather_broadcast(gamma_old.vector().array()))
+                "Gamma old = {}".format(numpy_mpi.gather_broadcast(gamma_old.vector().array()))
             )
-            self.cphm.solver.parameters["material"].get_gamma().assign(gamma_old)
+            self.cphm.solver.material.activation.assign(gamma_old)
             self.gamma_previous.assign(gamma_old)
 
             raise ex
@@ -425,7 +426,7 @@ class ActiveForwardRunner(BasicForwardRunner):
             self.cphm.solver.state.assign(w, annotate=annotate)
 
             # Now we make the final solve
-            self.cphm.solver.parameters["material"].get_gamma().assign(m)
+            self.cphm.solver.material.activation.assign(m)
 
             w = self.cphm.solver.state
 
