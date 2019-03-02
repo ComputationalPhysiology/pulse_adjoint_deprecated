@@ -30,24 +30,16 @@ be imported."""
 
 # import h5py
 # from h5py import _errors
-import numpy as np
+# import numpy as np
 
-from dolfin import *
+# from dolfin import *
 import dolfin
 
-from dolfin import Constant, Expression, SubDomain, INFO
+# from dolfin import Constant, Expression, SubDomain, INFO
 
 if dolfin.DOLFIN_VERSION_MAJOR > 1.6:
     from ufl.domain import find_geometric_dimension
 
-
-try:
-    import dolfin_adjoint
-    from dolfin_adjoint import *
-    from dolfin_adjoint import ReducedFunctional
-
-
-except:
-    # FIXME: Should we raise some sort of warning?
-    dolfin_adjoint = None
-    pass
+import dolfin_adjoint
+# from dolfin_adjoint import *
+# from dolfin_adjoint import ReducedFunctional

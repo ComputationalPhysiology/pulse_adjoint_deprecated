@@ -24,6 +24,7 @@
 # SIMULA RESEARCH LABORATORY MAKES NO REPRESENTATIONS AND EXTENDS NO
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
+import logging
 from .dolfinimport import *
 from .adjoint_contraction_args import *
 
@@ -116,7 +117,7 @@ def setup_general_parameters():
     # dolfin.parameters["num_threads"] = 8
 
     dolfin.set_log_active(False)
-    dolfin.set_log_level(INFO)
+    dolfin.set_log_level(logging.INFO)
 
 
 def setup_patient_parameters():
@@ -158,7 +159,7 @@ def setup_patient_parameters():
 
     """
 
-    params = Parameters("Patient_parameters")
+    params = dolfin.Parameters("Patient_parameters")
     params.add("patient", "Joakim")
     params.add("patient_type", "full")
     params.add("weight_rule", DEFAULT_WEIGHT_RULE, WEIGHT_RULES)
@@ -211,7 +212,7 @@ def setup_optimizationtarget_parameters():
     
     """
 
-    params = Parameters("Optimization_targets")
+    params = dolfin.Parameters("Optimization_targets")
     params.add("volume", True)
     params.add("rv_volume", False)
     params.add("regional_strain", True)
@@ -248,7 +249,7 @@ def setup_active_optimization_weigths():
     +----------------------+-----------------------+
     
     """
-    params = Parameters("Active_optimization_weigths")
+    params = dolfin.Parameters("Active_optimization_weigths")
 
     params.add("volume", 0.95)
     params.add("rv_volume", 0.95)
@@ -289,7 +290,7 @@ def setup_passive_optimization_weigths():
     
     """
 
-    params = Parameters("Passive_optimization_weigths")
+    params = dolfin.Parameters("Passive_optimization_weigths")
 
     params.add("volume", 1.0)
     params.add("rv_volume", 1.0)
@@ -350,7 +351,7 @@ def setup_application_parameters(material_model="holzapfel_ogden"):
 
 
     """
-    params = Parameters("Application_parmeteres")
+    params = dolfin.Parameters("Application_parmeteres")
 
     ## Output ##
 
@@ -490,7 +491,7 @@ def setup_application_parameters(material_model="holzapfel_ogden"):
 
 def setup_material_parameters(material_model):
 
-    material_parameters = Parameters("Material_parameters")
+    material_parameters = dolfin.Parameters("Material_parameters")
 
     if material_model == "guccione":
         material_parameters.add("C", 2.0)
@@ -555,7 +556,7 @@ def setup_optimization_parameters():
 
     """
     # Parameters for the Optimization
-    params = Parameters("Optimization_parameters")
+    params = dolfin.Parameters("Optimization_parameters")
     params.add("opt_type", "scipy_slsqp")
     params.add("method_1d", "bounded")
     params.add("active_opt_tol", 1e-10)
@@ -588,7 +589,7 @@ def setup_optimization_parameters():
 
 def setup_fixed_material_parameters(material_model):
 
-    fixed_matparams = Parameters("Fixed_parameters")
+    fixed_matparams = dolfin.Parameters("Fixed_parameters")
 
     if material_model == "holzapfel_ogden":
         fixed_matparams.add("a", False)
@@ -615,7 +616,7 @@ def setup_unloading_parameters():
     see the unloading module. 
     """
 
-    params = Parameters("Unloading_parameters")
+    params = dolfin.Parameters("Unloading_parameters")
 
     params.add("method", "hybrid", ["hybrid", "fixed_point", "raghavan"])
     # Terminate if difference in reference (unloaded) volume
@@ -628,7 +629,7 @@ def setup_unloading_parameters():
     # Estimate initial guess based on loaded configuration
     params.add("estimate_initial_guess", True)
 
-    unload_options = Parameters("unload_options")
+    unload_options = dolfin.Parameters("unload_options")
     unload_options.add("maxiter", 10)
     unload_options.add("tol", 0.01)
     unload_options.add("ub", 2.0)

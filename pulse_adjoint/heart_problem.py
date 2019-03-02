@@ -155,11 +155,11 @@ class BasicHeartProblem(collections.Iterator):
 
 
 def get_mean(f):
-    return numpy_mpi.gather_broadcast(f.vector().array()).mean()
+    return numpy_mpi.gather_broadcast(f.vector().get_local()).mean()
 
 
 def get_max(f):
-    return numpy_mpi.gather_broadcast(f.vector().array()).max()
+    return numpy_mpi.gather_broadcast(f.vector().get_local()).max()
 
 
 def get_max_diff(f1, f2):

@@ -26,7 +26,7 @@
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 import numpy as np
 import pulse
-from pulse.numpy_mpi import *
+from pulse import numpy_mpi
 
 
 from .dolfinimport import *
@@ -37,7 +37,7 @@ from .setup_parameters import *
 
 def merge_control(patient, control_str):
 
-    sfun = MeshFunction("size_t", patient.mesh, patient.sfun.dim())
+    sfun = dolfin.MeshFunction("size_t", patient.mesh, patient.sfun.dim())
     sfun.set_values(patient.sfun.array())
     if control_str != "":
         for v in control_str.split(":"):
@@ -185,7 +185,7 @@ def check_patient_attributes(patient):
             setattr(
                 patient,
                 "ffun",
-                MeshFunction("size_t", patient.mesh, 2, patient.mesh.domains()),
+                dolfin.MeshFunction("size_t", patient.mesh, 2, patient.mesh.domains()),
             )
 
     # Cell markers
@@ -200,7 +200,7 @@ def check_patient_attributes(patient):
             setattr(
                 patient,
                 "sfun",
-                MeshFunction("size_t", patient.mesh, 3, patient.mesh.domains()),
+                dolfin.MeshFunction("size_t", patient.mesh, 3, patient.mesh.domains()),
             )
 
     ## Other
@@ -248,8 +248,8 @@ def get_simulated_strain_traces(phm):
     strains = phm.strains
     for direction in range(3):
         for region in range(17):
-            simulated_strains[STRAIN_NUM_TO_KEY[direction]][region] = gather_broadcast(
-                strains[region].vector().array()
+            simulated_strains[STRAIN_NUM_TO_KEY[direction]][region] = numpy_mpi.gather_broadcast(
+                strains[region].vector().get_local()
             )[direction]
     return simulated_strains
 
@@ -263,7 +263,8 @@ def make_solver_params(params, patient, measurements=None):
 
 
 def make_solver_parameters(
-    params, patient, matparams, gamma=Constant(0.0), paramvec=None, measurements=None
+        params, patient, matparams, gamma=dolfin_adjoint.Constant(0.0),
+        paramvec=None, measurements=None
 ):
 
     ##  Material
@@ -288,11 +289,11 @@ def make_solver_parameters(
     # Neumann BC
     neuman_bc = []
 
-    p_lv = Constant(p_lv_, name="LV_endo_pressure")
+    p_lv = dolfin_adjoint.Constant(p_lv_, name="LV_endo_pressure")
 
     if "ENDO_LV" in patient.markers:
 
-        p_rv = Constant(p_rv_, name="RV_endo_pressure")
+        p_rv = dolfin_adjoint.Constant(p_rv_, name="RV_endo_pressure")
 
         neumann_bc = [
             [p_lv, patient.markers["ENDO_LV"][0]],
@@ -304,7 +305,7 @@ def make_solver_parameters(
         neumann_bc = [[p_lv, patient.markers["ENDO"][0]]]
         pressure = {"p_lv": p_lv}
 
-    pericard = Constant(params["pericardium_spring"])
+    pericard = dolfin_adjoint.Constant(params["pericardium_spring"])
     robin_bc = [[pericard, patient.markers["EPI"][0]]]
 
     if params["base_bc"] == "from_seg_base":
@@ -322,7 +323,7 @@ def make_solver_parameters(
             )
 
         endoring = VertexDomain(mesh_verts)
-        base_it = Expression("t", t=0.0, name="base_iterator")
+        base_it = dolfin.Expression("t", t=0.0, name="base_iterator")
 
         # Expression for defining the boundary conditions
         base_bc_y = BaseExpression(
@@ -340,8 +341,8 @@ def make_solver_parameters(
             V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
 
             bc = [
-                DirichletBC(
-                    V.sub(0), Constant(0.0), patient.ffun, patient.markers["BASE"][0]
+                dolfin.DirichletBC(
+                    V.sub(0), dolfin_adjoint.Constant(0.0), patient.ffun, patient.markers["BASE"][0]
                 ),
                 DirichletBC(V.sub(1), base_bc_y, endoring, "pointwise"),
                 DirichletBC(V.sub(2), base_bc_z, endoring, "pointwise"),
@@ -359,8 +360,8 @@ def make_solver_parameters(
             """
             V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
             bc = [
-                DirichletBC(
-                    V, Constant((0, 0, 0)), patient.ffun, patient.markers["BASE"][0]
+                dolfin.DirichletBC(
+                    V, dolfin_adjoint.Constant((0, 0, 0)), patient.ffun, patient.markers["BASE"][0]
                 )
             ]
             return bc
@@ -376,12 +377,12 @@ def make_solver_parameters(
             in the x = 0 plane.
             """
             V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-            bc = [DirichletBC(V.sub(0), 0, patient.ffun, patient.markers["BASE"][0])]
+            bc = [dolfin.DirichletBC(V.sub(0), 0, patient.ffun, patient.markers["BASE"][0])]
             return bc
 
         # Apply a linear sprint robin type BC to limit motion
         # base_spring = Function(V_real, name = "base_spring")
-        base_spring = Constant(params["base_spring_k"])
+        base_spring = dolfin_adjoint.Constant(params["base_spring_k"])
         robin_bc += [[base_spring, patient.markers["BASE"][0]]]
 
     # Circumferential, Radial and Longitudinal basis vector
@@ -393,7 +394,7 @@ def make_solver_parameters(
     solver_parameters = {
         "mesh": patient.mesh,
         "facet_function": patient.ffun,
-        "facet_normal": FacetNormal(patient.mesh),
+        "facet_normal": dolfin.FacetNormal(patient.mesh),
         "crl_basis": crl_basis,
         "mesh_function": patient.sfun,
         "markers": patient.markers,
@@ -425,9 +426,9 @@ def make_control(params, patient):
         gamma = RegionalParameter(sfun)
     else:
         gamma_family, gamma_degree = params["gamma_space"].split("_")
-        gamma_space = FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
+        gamma_space = dolfin.FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
 
-        gamma = Function(gamma_space, name="activation parameter")
+        gamma = dolfin_adjoint.Function(gamma_space, name="activation parameter")
 
     ##  Material parameters
 
@@ -439,8 +440,8 @@ def make_control(params, patient):
     else:
 
         family, degree = params["matparams_space"].split("_")
-        matparams_space = FunctionSpace(patient.mesh, family, int(degree))
-        paramvec_ = Function(matparams_space, name="matparam vector")
+        matparams_space = dolfin.FunctionSpace(patient.mesh, family, int(degree))
+        paramvec_ = dolfin_adjoint.Function(matparams_space, name="matparam vector")
 
     # If we want to estimate more than one parameter
 
@@ -467,7 +468,7 @@ def make_control(params, patient):
         # Load the parameters from the result file
 
         # Open simulation file
-        with HDF5File(mpi_comm_world(), params["sim_file"], "r") as h5file:
+        with dolfin.HDF5File(dolfin.mpi_comm_world(), params["sim_file"], "r") as h5file:
 
             # Get material parameter from passive phase file
             h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
@@ -484,9 +485,9 @@ def make_control(params, patient):
             if params["phase"] in [PHASES[0], PHASES[2]]:
 
                 val_const = (
-                    Constant(val)
+                    dolfin_adjoint.Constant(val)
                     if paramvec_.value_size() == 1
-                    else Constant([val] * paramvec_.value_size())
+                    else dolfin_adjoint.Constant([val] * paramvec_.value_size())
                 )
 
                 if npassive <= 1:
@@ -512,11 +513,11 @@ def make_control(params, patient):
         else:
 
             if npassive <= 1:
-                v_ = gather_broadcast(v.vector().array())
+                v_ = numpy_mpi.gather_broadcast(v.vector().get_local())
 
             else:
-                v_ = gather_broadcast(
-                    paramvec.split(deepcopy=True)[nopts_par].vector().array()
+                v_ = numpy_mpi.gather_broadcast(
+                    paramvec.split(deepcopy=True)[nopts_par].vector().get_local()
                 )
                 nopts_par += 1
 
@@ -669,7 +670,7 @@ def get_volume(patient, unload=False, chamber="lv", u=None):
 
     if unload:
         mesh = patient.original_geometry
-        ffun = MeshFunction("size_t", mesh, 2, mesh.domains())
+        ffun = dolfin.MeshFunction("size_t", mesh, 2, mesh.domains())
     else:
         mesh = patient.mesh
         ffun = patient.ffun
@@ -683,18 +684,18 @@ def get_volume(patient, unload=False, chamber="lv", u=None):
     else:
         endo_marker = patient.markers["ENDO_RV"][0]
 
-    dS = Measure("exterior_facet", subdomain_data=ffun, domain=mesh)(endo_marker)
+    dS = dolfin.Measure("exterior_facet", subdomain_data=ffun, domain=mesh)(endo_marker)
 
-    X = SpatialCoordinate(mesh)
-    N = FacetNormal(mesh)
+    X = dolfin.SpatialCoordinate(mesh)
+    N = dolfin.FacetNormal(mesh)
     if u is None:
-        vol_form = (-1.0 / 3.0) * dot(X, N)
+        vol_form = (-1.0 / 3.0) * dolfin.dot(X, N)
     else:
-        F = grad(u) + Identity(3)
-        J = det(F)
-        vol_form = (-1.0 / 3.0) * dot(X + u, J * inv(F).T * N)
+        F = dolfin.grad(u) + dolfin.Identity(3)
+        J = dolfin.det(F)
+        vol_form = (-1.0 / 3.0) * dolfin.dot(X + u, J * inv(F).T * N)
 
-    vol = assemble(vol_form * ds)
+    vol = dolfin.assemble(vol_form * dS)
     return vol
 
 
@@ -727,7 +728,7 @@ def setup_simulation(params, patient):
     return measurements, solver_parameters, pressure, controls
 
 
-class MyReducedFunctional(ReducedFunctional):
+class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
     """
     A modified reduced functional of the `dolfin_adjoint.ReducedFuctionl`
 
@@ -754,7 +755,7 @@ class MyReducedFunctional(ReducedFunctional):
         self.for_run = for_run
         self.paramvec = paramvec
 
-        self.initial_paramvec = gather_broadcast(paramvec.vector().array())
+        self.initial_paramvec = numpy_mpi.gather_broadcast(paramvec.vector().get_local())
         self.scale = scale
         self.derivative_scale = relax
 
@@ -764,27 +765,27 @@ class MyReducedFunctional(ReducedFunctional):
     def __call__(self, value, return_fail=False):
 
         logger.debug("\nEvaluate functional...")
-        adj_reset()
+        dolfin_adjoint.adj_reset()
         self.iter += 1
 
-        paramvec_new = Function(self.paramvec.function_space(), name="new control")
+        paramvec_new = dolfin_adjoint.Function(self.paramvec.function_space(), name="new control")
 
-        if isinstance(value, (Function, RegionalParameter, MixedParameter)):
+        if isinstance(value, (dolfin.Function, RegionalParameter, MixedParameter)):
             paramvec_new.assign(value)
         elif isinstance(value, float) or isinstance(value, int):
-            assign_to_vector(paramvec_new.vector(), np.array([value]))
-        elif isinstance(value, enlisting.Enlisted):
+            numpy_mpi.assign_to_vector(paramvec_new.vector(), np.array([value]))
+        elif isinstance(value, dolfin_adjoint.enlisting.Enlisted):
             val_delisted = delist(value, self.controls)
             paramvec_new.assign(val_delisted)
 
         else:
-            assign_to_vector(paramvec_new.vector(), gather_broadcast(value))
+            numpy_mpi.assign_to_vector(paramvec_new.vector(), numpy_mpi.gather_broadcast(value))
 
         logger.debug(Text.yellow("Start annotating"))
-        parameters["adjoint"]["stop_annotating"] = False
+        dolfin.parameters["adjoint"]["stop_annotating"] = False
 
         if self.verbose:
-            arr = gather_broadcast(paramvec_new.vector().array())
+            arr = numpy_mpi.gather_broadcast(paramvec_new.vector().get_local())
             msg = (
                 "\nCurrent value of control:"
                 + "\n\t{:>8}\t{:>8}\t{:>8}\t{:>8}\t{:>8}".format(
@@ -805,7 +806,7 @@ class MyReducedFunctional(ReducedFunctional):
         if change_log_level:
             logger.setLevel(WARNING)
 
-        t = Timer("Forward run")
+        t = dolfin.Timer("Forward run")
         t.start()
 
         logger.debug("\nEvaluate forward model")
@@ -832,10 +833,10 @@ class MyReducedFunctional(ReducedFunctional):
             # Some printing
             logger.info(print_head(self.for_res))
 
-        control = Control(self.paramvec)
+        control = dolfin_adjoint.Control(self.paramvec)
 
-        ReducedFunctional.__init__(
-            self, Functional(self.for_res["total_functional"]), control
+        dolfin_adjoint.ReducedFunctional.__init__(
+            self, dolfin_adjoint.Functional(self.for_res["total_functional"]), control
         )
 
         if crash:
@@ -859,10 +860,10 @@ class MyReducedFunctional(ReducedFunctional):
         )
 
         self.func_values_lst.append(func_value * self.scale)
-        self.controls_lst.append(Vector(paramvec_new.vector()))
+        self.controls_lst.append(dolfin.Vector(paramvec_new.vector()))
 
         logger.debug(Text.yellow("Stop annotating"))
-        parameters["adjoint"]["stop_annotating"] = True
+        dolfin.parameters["adjoint"]["stop_annotating"] = True
 
         self.print_line()
 
@@ -912,10 +913,10 @@ class MyReducedFunctional(ReducedFunctional):
         self.nr_der_calls += 1
         import math
 
-        t = Timer("Backward run")
+        t = dolfin.Timer("Backward run")
         t.start()
 
-        out = ReducedFunctional.derivative(self, forget=False)
+        out = dolfin_adjoint.ReducedFunctional.derivative(self, forget=False)
         back_time = t.stop()
         logger.debug(
             (
@@ -925,12 +926,12 @@ class MyReducedFunctional(ReducedFunctional):
         )
         self.backward_times.append(back_time)
 
-        for num in out[0].vector().array():
+        for num in out[0].vector().get_local():
             if math.isnan(num):
                 raise Exception("NaN in adjoint gradient calculation.")
 
         # Multiply with some small number to that we take smaller steps
-        gathered_out = gather_broadcast(out[0].vector().array())
+        gathered_out = numpy_mpi.gather_broadcast(out[0].vector().get_local())
 
         self.grad_norm.append(np.linalg.norm(gathered_out))
         self.grad_norm_scaled.append(
@@ -948,12 +949,12 @@ class RegionalParameter(dolfin.Function):
     def __init__(self, meshfunction):
 
         assert isinstance(
-            meshfunction, MeshFunctionSizet
+            meshfunction, dolfin.MeshFunctionSizet
         ), "Invalid meshfunction for regional gamma"
 
         mesh = meshfunction.mesh()
 
-        self._values = set(gather_broadcast(meshfunction.array()))
+        self._values = set(numpy_mpi.gather_broadcast(meshfunction.array()))
         self._nvalues = len(self._values)
 
         V = dolfin.VectorFunctionSpace(mesh, "R", 0, dim=self._nvalues)
@@ -1049,7 +1050,7 @@ class MixedParameter(dolfin.Function):
 
         # Create a function assigner
         self.function_assigner = [
-            dolfin.FunctionAssigner(W.sub(i), V) for i in range(n)
+            dolfin_adjoint.FunctionAssigner(W.sub(i), V) for i in range(n)
         ]
 
         # Store the original function space
@@ -1066,12 +1067,12 @@ class MixedParameter(dolfin.Function):
         :param int i: The subspace number
 
         """
-        f_ = Function(self.basespace)
+        f_ =dolfin_adjoint.Function(self.basespace)
         f_.assign(f)
         self.function_assigner[i].assign(self.split()[i], f_)
 
 
-class BaseExpression(Expression):
+class BaseExpression(dolfin.Expression):
     """
     A class for assigning boundary condition according to segmented surfaces
     Since the base is located at x = a (usually a=0), two classes must be set: 
@@ -1157,7 +1158,7 @@ class BaseExpression(Expression):
             value[0] = 0
 
 
-class VertexDomain(SubDomain):
+class VertexDomain(dolfin.SubDomain):
     """
     A subdomain defined in terms of
     a given set of coordinates.

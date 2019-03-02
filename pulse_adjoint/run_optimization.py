@@ -24,7 +24,9 @@
 # SIMULA RESEARCH LABORATORY MAKES NO REPRESENTATIONS AND EXTENDS NO
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
-from pulse.numpy_mpi import *
+# from pulse.numpy_mpi import *
+from pulse import numpy_mpi
+from pulse.iterate import get_constant as _get_constant
 from pulse.mechanicsproblem import SolverDidNotConverge
 
 from .dolfinimport import *
@@ -55,14 +57,12 @@ from .optimal_control import OptimalControl
 
 
 def get_constant(value_size, value_rank, val):
-    if value_size == 1:
-        if value_rank == 0:
-            c = Constant(val)
-        else:
-            c = Constant([val])
-    else:
-        c = Constant([val] * value_size)
-    return c
+    return _get_constant(
+        val=val,
+        value_rank=value_rank,
+        value_size=value_size,
+        constant=dolfin_adjoint.Constant
+    )
 
 
 def run_unloaded_optimization(params, patient):
@@ -238,7 +238,7 @@ def run_passive_optimization_step(
 
     # Stop recording
     logger.debug(Text.yellow("Stop annotating"))
-    parameters["adjoint"]["stop_annotating"] = True
+    dolfin.parameters["adjoint"]["stop_annotating"] = True
 
     # Initialize MyReducedFuctional
     rd = MyReducedFunctional(
@@ -327,10 +327,10 @@ def run_active_optimization(params, patient):
                                         domain=patient.mesh, subdomain_data=patient.sfun
                                     )(int(r))
                                 )
-                                for r in set(gather_broadcast(patient.sfun.array()))
+                                for r in set(numpy_mpi.gather_broadcast(patient.sfun.array()))
                             ]
                             meshvol = sum(meshvols)
-                            g_arr = gather_broadcast(gamma.vector().array())
+                            g_arr = numpy_mpi.gather_broadcast(gamma.vector().get_local())
                             val = sum(np.multiply(g_arr, meshvols)) / float(meshvol)
                             c = get_constant(
                                 gamma.value_size(), gamma.value_rank(), val
@@ -339,8 +339,8 @@ def run_active_optimization(params, patient):
                         else:
 
                             # Project the activation parameter onto the real line
-                            g_proj = project(gamma, FunctionSpace(patient.mesh, "R", 0))
-                            val = gather_broadcast(g_proj.vector().array())[0]
+                            g_proj = dolfin_adjoint.project(gamma, dolfin.FunctionSpace(patient.mesh, "R", 0))
+                            val = numpy_mpi.gather_broadcast(g_proj.vector().get_local())[0]
                             c = get_constant(
                                 gamma.value_size(), gamma.value_rank(), val
                             )
@@ -351,7 +351,7 @@ def run_active_optimization(params, patient):
 
                     logger.info("\nSolve optimization problem.......")
                     solve_oc_problem(params, rd, gamma)
-                    adj_reset()
+                    dolfin_adjoint.adj_reset()
 
             if not pressure_change:
                 raise RuntimeError("Unable to increasure")
@@ -395,8 +395,8 @@ def run_active_optimization_step(
 
         # Use gamma from the previous point as initial guess
         # Load gamma from previous point
-        g_temp = Function(gamma.function_space())
-        with HDF5File(mpi_comm_world(), params["sim_file"], "r") as h5file:
+        g_temp = dolfin_adjoint.Function(gamma.function_space())
+        with dolfin.HDF5File(dolfin.mpi_comm_world(), params["sim_file"], "r") as h5file:
             h5file.read(
                 g_temp,
                 "active_contraction/contract_point_{}/optimal_control".format(
@@ -437,7 +437,7 @@ def run_active_optimization_step(
     print(8)
     # Stop recording
     logger.debug(Text.yellow("Stop annotating"))
-    parameters["adjoint"]["stop_annotating"] = True
+    dolfin.parameters["adjoint"]["stop_annotating"] = True
 
     rd = MyReducedFunctional(
         for_run, gamma, relax=params["active_relax"], verbose=params["verbose"]
@@ -509,8 +509,8 @@ def solve_oc_problem(params, rd, paramvec, return_solution=False, store_solution
         state_start = rd.for_run.cphm.get_state()
         niter = 0
 
-        par_max = np.max(gather_broadcast(paramvec_start.vector().array()))
-        par_min = np.min(gather_broadcast(paramvec_start.vector().array()))
+        par_max = np.max(numpy_mpi.gather_broadcast(paramvec_start.vector().get_local()))
+        par_min = np.min(numpy_mpi.gather_broadcast(paramvec_start.vector().get_local()))
         gamma_max = float(params["Optimization_parameters"]["gamma_max"])
         mat_max = float(params["Optimization_parameters"]["matparams_max"])
         mat_min = float(params["Optimization_parameters"]["matparams_min"])
@@ -581,23 +581,23 @@ def solve_oc_problem(params, rd, paramvec, return_solution=False, store_solution
         if not done:
             opt_result = {}
             control_idx = np.argmin(rd.func_values_lst)
-            x = gather_broadcast(rd.controls_lst[control_idx].array())
+            x = numpy_mpi.gather_broadcast(rd.controls_lst[control_idx].array())
             msg = "Unable to solve problem. Choose the best value"
             logger.warning(msg)
         else:
             x = (
                 np.array([opt_result.pop("x")])
                 if nvar == 1
-                else gather_broadcast(opt_result.pop("x"))
+                else numpy_mpi.gather_broadcast(opt_result.pop("x"))
             )
 
-        optimum = Function(paramvec.function_space())
-        assign_to_vector(optimum.vector(), gather_broadcast(x))
+        optimum = dolfin_adjoint.Function(paramvec.function_space())
+        numpy_mpi.assign_to_vector(optimum.vector(), numpy_mpi.gather_broadcast(x))
 
         logger.info(Text.blue("\nForward solution at optimal parameters"))
         val = rd.for_run(optimum, False)
 
-        assign_to_vector(paramvec.vector(), gather_broadcast(x))
+        numpy_mpi.assign_to_vector(paramvec.vector(), numpy_mpi.gather_broadcast(x))
 
         rd.for_res["initial_control"] = (rd.initial_paramvec,)
         rd.for_res["optimal_control"] = rd.paramvec
@@ -621,8 +621,6 @@ def solve_oc_problem(params, rd, paramvec, return_solution=False, store_solution
 def print_optimization_report(
     params, opt_controls, init_controls, ini_for_res, opt_for_res, opt_result=None
 ):
-
-    from .numpy_mpi import gather_broadcast
 
     if opt_result:
         logger.info("\nOptimization terminated...")
@@ -654,7 +652,7 @@ def print_optimization_report(
         logger.info("\nMaterial Parameters")
         logger.info("Initial {}".format(init_controls))
         logger.info(
-            "Optimal {}".format(gather_broadcast(opt_controls.vector().array()))
+            "Optimal {}".format(numpy_mpi.gather_broadcast(opt_controls.vector().get_local()))
         )
     else:
         logger.info("\nContraction Parameter")
@@ -664,7 +662,7 @@ def print_optimization_report(
                 init_controls.min(), init_controls.mean(), init_controls.max()
             )
         )
-        opt_controls_arr = gather_broadcast(opt_controls.vector().array())
+        opt_controls_arr = numpy_mpi.gather_broadcast(opt_controls.vector().get_local())
         logger.info(
             "Optimal\t{:.5f}\t{:.5f}\t{:.5f}".format(
                 opt_controls_arr.min(), opt_controls_arr.mean(), opt_controls_arr.max()
@@ -749,7 +747,7 @@ def get_optimization_targets(params, solver_parameters, mshfun=None):
             marker = solver_parameters["markers"]["ENDO"][0]
 
         logger.debug("Make surface meausure for LV endo with marker {}".format(marker))
-        dS = Measure(
+        dS = dolfin.Measure(
             "exterior_facet",
             subdomain_data=solver_parameters["facet_function"],
             domain=mesh,
@@ -764,7 +762,7 @@ def get_optimization_targets(params, solver_parameters, mshfun=None):
 
         marker = solver_parameters["markers"]["ENDO_RV"][0]
         logger.debug("Make surface meausure for LV endo with marker {}".format(marker))
-        dS = Measure(
+        dS = dolfin.Measure(
             "exterior_facet",
             subdomain_data=solver_parameters["facet_function"],
             domain=mesh,
@@ -778,7 +776,7 @@ def get_optimization_targets(params, solver_parameters, mshfun=None):
     if p["regional_strain"]:
 
         logger.debug("Load regional strain target")
-        dX = Measure(
+        dX = dolfin.Measure(
             "dx", subdomain_data=solver_parameters["mesh_function"], domain=mesh
         )
 
@@ -803,12 +801,12 @@ def get_optimization_targets(params, solver_parameters, mshfun=None):
                     group = str(solver_parameters["passive_filling_duration"] - 1)
 
             family, degree = solver_parameters["state_space"].split(":")[0].split("_")
-            u = Function(
-                VectorFunctionSpace(solver_parameters["mesh"], family, int(degree))
+            u = dolfin.Function(
+                dolfin.VectorFunctionSpace(solver_parameters["mesh"], family, int(degree))
             )
 
             logger.debug("Load displacement from state number {}.".format(group))
-            with HDF5File(mpi_comm_world(), params["sim_file"], "r") as h5file:
+            with dolfin.HDF5File(dolfin.mpi_comm_world(), params["sim_file"], "r") as h5file:
 
                 # Get previous state
                 group = "/".join(
@@ -818,20 +816,20 @@ def get_optimization_targets(params, solver_parameters, mshfun=None):
 
             if params["strain_approx"] in ["project", "interpolate"]:
 
-                V = VectorFunctionSpace(solver_parameters["mesh"], "CG", 1)
+                V = dolfin.VectorFunctionSpace(solver_parameters["mesh"], "CG", 1)
                 if params["strain_approx"] == "project":
                     logger.debug("Project displacement")
-                    u = project(u, V)
+                    u = dolfin.project(u, V)
                     logger.debug("Interpolate displacement")
-                    u = interpolate(u, V)
+                    u = dolfin.interpolate(u, V)
 
-            F_ref = grad(u) + Identity(3)
+            F_ref = dolfin.grad(u) + dolfin.Identity(3)
 
         else:
             logger.debug(
                 "Do not recompute strains with respect than difference reference"
             )
-            F_ref = Identity(3)
+            F_ref = dolfin.Identity(3)
 
         logger.debug("Get RegionalStrainTarget")
         targets["regional_strain"] = RegionalStrainTarget(
@@ -863,7 +861,7 @@ def load_targets(params, solver_parameters, measurements, mshfun=None):
     logger.debug(Text.blue("Load optimization targets"))
     # Solve calls are not registred by libajoint
     logger.debug(Text.yellow("Stop annotating"))
-    parameters["adjoint"]["stop_annotating"] = True
+    dolfin.parameters["adjoint"]["stop_annotating"] = True
     print('a')
     # Load optimization targets
     optimization_targets = get_optimization_targets(params, solver_parameters, mshfun)
@@ -875,6 +873,6 @@ def load_targets(params, solver_parameters, measurements, mshfun=None):
     print('c')
     # Start recording for dolfin adjoint
     logger.debug(Text.yellow("Start annotating"))
-    parameters["adjoint"]["stop_annotating"] = False
+    dolfin.parameters["adjoint"]["stop_annotating"] = False
 
     return optimization_targets, bcs

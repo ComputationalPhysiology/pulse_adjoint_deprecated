@@ -72,8 +72,8 @@ class BasicForwardRunner(object):
         self.target_params = params["Optimization_targets"]
         self.params = params
 
-        self.meshvol = Constant(
-            assemble(Constant(1.0) * dx(solver_parameters["mesh"])), name="mesh volume"
+        self.meshvol = dolfin.Constant(
+            dolfin.assemble(dolfin.Constant(1.0) * dolfin.dx(solver_parameters["mesh"])), name="mesh volume"
         )
 
         # Initialize target functions
@@ -151,7 +151,7 @@ class BasicForwardRunner(object):
         self.regularization.reset()
 
         # Start the clock
-        adj_start_timestep(0.0)
+        dolfin_adjoint.adj_start_timestep(0.0)
 
         # Save Information for later storage.
         self.states = []
@@ -185,7 +185,7 @@ class BasicForwardRunner(object):
             m = self.paramvec
 
             # Add the initial state to the recording
-            functionals_time.append(functional * dt[0.0])
+            functionals_time.append(functional * dolfin_adjoint.dt[0.0])
 
         for it, p in enumerate(self.bcs["pressure"][1:], start=1):
 
@@ -201,22 +201,22 @@ class BasicForwardRunner(object):
                 or int(self.params["passive_weights"]) == it
             ):
 
-                self.update_targets(it, split(sol)[0], m, annotate=annotate)
+                self.update_targets(it, dolfin.split(sol)[0], m, annotate=annotate)
 
                 # Print the values
                 logger.info(self._print_line(it))
 
                 if phase == "active":
                     # There is only on step, so we are done
-                    functionals_time.append(functional * dt[START_TIME])
-                    adj_inc_timestep(1, True)
+                    functionals_time.append(functional * dolfin_adjoint.dt[dolfin_adjoint.START_TIME])
+                    dolfin_adjoint.adj_inc_timestep(1, True)
 
                 else:
                     # Check if we are done with the passive phase
-                    functionals_time.append(functional * dt[it])
-                    adj_inc_timestep(it, it == len(self.bcs["pressure"]) - 1)
+                    functionals_time.append(functional * dolfin_adjoint.dt[it])
+                    dolfin_adjoint.adj_inc_timestep(it, it == len(self.bcs["pressure"]) - 1)
 
-                functional_values.append(dolfin.assemble(functional))
+                functional_values.append(dolfin_adjoint.assemble(functional))
 
         forward_result = self._make_forward_result(functional_values, functionals_time)
 
@@ -382,14 +382,14 @@ class ActiveForwardRunner(BasicForwardRunner):
         # Take small steps with gamma until we have only one point left
         # We do not want to record this as we only want to optimize the final value
         logger.debug(Text.yellow("Stop annotating"))
-        parameters["adjoint"]["stop_annotating"] = True
+        dolfin.parameters["adjoint"]["stop_annotating"] = True
 
         logger.debug("Try to step up gamma")
 
         w_old = self.cphm.solver.state
         gamma_old = self.gamma_previous.copy(True)
         logger.info(
-            "Gamma old = {}".format(numpy_mpi.gather_broadcast(gamma_old.vector().array()))
+            "Gamma old = {}".format(numpy_mpi.gather_broadcast(gamma_old.vector().get_local()))
         )
 
         try:
@@ -403,7 +403,7 @@ class ActiveForwardRunner(BasicForwardRunner):
             self.cphm.solver.reinit(w_old)
             # Assign the old gamma
             logger.info(
-                "Gamma old = {}".format(numpy_mpi.gather_broadcast(gamma_old.vector().array()))
+                "Gamma old = {}".format(numpy_mpi.gather_broadcast(gamma_old.vector().get_local()))
             )
             self.cphm.solver.material.activation.assign(gamma_old)
             self.gamma_previous.assign(gamma_old)
@@ -418,7 +418,7 @@ class ActiveForwardRunner(BasicForwardRunner):
 
             self.gamma_previous.assign(m)
             logger.debug(Text.yellow("Start annotating"))
-            parameters["adjoint"]["stop_annotating"] = not annotate
+            dolfin.parameters["adjoint"]["stop_annotating"] = not annotate
 
             # Assign the state where we have only one step with gamma left, and make sure
             # that dolfin adjoint record this.
@@ -500,13 +500,13 @@ class PassiveForwardRunner(BasicForwardRunner):
                 self.opt_weights[k] = v
 
         self.paramvec = paramvec
-        self.cphm = self.get_phm(annotate, return_state=False)
+        self.cphm = self.get_phm(return_state=False)
 
     def __call__(self, m, annotate=False):
 
         self.assign_material_parameters(m)
         self.cphm = self.get_phm(annotate, return_state=False)
-        parameters["adjoint"]["stop_annotating"] = not annotate
+        dolfin.parameters["adjoint"]["stop_annotating"] = not annotate
         try:
             forward_result = BasicForwardRunner.solve_the_forward_problem(
                 self, self.cphm, annotate, "passive"
@@ -543,7 +543,7 @@ class PassiveForwardRunner(BasicForwardRunner):
             mat = getattr(self.solver_parameters["material"], par)
             mat.assign(paramvec)
         else:
-            paramvec_split = split(self.paramvec)
+            paramvec_split = dolfin.split(self.paramvec)
             fixed_idx = np.nonzero(
                 [not self.params["Fixed_parameters"][k] for k in lst]
             )[0]
@@ -562,7 +562,7 @@ class PassiveForwardRunner(BasicForwardRunner):
                 # mat.assign(v)
                 mat = v
 
-    def get_phm(self, annotate, return_state=False):
+    def get_phm(self, annotate=True, return_state=False):
 
         phm = PassiveHeartProblem(self.bcs, self.solver_parameters, self.pressure)
 
@@ -570,9 +570,9 @@ class PassiveForwardRunner(BasicForwardRunner):
             w_old = phm.solver.state.copy(deepcopy=True)
 
         # Do an initial solve for the initial point
-        parameters["adjoint"]["stop_annotating"] = True
+        dolfin.parameters["adjoint"]["stop_annotating"] = True
         phm.solver.solve()
-        parameters["adjoint"]["stop_annotating"] = not annotate
+        dolfin.parameters["adjoint"]["stop_annotating"] = not annotate
 
         if return_state:
             return phm, w_old
