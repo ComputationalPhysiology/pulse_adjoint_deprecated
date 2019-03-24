@@ -40,15 +40,9 @@ python setup.py install
 ```
 when you are in the same folder as the `setup.py`.
 
-
-
 ## Doumentation ##
-Documentation is found here: `http://pulse-adjoint.readthedocs.io/en/latest/`
-To create your own documentation, do
-```
-cd doc
-make html
-```
+Documentation is found at [pulse-adjoint.readthedocs.io](http://pulse-adjoint.readthedocs.io/en/latest)
+
 
 ## Citing ##
 
@@ -66,9 +60,6 @@ you to cite the following paper:
 
 ## License ##
 GNU LGPL v3
-c) 2001-2019 Simula Research Laboratory ALL RIGHTS RESERVE
-Authors: Henrik Finsberg
-
 
 ## Contributors ##
 * Henrik Finsberg (henriknf@simula.no)
