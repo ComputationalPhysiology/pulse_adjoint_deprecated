@@ -24,6 +24,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 
 import numpy as np
+import pulse.material as mat
 
 # import pulse_adjoint.models.material as mat
 # from pulse_adjoint.lvsolver import LVSolver
@@ -37,7 +38,7 @@ from pulse_adjoint.setup_optimization import (setup_general_parameters,
                                               check_patient_attributes,
                                               make_solver_params)
 
-
+from pulse_adjoint.heart_problem import create_mechanics_problem
 
 from pulse_adjoint.optimization_targets import OptimizationTarget, Regularization,  RegionalStrainTarget, VolumeTarget
 from pulse_adjoint.forward_runner import PassiveForwardRunner, ActiveForwardRunner
@@ -47,7 +48,8 @@ from pulse_adjoint.run_optimization import solve_oc_problem, run_unloaded_optimi
 from pulse.geometry_utils import (generate_fibers,
                                   setup_fiber_parameters,
                                   make_crl_basis,
-                                  mark_strain_regions)
+                                  mark_strain_regions,
+                                  save_geometry_to_h5)
 
 
 # This is temporary
@@ -114,7 +116,7 @@ def setup_params(phase, space = "CG_1", mesh_type = "lv",
 def my_taylor_test(Jhat, m0_fun):
 
     
-    m0 = gather_broadcast(m0_fun.vector().array())
+    m0 = gather_broadcast(m0_fun.vector().get_local())
       
     Jm0 = Jhat(m0)
     DJm0 = Jhat.derivative(forget=False)
@@ -227,7 +229,7 @@ def setup(phase, material_model, active_model,
                                                      eps_strain, pressures)
 
 
-    print(("Exact control = {}\n".format(f_ex.vector().array())))
+    print(("Exact control = {}\n".format(f_ex.vector().get_local())))
     
     if unload:
         params, ap_params, pressure_expr, basis, u_img = create_unloaded_geometry(params, us, ap_params,
@@ -301,7 +303,7 @@ def create_unloaded_geometry(params, us, ap_params, fiber_params, control_region
     ffun_img.array()[:] = params["facet_function"].array()
     
     # fibers
-    fields = generate_fibers(mesh_img, ffun = ffun_img, **fiber_params)
+    fields = generate_fibers(mesh_img, ffun = ffun_img, fiber_params=fiber_params)
     f0 = fields[0]
     
     
@@ -325,7 +327,6 @@ def create_unloaded_geometry(params, us, ap_params, fiber_params, control_region
     if os.path.isfile("synthetic_unloaded.h5"):
         os.remove("synthetic_unloaded.h5")
     
-    from mesh_generation.mesh_utils import save_geometry_to_h5
     h5name = "synthetic_unloaded.h5"
     save_geometry_to_h5(mesh_img, h5name, "", params["markers"],
                         fields, [c,r,l], other_functions={"u_img":u_img})
@@ -336,7 +337,7 @@ def create_unloaded_geometry(params, us, ap_params, fiber_params, control_region
     ap_params["unload"] = True
     ap_params["Unloading_parameters"]["tol"] = 1e-6
     ap_params["Unloading_parameters"]["maxiter"] = 40
-    ap_params["Unloading_parameters"]["method"] = "hybrid"#"fixed_point"
+    ap_params["Unloading_parameters"]["method"] = "fixed_point"
     
     ap_params["Unloading_parameters"]["unload_options"]["maxiter"] = 40
     ap_params["Unloading_parameters"]["unload_options"]["tol"] = 1e-10
@@ -346,6 +347,7 @@ def create_unloaded_geometry(params, us, ap_params, fiber_params, control_region
 
     params, p_lv, control = make_solver_parameters(geo_img, ap_params)
     params["basis"] = basis
+    params["crl_basis"] = basis
     params["f0"] = f0
     params["strain_markers"] = strain_markers
     params["control_markers"] = control_markers
@@ -485,27 +487,26 @@ def generate_data(expr, params, ap_params, pressure_expr, phase,
         act = f
     
    
-    if params["material_model"] == "neo_hookean":
-        material = mat.NeoHookean(params["f0"], act,
-                                  params["material_parameters"],
-                                  active_model = ap_params["active_model"])
-    else:
-        material = mat.HolzapfelOgden(params["f0"], act,
-                                      params["material_parameters"],
-                                      active_model = ap_params["active_model"])
+    # if params["material_model"] == "neo_hookean":
+    #     material = mat.NeoHookean(params["f0"], act,
+    #                               params["material_parameters"],
+    #                               active_model = ap_params["active_model"])
+    # else:
+    material = mat.HolzapfelOgden(f0=params["f0"], activation=act,
+                                  parameeters=params["material_parameters"],
+                                  active_model=ap_params["active_model"])
 
     params["material"] = material
 
-
-
-    solver = LVSolver(params)
-    solver.parameters["solve"]["newton_solver"]["report"] = True
+    # solver = LVSolver(params)
+    solver = create_mechanics_problem(params)
+    #solver.parameters["solve"]["newton_solver"]["report"] = True
     solver.solve()
     
     if phase == "active":
         h5group =  PASSIVE_INFLATION_GROUP
         with HDF5File(mpi_comm_world(), ap_params["sim_file"], "w") as h5file:
-            h5file.write(solver.get_state(), "/".join([h5group, "states/0"]))
+            h5file.write(solver.state, "/".join([h5group, "states/0"]))
 
 
     us_vol = []
@@ -519,7 +520,7 @@ def generate_data(expr, params, ap_params, pressure_expr, phase,
 
         pressure_expr["p_lv"].assign(pres)
         solver.solve()
-        w = solver.get_state()
+        w = solver.state
         u,p = w.split(deepcopy=True)
 
 
@@ -569,7 +570,7 @@ def generate_data(expr, params, ap_params, pressure_expr, phase,
             strains_arr_it = []
             target_strain.assign_simulated(u_strain)
             for i in range(target_strain.nregions):
-                s = gather_broadcast(target_strain.simulated_fun[i].vector().array())
+                s = gather_broadcast(target_strain.simulated_fun[i].vector().get_local())
                 
                 noise = [0.0]*len(target_strain.crl_basis) if eps_strain <= 0 \
                         else np.random.normal(0,eps_strain, len(target_strain.crl_basis))
@@ -592,7 +593,7 @@ def generate_data(expr, params, ap_params, pressure_expr, phase,
             target_vol = VolumeTarget(params["mesh"], dS, "LV", "project")
             target_vol.set_target_functions()
             target_vol.assign_simulated(u_vol)
-            vol = gather_broadcast(target_vol.simulated_fun.vector().array())[0]
+            vol = gather_broadcast(target_vol.simulated_fun.vector().get_local())[0]
             noise = 0.0 if eps_vol <= 0 else np.random.normal(0,eps_vol)
             vol_tot = vol+noise
 
@@ -816,6 +817,8 @@ def set_patient_attributes(params, pressures, vols, strains, unload):
     patient.ffun = params["facet_function"]
     patient.fiber = params["f0"]
     patient.sfun = params["strain_markers"]
+    for k, v in params['basis'].items():
+        setattr(patient, k, v)
     patient.markers = params["markers"]
     start_idx = 1 if unload else 0
     patient.pressure = pressures[start_idx:]

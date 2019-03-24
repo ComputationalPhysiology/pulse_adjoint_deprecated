@@ -24,7 +24,8 @@
 # SIMULA RESEARCH LABORATORY MAKES NO REPRESENTATIONS AND EXTENDS NO
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
-# from pulse.numpy_mpi import *
+
+import numpy as np
 from pulse import numpy_mpi
 from pulse.iterate import get_constant as _get_constant
 from pulse.mechanicsproblem import SolverDidNotConverge
@@ -106,7 +107,7 @@ def run_unloaded_optimization(params, patient):
         group = "/".join(
             [params["h5group"], PASSIVE_INFLATION_GROUP, "/optimal_control"]
         )
-        with HDF5File(mpi_comm_world(), params["sim_file"], "r") as h5file:
+        with dolfin.HDF5File(dolfin.mpi_comm_world(), params["sim_file"], "r") as h5file:
             h5file.read(paramvec, group)
 
         # Load the initial guess

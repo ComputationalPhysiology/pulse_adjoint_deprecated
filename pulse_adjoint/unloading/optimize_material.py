@@ -36,20 +36,21 @@ __author__ = "Henrik Finsberg (henriknf@simula.no)"
 import numpy as np
 import dolfin as df
 
-from .unloader import *
-from .utils import *
-
-from pulse.geometry_utils import load_geometry_from_h5, save_geometry_to_h5
+from pulse import HeartGeometry
 from pulse.numpy_mpi import *
+from pulse.unloader import *
+
+from .utils import *
 
 from ..setup_optimization import (
     setup_adjoint_contraction_parameters,
     make_control,
     setup_simulation,
     check_patient_attributes,
+    make_solver_parameters
 )
 from ..run_optimization import run_passive_optimization_step, solve_oc_problem, store
-
+from ..heart_problem import create_mechanics_problem
 
 
 
@@ -136,14 +137,12 @@ class UnloadedMaterial(object):
         self.tol = tol
         self.maxiter = maxiter
 
-        if method == "hybrid":
-            self.MeshUnloader = Hybrid
-        elif method == "fixed_point":
-            self.MeshUnloader = FixedPoint
+        if method == "fixed_point":
+            self.MeshUnloader = FixedPointUnloader
         elif method == "raghavan":
-            self.MeshUnloader = Raghavan
+            self.MeshUnloader = RaghavanUnloader
         else:
-            methods = ["fixed_point", "raghavan", "hybrid"]
+            methods = ["fixed_point", "raghavan"]
             msg = "Unknown unloading algorithm {}. ".format(
                 method
             ) + "Possible values are {}".format(methods)
@@ -166,19 +165,23 @@ class UnloadedMaterial(object):
 
         self.it = -1
 
-    def calibrate_data(self, volumes, pressures):
-        patient = load_geometry_from_h5(
-            self.params["Patient_parameters"]["mesh_path"],
-            self.params["Patient_parameters"]["mesh_group"],
+    @property
+    def geometry(self):
+        return HeartGeometry.from_file(
+            h5name=self.params["Patient_parameters"]["mesh_path"],
+            h5group=self.params["Patient_parameters"]["mesh_group"],
         )
+        
 
-        if self.is_biv:
-            v_lv = get_volume(patient)
+    def calibrate_data(self, volumes, pressures):
+
+        if self.geometry.is_biv:
+            v_lv = self.geometry.cavity_volume()
             v_lv_offset = v_lv - np.array(volumes).T[0][self.geometry_index]
             lv_volumes = np.add(np.array(volumes).T[0], v_lv_offset).tolist()
             logger.info("LV volume offset: {} ml".format(v_lv_offset))
 
-            v_rv = get_volume(patient, chamber="rv")
+            v_rv = self.geometry.cavity_volume(chamber="rv")
             v_rv_offset = v_rv - np.array(volumes).T[1][self.geometry_index]
             rv_volumes = np.add(np.array(volumes).T[1], v_rv_offset).tolist()
             logger.info("RV volume offset: {} ml".format(v_rv_offset))
@@ -187,7 +190,7 @@ class UnloadedMaterial(object):
 
         else:
 
-            v_lv = get_volume(patient)
+            v_lv = self.geometry.cavity_volume()
             v_lv_offset = v_lv - np.array(volumes).T[0]
             lv_volumes = np.add(np.array(volumes), v_lv_offset).tolist()
             logger.info("LV volume offset: {} ml".format(v_lv_offset))
@@ -199,12 +202,7 @@ class UnloadedMaterial(object):
 
     def unload(self):
 
-        patient = load_geometry_from_h5(
-            self.params["Patient_parameters"]["mesh_path"],
-            self.params["Patient_parameters"]["mesh_group"],
-        )
-
-        paramvec, gamma, matparams = make_control(self.params, patient)
+        paramvec, gamma, matparams = make_control(self.params, self.geometry)
 
         if self.it == 0 and self.initial_guess:
             assign_to_vector(
@@ -225,43 +223,50 @@ class UnloadedMaterial(object):
             )
         )
 
+        self.params["phase"] = "unloading"
+
+        params, p_expr = make_solver_parameters(
+                self.params, self.geometry, matparams
+            )
+
+        problem = create_mechanics_problem(params)
+
         unloader = self.MeshUnloader(
-            patient,
-            self.p_geo,
-            matparams,
-            self.params["sim_file"],
+            problem=problem,
+            pressure=self.p_geo,
+            h5name=self.params["sim_file"],
             options=self.unload_options,
             h5group=str(self.it),
-            remove_old=False,
-            solver_parameters=self.params,
-            approx=self.params["volume_approx"],
             merge_control=self.params["merge_passive_control"],
         )
-
+        # from IPython import embed; embed()
+        # exit()
         unloader.unload()
-        new_geometry = unloader.get_unloaded_geometry()
-        backward_displacement = unloader.get_backward_displacement()
+        new_geometry = unloader.unloaded_geometry
+        backward_displacement = unloader.backward_displacement
 
         group = "/".join([str(self.it), "unloaded"])
-        save_unloaded_geometry(
-            new_geometry, self.params["sim_file"], group, backward_displacement
+  
+        new_geometry.save(
+            h5name=self.params["sim_file"],
+            h5group=group,
+            other_functions=dict(backward_displacement=backward_displacement)
         )
 
-        group = "unloaded"
-        save_unloaded_geometry(new_geometry, self.params["sim_file"], group)
+        new_geometry.save(
+            h5name=self.params["sim_file"],
+            h5group="unloaded"
+        )
 
-        return load_geometry_from_h5(
-            self.params["sim_file"], group, comm=new_geometry.mesh.mpi_comm()
+        return HeartGeometry.from_file(
+            h5name=self.params["sim_file"],
+            h5group=group,
+            comm=new_geometry.mesh.mpi_comm()
         )
 
     def get_backward_displacement(self):
 
-        patient = load_geometry_from_h5(
-            self.params["Patient_parameters"]["mesh_path"],
-            self.params["Patient_parameters"]["mesh_group"],
-        )
-
-        u = df.Function(df.VectorFunctionSpace(patient.mesh, "CG", 1))
+        u = df.Function(df.VectorFunctionSpace(self.geometry.mesh, "CG", 1))
 
         group = "/".join([str(self.it), "unloaded", "backward_displacement"])
 
@@ -274,7 +279,7 @@ class UnloadedMaterial(object):
 
         group = "/".join([str(self.it), "unloaded"])
         try:
-            return load_geometry_from_h5(self.params["sim_file"], group)
+            return HeartGeometry.from_file(h5name=self.params["sim_file"], h5grop=group)
         except IOError:
             msg = (
                 "No unloaded geometry found {}:{}".format(
@@ -283,10 +288,7 @@ class UnloadedMaterial(object):
                 + "\nReturn original geometry."
             )
             logger.warning(msg)
-            return load_geometry_from_h5(
-                self.params["Patient_parameters"]["mesh_path"],
-                self.params["Patient_parameters"]["mesh_path"],
-            )
+            return self.geometry
 
     def get_optimal_material_parameter(self):
 
@@ -311,8 +313,6 @@ class UnloadedMaterial(object):
 
     def get_loaded_volume(self, chamber="lv"):
 
-        from pulse_adjoint.setup_optimization import get_volume
-
         geo = self.get_unloaded_geometry()
         V = df.VectorFunctionSpace(geo.mesh, "CG", 2)
         u = df.Function(V)
@@ -328,32 +328,24 @@ class UnloadedMaterial(object):
         except:
             logger.info("Could not open and read displacement")
 
-        return get_volume(geo, chamber=chamber, u=u)
+        return get.cavity_volume(chamber=chamber, u=u)
 
     def estimate_material(self):
-
-        geo = load_geometry_from_h5(
-            self.params["Patient_parameters"]["mesh_path"],
-            self.params["Patient_parameters"]["mesh_group"],
-        )
 
         if self.it >= 0:
             group = "/".join([str(self.it), "unloaded"])
             logger.info(
                 "Load geometry from {}:{}".format(self.params["sim_file"], group)
             )
-            patient = load_geometry_from_h5(self.params["sim_file"], group)
+            patient = HeartGeometry.from_file(self.params["sim_file"], group)
 
         else:
-            patient = load_geometry_from_h5(
-                self.params["Patient_parameters"]["mesh_path"],
-                self.params["Patient_parameters"]["mesh_group"],
-            )
+            patient = self.geometry
 
-        patient.original_geometry = geo.mesh
+        patient.original_geometry = self.geometry.mesh
 
         patient.passive_filling_duration = len(self.pressures)
-        if self.is_biv:
+        if self.geometry.is_biv:
             patient.pressure = np.array(self.pressures).T[0]
             patient.volume = np.array(self.volumes).T[0]
             patient.RVP = np.array(self.pressures).T[1]
@@ -446,18 +438,18 @@ class UnloadedMaterial(object):
         if self.it > 0:
 
             group1 = "/".join([str(self.it - 1), "unloaded"])
-            patient1 = load_geometry_from_h5(self.params["sim_file"], group1)
+            geo1 = HeartGeometry.from_file(self.params["sim_file"], group1)
 
             group2 = "/".join([str(self.it), "unloaded"])
-            patient2 = load_geometry_from_h5(self.params["sim_file"], group2)
+            geo22 = HeartGeometry.from_file(self.params["sim_file"], group2)
 
-            vol1_lv = get_volume(patient1)
-            vol2_lv = get_volume(patient2)
+            vol1_lv = geo1.cavity_volume()
+            vol2_lv = geo2.cavity_volume()
             lv = abs(vol1_lv - vol2_lv) / vol1_lv
 
-            if self.is_biv:
-                vol1_rv = get_volume(patient1, chamber="rv")
-                vol2_rv = get_volume(patient2, chamber="rv")
+            if geo1.is_biv:
+                vol1_rv = geo1.cavity_volume(chamber="rv")
+                vol2_rv = geo2.cavity_volume(chamber="rv")
                 rv = (vol1_rv - vol2_rv) / vol2_rv
             else:
                 rv = 0.0

@@ -61,9 +61,10 @@ def create_mechanics_problem(solver_parameters):
                                    crl_basis=crl_basis)
 
     neumann = []
+    names = ['lv', 'rv']
     for i, n in enumerate(solver_parameters['bc']['neumann']):
         neumann.append(pulse.NeumannBC(traction=n[0],
-                                       marker=n[1], name=f'neumann_{i}'))
+                                       marker=n[1], name=names[i]))
 
     robin = []
     for i, n in enumerate(solver_parameters['bc']['robin']):

@@ -25,6 +25,7 @@
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 import numpy as np
+import logging
 import pulse
 from pulse import numpy_mpi
 
@@ -269,12 +270,17 @@ def make_solver_parameters(
 
     ##  Material
     Material = get_material_model(params["material_model"])
+
+    f0 = getattr(patient, 'fiber', getattr(patient, 'f0', None))
+    s0 = getattr(patient, 'sheet', getattr(patient, 's0', None))
+    n0 = getattr(patient, 'sheet_normal', getattr(patient, 'n0', None))
+    
     material = Material(
-        f0=patient.fiber,
+        f0=f0,
         activation=gamma,
         parameters=matparams,
-        s0=patient.sheet,
-        n0=patient.sheet_normal,
+        s0=s0,
+        n0=n0,
         **params
     )
 
@@ -382,24 +388,24 @@ def make_solver_parameters(
 
         # Apply a linear sprint robin type BC to limit motion
         # base_spring = Function(V_real, name = "base_spring")
-        base_spring = dolfin_adjoint.Constant(params["base_spring_k"])
+        base_spring = dolfin_adjoint.Constant(params["base_spring"])
         robin_bc += [[base_spring, patient.markers["BASE"][0]]]
 
     # Circumferential, Radial and Longitudinal basis vector
     crl_basis = {}
-    for att in ["circumferential", "radial", "longitudinal"]:
-        if hasattr(patient, att):
-            crl_basis[att] = getattr(patient, att)
+    for att, att1 in [("circumferential", 'c0'), ("radial", 'r0'), ("longitudinal", 'l0')]:
+        # if hasattr(patient, att):
+        crl_basis[att] = getattr(patient, att, getattr(patient, att1, None))
 
     solver_parameters = {
         "mesh": patient.mesh,
         "facet_function": patient.ffun,
         "facet_normal": dolfin.FacetNormal(patient.mesh),
         "crl_basis": crl_basis,
-        "mesh_function": patient.sfun,
+        "mesh_function": getattr(patient, 'sfun', getattr(patient, 'cfun', None)),
         "markers": patient.markers,
-        "passive_filling_duration": patient.passive_filling_duration,
-        "strain_weights": patient.strain_weights,
+        "passive_filling_duration": getattr(patient, 'passive_filling_duration', 1),
+        "strain_weights": getattr(patient, 'strain_weights', None),
         "state_space": "P_2:P_1",
         "compressibility": {
             "type": params["compressibility"],
@@ -718,7 +724,7 @@ def get_volume_offset(patient, params, chamber="lv"):
 
 def setup_simulation(params, patient):
 
-    check_patient_attributes(patient)
+    # check_patient_attributes(patient)
     # Load measurements
     measurements = get_measurements(params, patient)
     solver_parameters, pressure, controls = make_solver_params(
@@ -804,7 +810,7 @@ class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
         change_log_level = (self.log_level == logging.INFO) and not self.verbose
 
         if change_log_level:
-            logger.setLevel(WARNING)
+            logger.setLevel(logging.WARNING)
 
         t = dolfin.Timer("Forward run")
         t.start()

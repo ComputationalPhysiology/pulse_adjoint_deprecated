@@ -363,7 +363,7 @@ def setup_application_parameters(material_model="holzapfel_ogden"):
     ## Parameters ##
 
     # Spring constant at base (Note: works one for base_bc = fix_x)
-    params.add("base_spring_k", 1.0)
+    params.add("base_spring", 1.0)
 
     # Spring constatnt at pericardium (if zero - divergence free)
     params.add("pericardium_spring", 0.0)
@@ -618,7 +618,7 @@ def setup_unloading_parameters():
 
     params = dolfin.Parameters("Unloading_parameters")
 
-    params.add("method", "hybrid", ["hybrid", "fixed_point", "raghavan"])
+    params.add("method", "fixed_point", ["fixed_point", "raghavan"])
     # Terminate if difference in reference (unloaded) volume
     # is less than tol
     params.add("tol", 0.05)

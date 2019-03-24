@@ -400,7 +400,7 @@ class OptimalControl(object):
 
         opt_params = params["Optimization_parameters"].to_dict()
 
-        x = gather_broadcast(paramvec.vector().array())
+        x = gather_broadcast(paramvec.vector().get_local())
         nvar = len(x)
         self.paramvec = paramvec
         self.x = x

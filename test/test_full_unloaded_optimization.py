@@ -71,9 +71,13 @@ def optimize():
 
     import numpy as np
     volume = np.transpose(vols)[1]
-  
-    ap_params["Unloading_parameters"]["estimate_initial_guess"] = True#False
+
+    ap_params["Unloading_parameters"]["estimate_initial_guess"] = False
     from pulse_adjoint.run_optimization import run_unloaded_optimization
+    # from IPython import embed; embed()
+    ap_params['Unloading_parameters']['maxiter'] = 2
+    ap_params['Unloading_parameters']['unload_options']['maxiter'] = 2
+    ap_params["Optimization_parameters"]['passive_maxiter'] = 2
     run_unloaded_optimization(ap_params, patient)
     # run_unloaded_optimization(params, strains, vols, ap_params,
                               # pressures,p_lv, return_rd = False)
