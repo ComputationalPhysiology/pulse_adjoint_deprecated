@@ -1,0 +1,6 @@
+pytest
+numpy
+matplotlib
+--no-binary=h5py
+h5py
+git+https://github.com/finsberg/pulse.git
