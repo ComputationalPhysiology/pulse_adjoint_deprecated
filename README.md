@@ -1,33 +1,45 @@
-# Pulse-Adjoint #
- 
-This repository contains code for solving basic problems in cardiac mechanics as well as code for doing data assimilation. 
-A cardiac computational model is constrained using clinical measurements such as pressure, volume and regional strain. The problem is formulated as a PDE-constrained optimisation problem where the objective functional represents the misfit between measured and simulated data. There are two phases; passive and active. In the passive phase the material parameters are the control parameters, and in the active phase the contraction parameter is the control parameter. The control parameters can be scalar or spatially resolved. The problem is solved using a gradient based optimization algorithm where the gradient is provided by solving the adjoint system.
+[![Documentation
+Status](https://readthedocs.org/projects/pulse-adjoint/badge/?version=latest)](https://pulse-adjoint.readthedocs.io/en/latest/?badge=latest)
 
-## Installation ##
+# Pulse-Adjoint
+
+Here we demostrate how you can constrain a cardiac computational model
+using clinical measurements such as pressure, volume and regional
+strain. The problem is formulated as a PDE-constrained optimisation
+problem where the objective functional represents the misfit between
+measured and simulated data. There are two phases; passive and active. In the
+passive phase the material parameters are the control parameters, and
+in the active phase the contraction parameter is the control
+parameter. The control parameters can be scalar or spatially
+resolved. The problem is solved using a gradient based optimization
+algorithm where the gradient is provided by solving the adjoint
+system. 
+
+## Note
+The code here is currently undergoing a major refactoring in order for
+it to be compatible with more recent versions of fenics as well as the
+standalone cardiac mechanics solver
+[pulse](https://github.com/ComputationalPhysiology/pulse). 
+We expect the `master` branch to be stable, as development will mainly
+be done on other branches.
+The original code, hosted at
+[Bitbucket](https://bitbucket.org/finsberg/pulse_adjoint) is no longer
+maintained.
+
+## Installation
+`pulse-adjoint` is written in pure python but based on `fenics` and
+`dolfin-adjoint` (using `libabjoint`). Therefore `fenics` version 2017
+and `dolfin-adjoint` that uses `libadjoint` (not `pyadjoint`) is
+currently the only supported versions. You also need to install
+[`pulse`](https://github.com/ComputationalPhysiology/pulse). 
+
+As `pulse-adjoint` is a pure python package you can install it by
+simply typing 
 ```
 python setup.py install
 ```
-or change `PREFIX` in the `Makefile` to where you want to install, and run `make install`
+when you are in the same folder as the `setup.py`.
 
-## Requirements ##
-In order to simply run the code you need
-```
-* FEniCS version 2016.x
-  -- http://fenicsproject.org
-* Dolfin-Adjoint version 2016.x
-  -- http://www.dolfin-adjoint.org/en/latest/download/index.html
-* yaml, h5py
-  -- pip install pyyaml, h5py
-* mesh_generation
-  -- Used for loading the meshes in patient_data
-  -- git clone git@bitbucket.org:finsberg/mesh_generation.git
-
-```
-
-## Structure of the repo ##
-The main code is found in `pulse_adjoint` folder. There are also currently four submodules: `models` contains the different models for passive and active behaviour, `unloading` contains the code to perform the unloading, `patient_data` is for handling input data and `postprocess` is for postprocessing the results. 
-
-The starting point should be the demos in the `demo` folder. It might also be useful to look at the different tests in the `test` folder.
 
 
 ## Doumentation ##
@@ -40,39 +52,23 @@ make html
 
 ## Citing ##
 
-You are welcomed to use this code for your own reaseach, but encourage you to cite one of following papers:
+You are welcomed to use this code for your own reaseach, but encourage
+you to cite the following paper:
 
 
-[1] Balaban, G., H. Finsberg, J. Sundnes, M. E. Rognes, H.-H. Odland, S. Ross, and S. T. Wall, 2016: High resolution data assimilation of cardiac mechanics
-applied to a dyssynchronous ventricle. International Journal for Numerical Methods in Engineering, 79, no. 11, 1309�1331
+>Finsberg, H., Xi, C., Tan, J.L., Zhong, L., Genet, M., Sundnes, J.,
+>Lee, L.C. and Wall, S.T., 2018. Efficient estimation of personalized
+>biventricular mechanical function employing gradient‐based
+>optimization. International journal for numerical methods in
+>biomedical engineering,
+>p.e2982. [DOI](https://doi.org/10.1002/cnm.2982)
 
-[2] Finsberg, H., G. Balaban, S. Ross, T. F. H�land, H. H. Odland, J. Sundnes, and S. Wall, 2017: Estimating cardiac contraction through high resolution
-data assimilation of a personalized mechanical model. Journal of Computational Science.
 
 ## License ##
-c) 2001-2017 Simula Research Laboratory ALL RIGHTS RESERVED
-
+GNU LGPL v3
+c) 2001-2019 Simula Research Laboratory ALL RIGHTS RESERVE
 Authors: Henrik Finsberg
 
-END-USER LICENSE AGREEMENT
-
-PLEASE READ THIS DOCUMENT CAREFULLY. By installing or using this software you agree with the terms and 
-conditions of this license agreement. If you do not accept the terms of this license agreement you may 
-not install or use this software.
-
-Permission to use, copy, modify and distribute any part of this software for non-profit educational 
-and research purposes, without fee, and without a written agreement is hereby granted, provided that 
-the above copyright notice, and this license agreement in its entirety appear in all copies. Those desiring 
-to use this software for commercial purposes should contact Simula Research Laboratory AS: post@simula.no 
-
-IN NO EVENT SHALL SIMULA RESEARCH LABORATORY BE LIABLE TO ANY PARTY FOR DIRECT, INDIRECT, SPECIAL, 
-INCIDENTAL, OR CONSEQUENTIAL DAMAGES, INCLUDING LOST PROFITS, ARISING OUT OF THE USE OF THIS SOFTWARE 
-"PULSE-ADJOINT" EVEN IF SIMULA RESEARCH LABORATORY HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
-THE SOFTWARE PROVIDED HEREIN IS ON AN "AS IS" BASIS, AND SIMULA RESEARCH LABORATORY HAS NO OBLIGATION 
-TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.  SIMULA RESEARCH LABORATORY MAKES NO 
-REPRESENTATIONS AND EXTENDS NO WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT NOT LIMITED 
-TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 
 ## Contributors ##
 * Henrik Finsberg (henriknf@simula.no)
