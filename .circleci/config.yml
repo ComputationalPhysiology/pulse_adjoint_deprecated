@@ -31,6 +31,9 @@ jobs:
       - run:
           name: update dolfin-adjoint
           command: |
+            export HOME=/home/fenics
+            export FENICS_PREFIX=$HOME/local
+            export PATH=$HOME/bin:$HOME/.local/bin:$PATH
             export FENICS_PYTHON_MAJOR_VERSION=3
             export FENICS_PYTHON_MINOR_VERSION=6
             source $HOME/fenics.env.conf
