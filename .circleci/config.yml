@@ -27,6 +27,16 @@ jobs:
           # fallback to using the latest cache if no exact match is found
           - v1-dependencies-
 
+
+      - run:
+          name: update dolfin-adjoint
+          command: |
+            export FENICS_PYTHON_MAJOR_VERSION=3
+            export FENICS_PYTHON_MINOR_VERSION=6
+            source $HOME/fenics.env.conf
+            source /home/fenics/dolfin-adjoint.conf
+            update_dolfin-adjoint && update_libadjoint
+          
       - run:
           name: install dependencies
           command: |
