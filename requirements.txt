@@ -1,5 +1,6 @@
 pytest
 numpy
+pyyaml
 matplotlib
 --no-binary=h5py
 h5py
