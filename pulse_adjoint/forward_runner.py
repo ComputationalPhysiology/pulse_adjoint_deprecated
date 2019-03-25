@@ -31,8 +31,8 @@ so that dolfin-adjoint can run the backward solve.
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 import numpy as np
 from pulse.mechanicsproblem import SolverDidNotConverge
-from pulse.numpy_mpi import *
 from pulse import numpy_mpi
+from pulse.dolfin_utils import RegionalParameter
 
 from .heart_problem import PassiveHeartProblem, ActiveHeartProblem
 from .dolfinimport import *
@@ -40,7 +40,7 @@ from .optimization_targets import *
 from .adjoint_contraction_args import *
 
 from .utils import Text, list_sum, Object, TablePrint, UnableToChangePressureExeption
-from .setup_optimization import RegionalParameter
+
 
 class BasicForwardRunner(object):
     """
@@ -534,8 +534,8 @@ class PassiveForwardRunner(BasicForwardRunner):
             )[0][0]
             par = lst[fixed_idx]
             if self.params["matparams_space"] == "regional":
-                paramvec = project(
-                    self.paramvec.get_function(), self.paramvec.get_ind_space()
+                paramvec = dolfin_adjoint.project(
+                    self.paramvec.function, self.paramvec.proj_space
                 )
             else:
                 paramvec = self.paramvec
@@ -553,8 +553,9 @@ class PassiveForwardRunner(BasicForwardRunner):
 
                 if self.params["matparams_space"] == "regional":
                     rg = RegionalParameter(self.paramvec._meshfunction)
-                    rg.assign(project(paramvec_split[it], rg.function_space()))
-                    v = rg.get_function()
+                    rg.assign(dolfin_adjoint.project(paramvec_split[it],
+                                                     rg.function_space()))
+                    v = rg.function
                 else:
                     v = paramvec_split[it]
 
