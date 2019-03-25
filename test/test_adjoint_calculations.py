@@ -36,9 +36,9 @@ import itertools
 parametrize = pytest.mark.parametrize
 
 mesh_types = ["lv"]
-spaces = ["regional", "CG_1"]
+spaces = ["regional", "CG_1"][:1]
 phases = ["passive", "active"]
-active_models = ["active_strain", "active_stress"]
+active_models = ["active_strain", "active_stress"][:1]
 parameters['adjoint']['stop_annotating'] = False
 
 from pulse_adjoint import LVTestPatient
@@ -72,7 +72,7 @@ def passive(params):
     # Replay the forward run, i.e make sure that the recording is correct.
     logger.info("Replay dolfin")
     assert replay_dolfin(tol=1e-12)
-    
+
     # Test that the gradient is correct
     logger.info("Taylor test")
     my_taylor_test(rd, paramvec)
@@ -165,8 +165,8 @@ def test_adjoint_calculations(mesh_type, space, phase, active_model):
 if __name__ == "__main__":
 
 
-    test_adjoint_calculations("lv", "CG_1", "passive", "active_strain")
-    # test_adjoint_calculations("lv", "regional", "passive", "active_strain")
+    # test_adjoint_calculations("lv", "CG_1", "passive", "active_strain")
+    test_adjoint_calculations("lv", "regional", "passive", "active_strain")
     
     # test_adjoint_calculations("lv", "CG_1", "active", "active_strain")
     # test_adjoint_calculations("lv", "regional", "active", "active_strain")
