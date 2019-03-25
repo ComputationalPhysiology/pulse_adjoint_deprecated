@@ -39,6 +39,7 @@ mesh_types = ["lv"]
 spaces = ["regional", "CG_1"]
 phases = ["passive", "active"]
 active_models = ["active_strain", "active_stress"]
+parameters['adjoint']['stop_annotating'] = False
 
 from pulse_adjoint import LVTestPatient
 patient = LVTestPatient()
@@ -163,7 +164,7 @@ def test_adjoint_calculations(mesh_type, space, phase, active_model):
     
 if __name__ == "__main__":
 
-    parameters['adjoint']['stop_annotating'] = False
+
     test_adjoint_calculations("lv", "CG_1", "passive", "active_strain")
     # test_adjoint_calculations("lv", "regional", "passive", "active_strain")
     
