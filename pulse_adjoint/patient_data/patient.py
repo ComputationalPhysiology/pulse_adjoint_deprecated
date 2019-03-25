@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python
 # c) 2001-2017 Simula Research Laboratory ALL RIGHTS RESERVED
 # Authors: Henrik Finsberg
@@ -27,6 +28,7 @@
 import numpy as np
 import os
 from pulse.numpy_mpi import *
+import pulse
 
 from .utils import logger
 from . import load, utils
@@ -282,18 +284,12 @@ class TestPatient(BasePatient):
 class LVTestPatient(TestPatient):
     def __init__(self, name="ellipsoid", **kwargs):
 
-        assert name in [
-            "simple_ellipsoid",
-            "prolate_ellipsoid",
-            "benchmark",
-            "lv_test_mesh",
-            'ellipsoid'
-        ]
+        assert name in pulse.mesh_paths
         self._name = name
         self._mesh_type = "lv"
 
         self.paths = {
-            "mesh_path": os.path.join(curdir, "../example_meshes/{}.h5".format(name))
+            "mesh_path": pulse.mesh_paths[name]
         }
         TestPatient.__init__(self, **kwargs)
 
@@ -310,7 +306,7 @@ class BiVTestPatient(TestPatient):
         self.RVV = np.array([27.387594] * 6)
 
         self.paths = {
-            "mesh_path": os.path.join(curdir, "../example_meshes/biv_ellipsoid.h5")
+            "mesh_path": pulse.mesh_paths["biv_ellipsoid.h5"]
         }
 
         TestPatient.__init__(self, **kwargs)
