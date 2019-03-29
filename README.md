@@ -42,7 +42,20 @@ python setup.py install
 when you are in the same folder as the `setup.py`.
 
 ## Doumentation ##
-Documentation is found at [pulse-adjoint.readthedocs.io](http://pulse-adjoint.readthedocs.io/en/latest)
+Documentation is found at
+[pulse-adjoint.readthedocs.io](http://pulse-adjoint.readthedocs.io/en/latest)
+
+## Getting started
+
+In order to get starting with pulse-adjoint it is beneficial to get to
+know [FEniCS](https://fenicsproject.org) as well as the
+[pulse](https://github.com/ComputationalPhysiology/pulse), which has a
+lot of [demos](https://finsberg.github.io/pulse/html/demos/demos.html)
+
+Next you can check out the demoes in this repository. They should give
+an idea on how you can incorporate your own data into the pipeline.
+If you need to generate microstructure you can checkout out the
+[ldrb](https://github.com/ComputationalPhysiology/ldrb)
 
 
 ## Citing ##
