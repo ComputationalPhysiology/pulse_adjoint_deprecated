@@ -1,0 +1,41 @@
+{% set name = "pulse_adjoint" %}
+{% set version = "1.0" %}
+{% set sha256 = "ca67a92f1e042e3e0210a7eccd6278d2973ac15b8f8b05b6242b839d9bbd54bb" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://github.com/ComputationalPhysiology/pulse_adjoint/archive/v{{ version }}.tar.gz
+  sha256: {{ sha256 }}
+
+build:
+  number: 0
+  script: python setup.py install
+  noarch: python
+
+requirements:
+  build:
+    - python 3.6.4=0
+  run:
+    - pulse
+    - dolfin-adjoint
+    - pyyaml
+    - matplotlib
+    - scipy
+test:
+  imports:
+    - pulse_adjoint
+
+about:
+  home: https://pulse-adjoint.readthedocs.io/en/latest/
+  license: LGPL-3.0
+  license_family: LGPL
+  license_file: LICENSE
+  summary: 'Data assimilation for cardiac mechanics'
+
+  description: |
+    Data assimilation for cardiac mechanics'
+  doc_url: https://pulse-adjoint.readthedocs.io/en/latest/
+  dev_url: https://github.com/ComputationalPhysiology/pulse_adjoint

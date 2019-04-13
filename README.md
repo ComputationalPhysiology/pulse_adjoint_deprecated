@@ -1,6 +1,7 @@
 [![CircleCI](https://circleci.com/gh/ComputationalPhysiology/pulse_adjoint.svg?style=svg)](https://circleci.com/gh/ComputationalPhysiology/pulse_adjoint)
 [![Documentation
 Status](https://readthedocs.org/projects/pulse-adjoint/badge/?version=latest)](https://pulse-adjoint.readthedocs.io/en/latest/?badge=latest)
+[![Anaconda-Server Badge](https://anaconda.org/finsberg/pulse_adjoint/badges/platforms.svg)](https://anaconda.org/finsberg/pulse_adjoint)
 
 # Pulse-Adjoint
 
