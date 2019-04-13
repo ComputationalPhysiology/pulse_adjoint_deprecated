@@ -42,10 +42,11 @@ from .setup_parameters import *
 def merge_control(patient, control_str):
 
     sfun = dolfin.MeshFunction("size_t", patient.mesh, patient.sfun.dim())
-    sfun.set_values(patient.sfun.array())
+    arr = patient.sfun.array()
+    sfun.set_values(arr)
     if control_str != "":
         for v in control_str.split(":"):
-            vals = sorted(np.array(v.split(","), dtype=int))
+            vals = sorted(np.array(v.split(","), dtype=arr.dtype))
             min_val = vals[0]
             for vi in vals[1:]:
                 sfun.array()[sfun.array() == vi] = min_val
@@ -228,7 +229,7 @@ def check_patient_attributes(patient):
 
 def save_patient_data_to_simfile(patient, sim_file):
 
-    from mesh_generation.mesh_utils import save_geometry_to_h5
+    from pulse.geometry_utils import save_geometry_to_h5
 
     fields = []
     for att in ["fiber", "sheet", "sheet_normal"]:
@@ -493,6 +494,9 @@ def make_control(params, patient):
             # Use the materal parameters from the parameters as initial guess
             if params["phase"] in [PHASES[0], PHASES[2]]:
 
+                # val_const = dolfin_adjoint.Function(paramvec.function_space())
+                # numpy_mpi.assign_to_vector(val_const.vector(),
+                #                            val * np.ones(len(val_const)))
                 val_const = (
                     dolfin_adjoint.Constant(val)
                     if paramvec_.value_size() == 1
@@ -767,9 +771,7 @@ class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
         self.initial_paramvec = numpy_mpi.gather_broadcast(paramvec.vector().get_local())
         self.scale = scale
         self.derivative_scale = relax
-
         self.verbose = verbose
-        from .optimal_control import has_scipy016
 
     def __call__(self, value, return_fail=False):
 
@@ -777,7 +779,9 @@ class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
         dolfin_adjoint.adj_reset()
         self.iter += 1
 
-        paramvec_new = dolfin_adjoint.Function(self.paramvec.function_space(), name="new control")
+        paramvec_new = dolfin_adjoint.Function(self.paramvec.function_space(),
+                                               name="new control")
+        # paramvec_new = RegionalParameter(self.paramvec._meshfunction)
 
         if isinstance(value, (dolfin.Function, RegionalParameter, MixedParameter)):
             paramvec_new.assign(value)
@@ -788,7 +792,8 @@ class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
             paramvec_new.assign(val_delisted)
 
         else:
-            numpy_mpi.assign_to_vector(paramvec_new.vector(), numpy_mpi.gather_broadcast(value))
+            numpy_mpi.assign_to_vector(paramvec_new.vector(),
+                                       numpy_mpi.gather_broadcast(value))
 
         logger.debug(Text.yellow("Start annotating"))
         dolfin.parameters["adjoint"]["stop_annotating"] = False
@@ -842,7 +847,7 @@ class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
             # Some printing
             logger.info(print_head(self.for_res))
 
-        control = dolfin_adjoint.Control(self.paramvec)
+        control = dolfin_adjoint.Control(self.paramvec)            
 
         dolfin_adjoint.ReducedFunctional.__init__(
             self, dolfin_adjoint.Functional(self.for_res["total_functional"]), control
@@ -924,7 +929,7 @@ class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
 
         t = dolfin.Timer("Backward run")
         t.start()
-
+        
         out = dolfin_adjoint.ReducedFunctional.derivative(self, forget=False)
         back_time = t.stop()
         logger.debug(
@@ -952,5 +957,3 @@ class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
             )
         )
         return self.scale * gathered_out * self.derivative_scale
-
-

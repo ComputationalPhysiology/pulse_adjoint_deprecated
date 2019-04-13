@@ -7,6 +7,7 @@ from . import utils
 from . import heart_problem
 from . import optimal_control
 
+from .run_optimization import assimilate
 
 # Subpackages
 from . import postprocess

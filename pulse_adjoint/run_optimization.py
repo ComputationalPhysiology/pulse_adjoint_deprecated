@@ -25,17 +25,21 @@
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 
+import dolfin
+import dolfin_adjoint
+
 import numpy as np
 from pulse import numpy_mpi
 from pulse.iterate import get_constant as _get_constant
 from pulse.mechanicsproblem import SolverDidNotConverge
 
-from .dolfinimport import *
 from .setup_optimization import (
     setup_simulation,
     logger,
     MyReducedFunctional,
     get_measurements,
+    update_unloaded_patient,
+    save_patient_data_to_simfile,
 )
 
 from .utils import (
@@ -55,6 +59,60 @@ from .adjoint_contraction_args import *
 from .io import write_opt_results_to_h5
 from .optimal_control import OptimalControl
 
+
+def assimilate(geometry, data, params):
+
+    required_keys = ['LVP', 'passive_filling_duration']
+    for key in required_keys:
+        msg = 'Expected "{}" to be a key in data'.format(key)
+        assert key in data, msg
+
+    setattr(geometry, 'pressure', data.get('LVP'))
+    setattr(geometry, 'passive_filling_duration',
+            data.get('passive_filling_duration'))
+    setattr(geometry, 'num_points', len(geometry.pressure))
+    setattr(geometry, 'num_contract_points',
+            geometry.num_points - geometry.passive_filling_duration)
+
+    for new, old in [('circumferential', 'c0'),
+                     ('longitudinal', 'l0'),
+                     ('radial', 'r0'),
+                     ('fiber', 'f0'),
+                     ('sheet', 's0'),
+                     ('sheet_normal', 'n0'),
+                     ('sfun', 'cfun')]:
+        setattr(geometry, new, getattr(geometry, old, None))
+
+    for key, attr in [('LVV', 'volume'),
+                      ('RVV', 'rv_volume'),
+                      ('RVP', 'rv_pressure'),
+                      ('strains', 'strains')]:
+
+        if key in data:
+            setattr(geometry, attr, data.get(key))
+
+    save_patient_data_to_simfile(geometry, params['sim_file'])
+
+    from .io import passive_inflation_exists
+    params["phase"] = PHASES[0]
+    if not passive_inflation_exists(params):
+
+        if params["unload"]:
+
+            run_unloaded_optimization(params, geometry)
+
+        else:
+            run_passive_optimization(params, geometry)
+
+        dolfin_adjoint.adj_reset()
+
+    if params["unload"]:
+        patient = update_unloaded_patient(params, geometry)
+
+    # Make sure that we choose active contraction phase
+    params["phase"] = PHASES[1]
+    run_active_optimization(params, geometry)
+    
 
 
 def get_constant(value_size, value_rank, val):
@@ -384,14 +442,10 @@ def run_active_optimization_step(
     :rtype: 
 
     """
-    print(1)
     # Get initial guess for gamma
     if params["active_contraction_iteration_number"] == 0:
-        print(2)
         zero = get_constant(gamma.value_size(), gamma.value_rank(), 0.0)
-        print(3)
         gamma.assign(zero)
-        print(4)
     else:
 
         # Use gamma from the previous point as initial guess
@@ -528,7 +582,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution=False, store_solution
             except SolverDidNotConverge:
                 print("NOOOO!")
                 if len(rd.controls_lst) > 0:
-                    assign_to_vector(paramvec.vector(), rd.controls_lst[-1].array())
+                    assign_to_vector(paramvec.vector(), rd.controls_lst[-1].get_local())
                 else:
                     msg = "Unable to converge. " + "Choose a different initial guess"
                     logger.error(msg)
@@ -582,7 +636,7 @@ def solve_oc_problem(params, rd, paramvec, return_solution=False, store_solution
         if not done:
             opt_result = {}
             control_idx = np.argmin(rd.func_values_lst)
-            x = numpy_mpi.gather_broadcast(rd.controls_lst[control_idx].array())
+            x = numpy_mpi.gather_broadcast(rd.controls_lst[control_idx].get_local())
             msg = "Unable to solve problem. Choose the best value"
             logger.warning(msg)
         else:

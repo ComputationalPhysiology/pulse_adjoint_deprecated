@@ -36,10 +36,6 @@ be imported."""
 import dolfin
 
 # from dolfin import Constant, Expression, SubDomain, INFO
-
-if dolfin.DOLFIN_VERSION_MAJOR > 1.6:
-    from ufl.domain import find_geometric_dimension
-
 import dolfin_adjoint
 # from dolfin_adjoint import *
 # from dolfin_adjoint import ReducedFunctional
