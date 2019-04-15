@@ -37,5 +37,6 @@ import dolfin
 
 # from dolfin import Constant, Expression, SubDomain, INFO
 import dolfin_adjoint
+
 # from dolfin_adjoint import *
 # from dolfin_adjoint import ReducedFunctional

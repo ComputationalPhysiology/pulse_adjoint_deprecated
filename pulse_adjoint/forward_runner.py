@@ -73,7 +73,10 @@ class BasicForwardRunner(object):
         self.params = params
 
         self.meshvol = dolfin.Constant(
-            dolfin.assemble(dolfin.Constant(1.0) * dolfin.dx(solver_parameters["mesh"])), name="mesh volume"
+            dolfin.assemble(
+                dolfin.Constant(1.0) * dolfin.dx(solver_parameters["mesh"])
+            ),
+            name="mesh volume",
         )
 
         # Initialize target functions
@@ -208,13 +211,17 @@ class BasicForwardRunner(object):
 
                 if phase == "active":
                     # There is only on step, so we are done
-                    functionals_time.append(functional * dolfin_adjoint.dt[dolfin_adjoint.START_TIME])
+                    functionals_time.append(
+                        functional * dolfin_adjoint.dt[dolfin_adjoint.START_TIME]
+                    )
                     dolfin_adjoint.adj_inc_timestep(1, True)
 
                 else:
                     # Check if we are done with the passive phase
                     functionals_time.append(functional * dolfin_adjoint.dt[it])
-                    dolfin_adjoint.adj_inc_timestep(it, it == len(self.bcs["pressure"]) - 1)
+                    dolfin_adjoint.adj_inc_timestep(
+                        it, it == len(self.bcs["pressure"]) - 1
+                    )
 
                 functional_values.append(dolfin_adjoint.assemble(functional))
 
@@ -389,7 +396,9 @@ class ActiveForwardRunner(BasicForwardRunner):
         w_old = self.cphm.solver.state
         gamma_old = self.gamma_previous.copy(True)
         logger.info(
-            "Gamma old = {}".format(numpy_mpi.gather_broadcast(gamma_old.vector().get_local()))
+            "Gamma old = {}".format(
+                numpy_mpi.gather_broadcast(gamma_old.vector().get_local())
+            )
         )
 
         try:
@@ -403,7 +412,9 @@ class ActiveForwardRunner(BasicForwardRunner):
             self.cphm.solver.reinit(w_old)
             # Assign the old gamma
             logger.info(
-                "Gamma old = {}".format(numpy_mpi.gather_broadcast(gamma_old.vector().get_local()))
+                "Gamma old = {}".format(
+                    numpy_mpi.gather_broadcast(gamma_old.vector().get_local())
+                )
             )
             self.cphm.solver.material.activation.assign(gamma_old)
             self.gamma_previous.assign(gamma_old)
@@ -553,8 +564,9 @@ class PassiveForwardRunner(BasicForwardRunner):
 
                 if self.params["matparams_space"] == "regional":
                     rg = RegionalParameter(self.paramvec._meshfunction)
-                    rg.assign(dolfin_adjoint.project(paramvec_split[it],
-                                                     rg.function_space()))
+                    rg.assign(
+                        dolfin_adjoint.project(paramvec_split[it], rg.function_space())
+                    )
                     v = rg.function
                 else:
                     v = paramvec_split[it]

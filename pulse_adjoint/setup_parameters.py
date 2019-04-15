@@ -440,7 +440,7 @@ def setup_application_parameters(material_model="holzapfel_ogden"):
 
     # Normalization factor for active contraction
     # For default values see material module
-    params.add("T_ref", 0.0)
+    params.add("T_ref", 1.0)
 
     # Decouple deviatoric and isochoric strains
     params.add("dev_iso_split", True)

@@ -36,54 +36,58 @@ from .utils import Text, UnableToChangePressureExeption
 from pulse.iterate import iterate, delist
 from pulse import numpy_mpi
 
+
 def create_mechanics_problem(solver_parameters):
     import pulse
+
     # from pulse import (MechanicsProblem, HeartGeometry, BoundaryConditions,
-                       # NeumannBC, RobinBC, MarkerFunctions, Marker, CRLBasis)
+    # NeumannBC, RobinBC, MarkerFunctions, Marker, CRLBasis)
     from pulse.material import HolzapfelOgden
 
-    mfun = pulse.MarkerFunctions(ffun=solver_parameters['facet_function'],
-                                 cfun=solver_parameters['mesh_function'])
-    
-    material = solver_parameters['material']
-    microstructure = pulse.Microstructure(f0=material.f0,
-                                          s0=material.s0,
-                                          n0=material.f0)
-    
-    crl_basis = pulse.CRLBasis(c0=solver_parameters['crl_basis']['circumferential'],
-                               r0=solver_parameters['crl_basis']['radial'],
-                               l0=solver_parameters['crl_basis']['longitudinal'])
-    
-    geometry = pulse.HeartGeometry(mesh=solver_parameters['mesh'],
-                                   markers=solver_parameters['markers'],
-                                   marker_functions=mfun,
-                                   microstructure=microstructure,
-                                   crl_basis=crl_basis)
+    mfun = pulse.MarkerFunctions(
+        ffun=solver_parameters["facet_function"],
+        cfun=solver_parameters["mesh_function"],
+    )
+
+    material = solver_parameters["material"]
+    microstructure = pulse.Microstructure(
+        f0=material.f0, s0=material.s0, n0=material.f0
+    )
+
+    crl_basis = pulse.CRLBasis(
+        c0=solver_parameters["crl_basis"]["circumferential"],
+        r0=solver_parameters["crl_basis"]["radial"],
+        l0=solver_parameters["crl_basis"]["longitudinal"],
+    )
+
+    geometry = pulse.HeartGeometry(
+        mesh=solver_parameters["mesh"],
+        markers=solver_parameters["markers"],
+        marker_functions=mfun,
+        microstructure=microstructure,
+        crl_basis=crl_basis,
+    )
 
     neumann = []
-    names = ['lv', 'rv']
-    for i, n in enumerate(solver_parameters['bc']['neumann']):
-        neumann.append(pulse.NeumannBC(traction=n[0],
-                                       marker=n[1], name=names[i]))
+    names = ["lv", "rv"]
+    for i, n in enumerate(solver_parameters["bc"]["neumann"]):
+        neumann.append(pulse.NeumannBC(traction=n[0], marker=n[1], name=names[i]))
 
     robin = []
-    for i, n in enumerate(solver_parameters['bc']['robin']):
+    for i, n in enumerate(solver_parameters["bc"]["robin"]):
         robin.append(pulse.RobinBC(value=n[0], marker=n[1]))
 
-
-    if hasattr(solver_parameters['bc']['dirichlet'], '__len__'):
-        dirichlet = solver_parameters['bc']['dirichlet']
+    if hasattr(solver_parameters["bc"]["dirichlet"], "__len__"):
+        dirichlet = solver_parameters["bc"]["dirichlet"]
     else:
-        dirichlet = (solver_parameters['bc']['dirichlet'],)
+        dirichlet = (solver_parameters["bc"]["dirichlet"],)
 
-    bcs = pulse.BoundaryConditions(dirichlet=dirichlet,
-                                   neumann=neumann,
-                                   robin=robin)
+    bcs = pulse.BoundaryConditions(dirichlet=dirichlet, neumann=neumann, robin=robin)
 
     problem = pulse.MechanicsProblem(geometry, material, bcs)
 
     return problem
-    
+
 
 class BasicHeartProblem(collections.Iterator):
     """
@@ -116,9 +120,7 @@ class BasicHeartProblem(collections.Iterator):
             target = p_lv_next
             control = self.p_lv
 
-        iterate(problem=self.solver,
-                target=target,
-                control=control, continuation=True)
+        iterate(problem=self.solver, target=target, control=control, continuation=True)
 
     def get_state(self, copy=True):
         """
@@ -188,7 +190,9 @@ class ActiveHeartProblem(BasicHeartProblem):
 
         # Load the state from the previous iteration
         w_temp = dolfin_adjoint.Function(self.solver.state_space, name="w_temp")
-        with dolfin.HDF5File(dolfin.mpi_comm_world(), params["sim_file"], "r") as h5file:
+        with dolfin.HDF5File(
+            dolfin.mpi_comm_world(), params["sim_file"], "r"
+        ) as h5file:
 
             # Get previous state
             if params["active_contraction_iteration_number"] == 0:
@@ -298,7 +302,7 @@ class ActiveHeartProblem(BasicHeartProblem):
             target=gamma_current,
             continuation=True,
             old_states=old_states,
-            old_controls=old_gammas
+            old_controls=old_gammas,
         )
         # Store these gammas and states which can be used
         # as initial guess for the newton solver in a later

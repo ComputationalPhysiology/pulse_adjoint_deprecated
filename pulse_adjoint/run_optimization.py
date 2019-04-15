@@ -62,38 +62,45 @@ from .optimal_control import OptimalControl
 
 def assimilate(geometry, data, params):
 
-    required_keys = ['LVP', 'passive_filling_duration']
+    required_keys = ["LVP", "passive_filling_duration"]
     for key in required_keys:
         msg = 'Expected "{}" to be a key in data'.format(key)
         assert key in data, msg
 
-    setattr(geometry, 'pressure', data.get('LVP'))
-    setattr(geometry, 'passive_filling_duration',
-            data.get('passive_filling_duration'))
-    setattr(geometry, 'num_points', len(geometry.pressure))
-    setattr(geometry, 'num_contract_points',
-            geometry.num_points - geometry.passive_filling_duration)
+    setattr(geometry, "pressure", data.get("LVP"))
+    setattr(geometry, "passive_filling_duration", data.get("passive_filling_duration"))
+    setattr(geometry, "num_points", len(geometry.pressure))
+    setattr(
+        geometry,
+        "num_contract_points",
+        geometry.num_points - geometry.passive_filling_duration,
+    )
 
-    for new, old in [('circumferential', 'c0'),
-                     ('longitudinal', 'l0'),
-                     ('radial', 'r0'),
-                     ('fiber', 'f0'),
-                     ('sheet', 's0'),
-                     ('sheet_normal', 'n0'),
-                     ('sfun', 'cfun')]:
+    for new, old in [
+        ("circumferential", "c0"),
+        ("longitudinal", "l0"),
+        ("radial", "r0"),
+        ("fiber", "f0"),
+        ("sheet", "s0"),
+        ("sheet_normal", "n0"),
+        ("sfun", "cfun"),
+    ]:
         setattr(geometry, new, getattr(geometry, old, None))
 
-    for key, attr in [('LVV', 'volume'),
-                      ('RVV', 'rv_volume'),
-                      ('RVP', 'rv_pressure'),
-                      ('strains', 'strains')]:
+    for key, attr in [
+        ("LVV", "volume"),
+        ("RVV", "rv_volume"),
+        ("RVP", "rv_pressure"),
+        ("strains", "strains"),
+    ]:
 
         if key in data:
             setattr(geometry, attr, data.get(key))
 
-    save_patient_data_to_simfile(geometry, params['sim_file'])
+    save_patient_data_to_simfile(geometry, params["sim_file"])
 
     from .io import passive_inflation_exists
+
     params["phase"] = PHASES[0]
     if not passive_inflation_exists(params):
 
@@ -112,7 +119,6 @@ def assimilate(geometry, data, params):
     # Make sure that we choose active contraction phase
     params["phase"] = PHASES[1]
     run_active_optimization(params, geometry)
-    
 
 
 def get_constant(value_size, value_rank, val):
@@ -120,7 +126,7 @@ def get_constant(value_size, value_rank, val):
         val=val,
         value_rank=value_rank,
         value_size=value_size,
-        constant=dolfin_adjoint.Constant
+        constant=dolfin_adjoint.Constant,
     )
 
 
@@ -165,7 +171,9 @@ def run_unloaded_optimization(params, patient):
         group = "/".join(
             [params["h5group"], PASSIVE_INFLATION_GROUP, "/optimal_control"]
         )
-        with dolfin.HDF5File(dolfin.mpi_comm_world(), params["sim_file"], "r") as h5file:
+        with dolfin.HDF5File(
+            dolfin.mpi_comm_world(), params["sim_file"], "r"
+        ) as h5file:
             h5file.read(paramvec, group)
 
         # Load the initial guess
@@ -386,10 +394,14 @@ def run_active_optimization(params, patient):
                                         domain=patient.mesh, subdomain_data=patient.sfun
                                     )(int(r))
                                 )
-                                for r in set(numpy_mpi.gather_broadcast(patient.sfun.array()))
+                                for r in set(
+                                    numpy_mpi.gather_broadcast(patient.sfun.array())
+                                )
                             ]
                             meshvol = sum(meshvols)
-                            g_arr = numpy_mpi.gather_broadcast(gamma.vector().get_local())
+                            g_arr = numpy_mpi.gather_broadcast(
+                                gamma.vector().get_local()
+                            )
                             val = sum(np.multiply(g_arr, meshvols)) / float(meshvol)
                             c = get_constant(
                                 gamma.value_size(), gamma.value_rank(), val
@@ -398,8 +410,12 @@ def run_active_optimization(params, patient):
                         else:
 
                             # Project the activation parameter onto the real line
-                            g_proj = dolfin_adjoint.project(gamma, dolfin.FunctionSpace(patient.mesh, "R", 0))
-                            val = numpy_mpi.gather_broadcast(g_proj.vector().get_local())[0]
+                            g_proj = dolfin_adjoint.project(
+                                gamma, dolfin.FunctionSpace(patient.mesh, "R", 0)
+                            )
+                            val = numpy_mpi.gather_broadcast(
+                                g_proj.vector().get_local()
+                            )[0]
                             c = get_constant(
                                 gamma.value_size(), gamma.value_rank(), val
                             )
@@ -451,7 +467,9 @@ def run_active_optimization_step(
         # Use gamma from the previous point as initial guess
         # Load gamma from previous point
         g_temp = dolfin_adjoint.Function(gamma.function_space())
-        with dolfin.HDF5File(dolfin.mpi_comm_world(), params["sim_file"], "r") as h5file:
+        with dolfin.HDF5File(
+            dolfin.mpi_comm_world(), params["sim_file"], "r"
+        ) as h5file:
             h5file.read(
                 g_temp,
                 "active_contraction/contract_point_{}/optimal_control".format(
@@ -467,15 +485,13 @@ def run_active_optimization_step(
     else:
         mshfun = None
 
-    print(5)
     optimization_targets, bcs = load_targets(
         params, solver_parameters, measurements, mshfun
     )
-    print(6)
     for_run = ActiveForwardRunner(
         solver_parameters, pressure, bcs, optimization_targets, params, gamma
     )
-    print(7)
+
     # Update weights so that the initial value of the
     # functional is 0.1
     if params["adaptive_weights"]:
@@ -489,7 +505,7 @@ def run_active_optimization_step(
         for_run.opt_weights.update(**weights)
         logger.info("Update weights for functional")
         logger.info(for_run._print_functional())
-    print(8)
+
     # Stop recording
     logger.debug(Text.yellow("Stop annotating"))
     dolfin.parameters["adjoint"]["stop_annotating"] = True
@@ -497,7 +513,7 @@ def run_active_optimization_step(
     rd = MyReducedFunctional(
         for_run, gamma, relax=params["active_relax"], verbose=params["verbose"]
     )
-    print(9)
+
     return rd, gamma
 
 
@@ -564,8 +580,12 @@ def solve_oc_problem(params, rd, paramvec, return_solution=False, store_solution
         state_start = rd.for_run.cphm.get_state()
         niter = 0
 
-        par_max = np.max(numpy_mpi.gather_broadcast(paramvec_start.vector().get_local()))
-        par_min = np.min(numpy_mpi.gather_broadcast(paramvec_start.vector().get_local()))
+        par_max = np.max(
+            numpy_mpi.gather_broadcast(paramvec_start.vector().get_local())
+        )
+        par_min = np.min(
+            numpy_mpi.gather_broadcast(paramvec_start.vector().get_local())
+        )
         gamma_max = float(params["Optimization_parameters"]["gamma_max"])
         mat_max = float(params["Optimization_parameters"]["matparams_max"])
         mat_min = float(params["Optimization_parameters"]["matparams_min"])
@@ -707,7 +727,9 @@ def print_optimization_report(
         logger.info("\nMaterial Parameters")
         logger.info("Initial {}".format(init_controls))
         logger.info(
-            "Optimal {}".format(numpy_mpi.gather_broadcast(opt_controls.vector().get_local()))
+            "Optimal {}".format(
+                numpy_mpi.gather_broadcast(opt_controls.vector().get_local())
+            )
         )
     else:
         logger.info("\nContraction Parameter")
@@ -857,11 +879,15 @@ def get_optimization_targets(params, solver_parameters, mshfun=None):
 
             family, degree = solver_parameters["state_space"].split(":")[0].split("_")
             u = dolfin.Function(
-                dolfin.VectorFunctionSpace(solver_parameters["mesh"], family, int(degree))
+                dolfin.VectorFunctionSpace(
+                    solver_parameters["mesh"], family, int(degree)
+                )
             )
 
             logger.debug("Load displacement from state number {}.".format(group))
-            with dolfin.HDF5File(dolfin.mpi_comm_world(), params["sim_file"], "r") as h5file:
+            with dolfin.HDF5File(
+                dolfin.mpi_comm_world(), params["sim_file"], "r"
+            ) as h5file:
 
                 # Get previous state
                 group = "/".join(
@@ -917,15 +943,15 @@ def load_targets(params, solver_parameters, measurements, mshfun=None):
     # Solve calls are not registred by libajoint
     logger.debug(Text.yellow("Stop annotating"))
     dolfin.parameters["adjoint"]["stop_annotating"] = True
-    print('a')
+
     # Load optimization targets
     optimization_targets = get_optimization_targets(params, solver_parameters, mshfun)
-    print('b')
+
     # Load target data
     optimization_targets, bcs = load_target_data(
         measurements, params, optimization_targets
     )
-    print('c')
+
     # Start recording for dolfin adjoint
     logger.debug(Text.yellow("Start annotating"))
     dolfin.parameters["adjoint"]["stop_annotating"] = False

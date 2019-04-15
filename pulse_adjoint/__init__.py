@@ -1,3 +1,7 @@
+import pulse as _pulse
+
+_pulse.annotation.annotate = True
+
 from . import adjoint_contraction_args as args
 
 from . import forward_runner

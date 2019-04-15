@@ -28,10 +28,12 @@ import numpy as np
 import logging
 import pulse
 from pulse import numpy_mpi
-from pulse.dolfin_utils import (RegionalParameter,
-                                MixedParameter,
-                                BaseExpression,
-                                VertexDomain)
+from pulse.dolfin_utils import (
+    RegionalParameter,
+    MixedParameter,
+    BaseExpression,
+    VertexDomain,
+)
 
 from .dolfinimport import *
 from .utils import Object, Text, print_line, print_head
@@ -253,9 +255,11 @@ def get_simulated_strain_traces(phm):
     strains = phm.strains
     for direction in range(3):
         for region in range(17):
-            simulated_strains[STRAIN_NUM_TO_KEY[direction]][region] = numpy_mpi.gather_broadcast(
-                strains[region].vector().get_local()
-            )[direction]
+            simulated_strains[STRAIN_NUM_TO_KEY[direction]][
+                region
+            ] = numpy_mpi.gather_broadcast(strains[region].vector().get_local())[
+                direction
+            ]
     return simulated_strains
 
 
@@ -268,24 +272,23 @@ def make_solver_params(params, patient, measurements=None):
 
 
 def make_solver_parameters(
-        params, patient, matparams, gamma=dolfin_adjoint.Constant(0.0),
-        paramvec=None, measurements=None
+    params,
+    patient,
+    matparams,
+    gamma=dolfin_adjoint.Constant(0.0),
+    paramvec=None,
+    measurements=None,
 ):
 
     ##  Material
     Material = get_material_model(params["material_model"])
 
-    f0 = getattr(patient, 'fiber', getattr(patient, 'f0', None))
-    s0 = getattr(patient, 'sheet', getattr(patient, 's0', None))
-    n0 = getattr(patient, 'sheet_normal', getattr(patient, 'n0', None))
-    
+    f0 = getattr(patient, "fiber", getattr(patient, "f0", None))
+    s0 = getattr(patient, "sheet", getattr(patient, "s0", None))
+    n0 = getattr(patient, "sheet_normal", getattr(patient, "n0", None))
+
     material = Material(
-        f0=f0,
-        activation=gamma,
-        parameters=matparams,
-        s0=s0,
-        n0=n0,
-        **params
+        f0=f0, activation=gamma, parameters=matparams, s0=s0, n0=n0, **params
     )
 
     if measurements is None:
@@ -352,7 +355,10 @@ def make_solver_parameters(
 
             bc = [
                 dolfin.DirichletBC(
-                    V.sub(0), dolfin_adjoint.Constant(0.0), patient.ffun, patient.markers["BASE"][0]
+                    V.sub(0),
+                    dolfin_adjoint.Constant(0.0),
+                    patient.ffun,
+                    patient.markers["BASE"][0],
                 ),
                 DirichletBC(V.sub(1), base_bc_y, endoring, "pointwise"),
                 DirichletBC(V.sub(2), base_bc_z, endoring, "pointwise"),
@@ -371,7 +377,10 @@ def make_solver_parameters(
             V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
             bc = [
                 dolfin.DirichletBC(
-                    V, dolfin_adjoint.Constant((0, 0, 0)), patient.ffun, patient.markers["BASE"][0]
+                    V,
+                    dolfin_adjoint.Constant((0, 0, 0)),
+                    patient.ffun,
+                    patient.markers["BASE"][0],
                 )
             ]
             return bc
@@ -387,7 +396,11 @@ def make_solver_parameters(
             in the x = 0 plane.
             """
             V = W if W.sub(0).num_sub_spaces() == 0 else W.sub(0)
-            bc = [dolfin.DirichletBC(V.sub(0), 0, patient.ffun, patient.markers["BASE"][0])]
+            bc = [
+                dolfin.DirichletBC(
+                    V.sub(0), 0, patient.ffun, patient.markers["BASE"][0]
+                )
+            ]
             return bc
 
         # Apply a linear sprint robin type BC to limit motion
@@ -397,7 +410,11 @@ def make_solver_parameters(
 
     # Circumferential, Radial and Longitudinal basis vector
     crl_basis = {}
-    for att, att1 in [("circumferential", 'c0'), ("radial", 'r0'), ("longitudinal", 'l0')]:
+    for att, att1 in [
+        ("circumferential", "c0"),
+        ("radial", "r0"),
+        ("longitudinal", "l0"),
+    ]:
         # if hasattr(patient, att):
         crl_basis[att] = getattr(patient, att, getattr(patient, att1, None))
 
@@ -406,10 +423,10 @@ def make_solver_parameters(
         "facet_function": patient.ffun,
         "facet_normal": dolfin.FacetNormal(patient.mesh),
         "crl_basis": crl_basis,
-        "mesh_function": getattr(patient, 'sfun', getattr(patient, 'cfun', None)),
+        "mesh_function": getattr(patient, "sfun", getattr(patient, "cfun", None)),
         "markers": patient.markers,
-        "passive_filling_duration": getattr(patient, 'passive_filling_duration', 1),
-        "strain_weights": getattr(patient, 'strain_weights', None),
+        "passive_filling_duration": getattr(patient, "passive_filling_duration", 1),
+        "strain_weights": getattr(patient, "strain_weights", None),
         "state_space": "P_2:P_1",
         "compressibility": {
             "type": params["compressibility"],
@@ -436,7 +453,9 @@ def make_control(params, patient):
         gamma = RegionalParameter(sfun)
     else:
         gamma_family, gamma_degree = params["gamma_space"].split("_")
-        gamma_space = dolfin.FunctionSpace(patient.mesh, gamma_family, int(gamma_degree))
+        gamma_space = dolfin.FunctionSpace(
+            patient.mesh, gamma_family, int(gamma_degree)
+        )
 
         gamma = dolfin_adjoint.Function(gamma_space, name="activation parameter")
 
@@ -478,7 +497,9 @@ def make_control(params, patient):
         # Load the parameters from the result file
 
         # Open simulation file
-        with dolfin.HDF5File(dolfin.mpi_comm_world(), params["sim_file"], "r") as h5file:
+        with dolfin.HDF5File(
+            dolfin.mpi_comm_world(), params["sim_file"], "r"
+        ) as h5file:
 
             # Get material parameter from passive phase file
             h5file.read(paramvec, PASSIVE_INFLATION_GROUP + "/optimal_control")
@@ -768,7 +789,9 @@ class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
         self.for_run = for_run
         self.paramvec = paramvec
 
-        self.initial_paramvec = numpy_mpi.gather_broadcast(paramvec.vector().get_local())
+        self.initial_paramvec = numpy_mpi.gather_broadcast(
+            paramvec.vector().get_local()
+        )
         self.scale = scale
         self.derivative_scale = relax
         self.verbose = verbose
@@ -779,8 +802,9 @@ class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
         dolfin_adjoint.adj_reset()
         self.iter += 1
 
-        paramvec_new = dolfin_adjoint.Function(self.paramvec.function_space(),
-                                               name="new control")
+        paramvec_new = dolfin_adjoint.Function(
+            self.paramvec.function_space(), name="new control"
+        )
         # paramvec_new = RegionalParameter(self.paramvec._meshfunction)
 
         if isinstance(value, (dolfin.Function, RegionalParameter, MixedParameter)):
@@ -792,8 +816,9 @@ class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
             paramvec_new.assign(val_delisted)
 
         else:
-            numpy_mpi.assign_to_vector(paramvec_new.vector(),
-                                       numpy_mpi.gather_broadcast(value))
+            numpy_mpi.assign_to_vector(
+                paramvec_new.vector(), numpy_mpi.gather_broadcast(value)
+            )
 
         logger.debug(Text.yellow("Start annotating"))
         dolfin.parameters["adjoint"]["stop_annotating"] = False
@@ -847,7 +872,7 @@ class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
             # Some printing
             logger.info(print_head(self.for_res))
 
-        control = dolfin_adjoint.Control(self.paramvec)            
+        control = dolfin_adjoint.Control(self.paramvec)
 
         dolfin_adjoint.ReducedFunctional.__init__(
             self, dolfin_adjoint.Functional(self.for_res["total_functional"]), control
@@ -929,7 +954,7 @@ class MyReducedFunctional(dolfin_adjoint.ReducedFunctional):
 
         t = dolfin.Timer("Backward run")
         t.start()
-        
+
         out = dolfin_adjoint.ReducedFunctional.derivative(self, forget=False)
         back_time = t.stop()
         logger.debug(

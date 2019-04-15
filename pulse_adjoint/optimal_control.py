@@ -65,7 +65,6 @@ from .utils import print_line, print_head
 from .adjoint_contraction_args import *
 
 
-
 try:
     import scipy
     from scipy.optimize import minimize as scipy_minimize

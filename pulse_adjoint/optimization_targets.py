@@ -73,8 +73,7 @@ class OptimizationTarget(object):
 
         # The volume of the mesh
         self.meshvol = dolfin.Constant(
-            dolfin.assemble(dolfin.Constant(1.0) * dolfin.dx(mesh)),
-            name="mesh volume"
+            dolfin.assemble(dolfin.Constant(1.0) * dolfin.dx(mesh)), name="mesh volume"
         )
 
         # Test and trial functions for the target space
@@ -149,7 +148,8 @@ class OptimizationTarget(object):
     def assign_functional(self):
         logger.debug("Assign functional for {}".format(self._name))
         dolfin_adjoint.solve(
-            self._trial_r * self._test_r * dolfin.dx == self._test_r * self._form * dolfin.dx,
+            self._trial_r * self._test_r * dolfin.dx
+            == self._test_r * self._form * dolfin.dx,
             self.functional,
         )
 
@@ -267,7 +267,9 @@ class RegionalStrainTarget(OptimizationTarget):
         self.dmu = dmu
 
         self.meshvols = [
-            dolfin.Constant(dolfin.assemble(dolfin.Constant(1.0) * dmu(int(i))), name="mesh volume")
+            dolfin.Constant(
+                dolfin.assemble(dolfin.Constant(1.0) * dmu(int(i))), name="mesh volume"
+            )
             for i in self.regions
         ]
 
@@ -317,22 +319,30 @@ class RegionalStrainTarget(OptimizationTarget):
         """
 
         self.target_fun = [
-            dolfin_adjoint.Function(self.target_space, name="Target Strains_{}".format(i + 1))
+            dolfin_adjoint.Function(
+                self.target_space, name="Target Strains_{}".format(i + 1)
+            )
             for i in range(self.nregions)
         ]
 
         self.simulated_fun = [
-            dolfin_adjoint.Function(self.target_space, name="Simulated Strains_{}".format(i + 1))
+            dolfin_adjoint.Function(
+                self.target_space, name="Simulated Strains_{}".format(i + 1)
+            )
             for i in range(self.nregions)
         ]
 
         self.functional = [
-            dolfin_adjoint.Function(self.realspace, name="Strains_{} Functional".format(i + 1))
+            dolfin_adjoint.Function(
+                self.realspace, name="Strains_{} Functional".format(i + 1)
+            )
             for i in range(self.nregions)
         ]
 
         self.weights = [
-            dolfin_adjoint.Function(self.weight_space, name="Strains Weights_{}".format(i + 1))
+            dolfin_adjoint.Function(
+                self.weight_space, name="Strains Weights_{}".format(i + 1)
+            )
             for i in range(self.nregions)
         ]
 
@@ -349,7 +359,8 @@ class RegionalStrainTarget(OptimizationTarget):
     def _set_form(self):
 
         self._form = [
-            (dolfin.dot(self.weights[i], self.simulated_fun[i] - self.target_fun[i])) ** 2
+            (dolfin.dot(self.weights[i], self.simulated_fun[i] - self.target_fun[i]))
+            ** 2
             for i in range(self.nregions)
         ]
 
@@ -382,8 +393,7 @@ class RegionalStrainTarget(OptimizationTarget):
         logger.debug("Assign simulated for {}".format(self._name))
         if self.approx == "interpolate":
             u_int = dolfin_adjoint.interpolate(
-                dolfin_adjoint.project(u, self._disp_space),
-                self._interpolation_space
+                dolfin_adjoint.project(u, self._disp_space), self._interpolation_space
             )
 
         elif self.approx == "project":
@@ -405,7 +415,9 @@ class RegionalStrainTarget(OptimizationTarget):
 
         if len(self.crl_basis) > 0:
 
-            tensor_diag = dolfin.as_vector([dolfin.inner(tensor * e, e) for e in self.crl_basis])
+            tensor_diag = dolfin.as_vector(
+                [dolfin.inner(tensor * e, e) for e in self.crl_basis]
+            )
 
             # Make a project for dolfin-adjoint recording
             for i, r in enumerate(self.regions):
@@ -475,7 +487,9 @@ class FullStrainTarget(OptimizationTarget):
 
         # Compute the strains
         gradu = dolfin.grad(u)
-        grad_u_diag = dolfin.as_vector([dolfin.inner(e, gradu * e) for e in self.crl_basis])
+        grad_u_diag = dolfin.as_vector(
+            [dolfin.inner(e, gradu * e) for e in self.crl_basis]
+        )
 
         # Make a project for dolfin-adjoint recording
         dolfin_adjoint.solve(
@@ -505,7 +519,9 @@ class VolumeTarget(OptimizationTarget):
         self.chamber = chamber
 
         self.target_space = dolfin.FunctionSpace(mesh, "R", 0)
-        self.endoarea = dolfin.Constant(dolfin.assemble(dolfin.Constant(1.0) * dmu), name="endo area")
+        self.endoarea = dolfin.Constant(
+            dolfin.assemble(dolfin.Constant(1.0) * dmu), name="endo area"
+        )
 
         assert approx in ["project", "interpolate", "original"]
         self.approx = approx
@@ -548,7 +564,8 @@ class VolumeTarget(OptimizationTarget):
         else:
             if self.approx == "interpolate":
                 u_int = dolfin_adjoint.interpolate(
-                    dolfin_adjoint.project(u, self._disp_space), self._interpolation_space
+                    dolfin_adjoint.project(u, self._disp_space),
+                    self._interpolation_space,
                 )
 
             elif self.approx == "project":
@@ -560,7 +577,9 @@ class VolumeTarget(OptimizationTarget):
             # Compute volume
             F = dolfin.grad(u_int) + dolfin.Identity(3)
             J = dolfin.det(F)
-            vol = (-1.0 / 3.0) * dolfin.dot(self._X + u_int, J * dolfin.inv(F).T * self._N)
+            vol = (-1.0 / 3.0) * dolfin.dot(
+                self._X + u_int, J * dolfin.inv(F).T * self._N
+            )
 
         # Make a project for dolfin-adjoint recording
         dolfin_adjoint.solve(
@@ -598,10 +617,14 @@ class Regularization(object):
         self._mshfun = (
             mshfun
             if mshfun is not None
-            else dolfin.MeshFunction("size_t", mesh, mesh.geometry().dim(), mesh.domains())
+            else dolfin.MeshFunction(
+                "size_t", mesh, mesh.geometry().dim(), mesh.domains()
+            )
         )
 
-        self.meshvol = dolfin.Constant(dolfin.assemble(dolfin.Constant(1.0) * dolfin.dx(mesh)), name="mesh volume")
+        self.meshvol = dolfin.Constant(
+            dolfin.assemble(dolfin.Constant(1.0) * dolfin.dx(mesh)), name="mesh volume"
+        )
         self._regtype = regtype
         # A real space for projecting the functional
         self._realspace = dolfin.FunctionSpace(mesh, "R", 0)
@@ -635,7 +658,9 @@ class Regularization(object):
 
     def set_target_functions(self):
 
-        self.functional = dolfin_adjoint.Function(self._realspace, name="regularization_functional")
+        self.functional = dolfin_adjoint.Function(
+            self._realspace, name="regularization_functional"
+        )
         if self.spacestr == "regional":
             from .setup_optimization import RegionalParameter
 
@@ -658,7 +683,10 @@ class Regularization(object):
         else:
             if self.spacestr == "CG_1":
 
-                return (dolfin.inner(dolfin.grad(self._m), dolfin.grad(self._m)) / self.meshvol) * self.dx
+                return (
+                    dolfin.inner(dolfin.grad(self._m), dolfin.grad(self._m))
+                    / self.meshvol
+                ) * self.dx
 
             elif self.spacestr == "regional":
 
@@ -666,12 +694,16 @@ class Regularization(object):
 
                 # Sum all the components to find the mean
                 expr_arr[0] = "1"
-                m_sum = dolfin.dot(self._m, dolfin.Expression(tuple(expr_arr), degree=1))
+                m_sum = dolfin.dot(
+                    self._m, dolfin.Expression(tuple(expr_arr), degree=1)
+                )
                 expr_arr[0] = "0"
 
                 for i in range(1, self._m.value_size()):
                     expr_arr[i] = "1"
-                    m_sum += dolfin.dot(self._m, dolfin.Expression(tuple(expr_arr), degree=1))
+                    m_sum += dolfin.dot(
+                        self._m, dolfin.Expression(tuple(expr_arr), degree=1)
+                    )
                     expr_arr[i] = "0"
 
                 # Compute the mean
@@ -680,13 +712,17 @@ class Regularization(object):
                 # Compute the variance
                 expr_arr[0] = "1"
                 m_reg = (
-                    dolfin.dot(self._m, dolfin.Expression(tuple(expr_arr), degree=1)) - m_avg
+                    dolfin.dot(self._m, dolfin.Expression(tuple(expr_arr), degree=1))
+                    - m_avg
                 ) ** 2 / self._m.value_size()
                 expr_arr[0] = "0"
                 for i in range(1, self._m.value_size()):
                     expr_arr[i] = "1"
                     m_reg += (
-                        dolfin.dot(self._m, dolfin.Expression(tuple(expr_arr), degree=1)) - m_avg
+                        dolfin.dot(
+                            self._m, dolfin.Expression(tuple(expr_arr), degree=1)
+                        )
+                        - m_avg
                     ) ** 2 / self._m.value_size()
                     expr_arr[i] = "0"
 
@@ -774,7 +810,9 @@ if __name__ == "__main__":
             target_vol.set_target_functions()
             target_vol.assign_simulated(u)
 
-            vol = numpy_mpi.gather_broadcast(target_vol.simulated_fun.vector().get_local())[0]
+            vol = numpy_mpi.gather_broadcast(
+                target_vol.simulated_fun.vector().get_local()
+            )[0]
             print(("Volume = ", vol))
 
             target_strain = RegionalStrainTarget(
@@ -791,7 +829,9 @@ if __name__ == "__main__":
             target_strain.assign_simulated(u)
 
             strain = [
-                numpy_mpi.gather_broadcast(target_strain.simulated_fun[i].vector().get_local())
+                numpy_mpi.gather_broadcast(
+                    target_strain.simulated_fun[i].vector().get_local()
+                )
                 for i in range(nregions)
             ]
             print(("Regional strain = ", strain))

@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python
 # c) 2001-2017 Simula Research Laboratory ALL RIGHTS RESERVED
 # Authors: Henrik Finsberg
@@ -221,10 +220,7 @@ class BasePatient(object):
             geo = load.load_geometry(self.paths["mesh_path"], self.h5group, **kwargs)
 
             # Mapper for compatability
-            mapper = dict(fiber='f0',
-                          sheet='s0',
-                          sheet_normal='n0',
-                          sfun='cfun')
+            mapper = dict(fiber="f0", sheet="s0", sheet_normal="n0", sfun="cfun")
 
             for k, v in mapper.items():
                 if hasattr(geo, v):
@@ -288,9 +284,7 @@ class LVTestPatient(TestPatient):
         self._name = name
         self._mesh_type = "lv"
 
-        self.paths = {
-            "mesh_path": pulse.mesh_paths[name]
-        }
+        self.paths = {"mesh_path": pulse.mesh_paths[name]}
         TestPatient.__init__(self, **kwargs)
 
 
@@ -305,9 +299,7 @@ class BiVTestPatient(TestPatient):
         # RV volume
         self.RVV = np.array([27.387594] * 6)
 
-        self.paths = {
-            "mesh_path": pulse.mesh_paths["biv_ellipsoid.h5"]
-        }
+        self.paths = {"mesh_path": pulse.mesh_paths["biv_ellipsoid.h5"]}
 
         TestPatient.__init__(self, **kwargs)
         self.pressure = np.linspace(0, 2, 6)

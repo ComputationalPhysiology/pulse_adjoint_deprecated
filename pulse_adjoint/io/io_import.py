@@ -59,4 +59,3 @@ from ..adjoint_contraction_args import (
     PASSIVE_INFLATION_GROUP,
     PHASES,
 )
-

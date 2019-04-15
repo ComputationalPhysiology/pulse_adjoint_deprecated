@@ -47,11 +47,10 @@ from ..setup_optimization import (
     make_control,
     setup_simulation,
     check_patient_attributes,
-    make_solver_parameters
+    make_solver_parameters,
 )
 from ..run_optimization import run_passive_optimization_step, solve_oc_problem, store
 from ..heart_problem import create_mechanics_problem
-
 
 
 class UnloadedMaterial(object):
@@ -171,7 +170,6 @@ class UnloadedMaterial(object):
             h5name=self.params["Patient_parameters"]["mesh_path"],
             h5group=self.params["Patient_parameters"]["mesh_group"],
         )
-        
 
     def calibrate_data(self, volumes, pressures):
 
@@ -225,9 +223,7 @@ class UnloadedMaterial(object):
 
         self.params["phase"] = "unloading"
 
-        params, p_expr = make_solver_parameters(
-                self.params, self.geometry, matparams
-            )
+        params, p_expr = make_solver_parameters(self.params, self.geometry, matparams)
 
         problem = create_mechanics_problem(params)
 
@@ -246,22 +242,19 @@ class UnloadedMaterial(object):
         backward_displacement = unloader.backward_displacement
 
         group = "/".join([str(self.it), "unloaded"])
-  
-        new_geometry.save(
-            h5name=self.params["sim_file"],
-            h5group=group,
-            other_functions=dict(backward_displacement=backward_displacement)
-        )
 
         new_geometry.save(
             h5name=self.params["sim_file"],
-            h5group="unloaded"
+            h5group=group,
+            other_functions=dict(backward_displacement=backward_displacement),
         )
+
+        new_geometry.save(h5name=self.params["sim_file"], h5group="unloaded")
 
         return HeartGeometry.from_file(
             h5name=self.params["sim_file"],
             h5group=group,
-            comm=new_geometry.mesh.mpi_comm()
+            comm=new_geometry.mesh.mpi_comm(),
         )
 
     def get_backward_displacement(self):
