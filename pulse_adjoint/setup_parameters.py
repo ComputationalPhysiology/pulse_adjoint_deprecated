@@ -25,6 +25,7 @@
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
 import logging
+import dolfin
 from .dolfinimport import *
 from .adjoint_contraction_args import *
 
@@ -441,9 +442,6 @@ def setup_application_parameters(material_model="holzapfel_ogden"):
     # Normalization factor for active contraction
     # For default values see material module
     params.add("T_ref", 1.0)
-
-    # Decouple deviatoric and isochoric strains
-    params.add("dev_iso_split", True)
 
     # Fraction of transverse active tesion for active stress formulation.
     # 0 = active only along fiber, 1 = equal force in all directions (default=0.0).

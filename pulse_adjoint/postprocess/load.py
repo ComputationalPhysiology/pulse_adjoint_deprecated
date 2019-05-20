@@ -33,11 +33,14 @@ This will be included later.
 # SIMULA RESEARCH LABORATORY MAKES NO REPRESENTATIONS AND EXTENDS NO
 # WARRANTIES OF ANY KIND, EITHER IMPLIED OR EXPRESSED, INCLUDING, BUT
 # NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY OR FITNESS
-import os, h5py
+import os
+import h5py
 from copy import deepcopy
 import numpy as np
+import pulse
 from .args import *
 from . import utils
+from ..utils import geo_compat
 
 
 attributes = [
@@ -153,15 +156,11 @@ def load_parameters(fname, key=None):
         raise KeyError(msg)
 
 
-def load_patient_data(h5name, h5group):
-    from mesh_generation import load_geometry_from_h5
-    from ..patient_data import FullPatient
+def load_patient_data(h5name, h5group=""):
 
-    patient = FullPatient(init=False)
+    patient = pulse.HeartGeometry.from_file(h5name, h5group)
 
-    geo = load_geometry_from_h5(h5name, h5group)
-
-    for k, v in geo.__dict__.items():
+    for k, v in patient.__dict__.items():
         if k not in patient_paths:
             setattr(patient, k, v)
 
@@ -185,15 +184,15 @@ def load_patient_data(h5name, h5group):
 
     paths = {}
     for p in patient_paths:
-        if hasattr(geo, p):
-            paths[p] = getattr(geo, p)
+        if hasattr(patient, p):
+            paths[p] = getattr(patient, p)
 
     setattr(patient, "paths", paths)
 
     return patient
 
 
-def save_patient_to_h5(patient, h5name, h5group):
+def save_patient_to_h5(patient, h5name, h5group=""):
 
     if hasattr(patient, "mesh"):
         mesh = getattr(patient, "mesh")
@@ -442,9 +441,10 @@ def load_dict_from_h5(fname, h5group=""):
             if h5group in h5file:
                 d = h52dict(h5file[h5group])
             else:
-                msg = "h5group {} does not exist in h5file {}".format(fname, h5group)
+                msg = "h5group {} does not exist in h5file {}".format(fname,
+                                                                      h5group)
                 logger.warning(msg)
-                return None
+                return {}
         else:
             d = h52dict(h5file)
 
@@ -921,13 +921,21 @@ def get_kwargs(patient, params):
     return kwargs
 
 
-def load_measured_strain_and_volume(patient, params, num_points=None):
+def load_measured_strain_and_volume(patient, params,
+                                    num_points=None, data=None):
 
     from pulse_adjoint.setup_optimization import get_measurements
 
     params["phase"] = "all"
 
+    if data is not None:
+        patient = geo_compat(patient, data)
+
+    from IPython import embed; embed()
+    exit()
     data = get_measurements(params, patient)
+
+    
 
     # Some indices
     passive_filling_duration = patient.passive_filling_duration

@@ -28,6 +28,46 @@ from pprint import pformat
 from .adjoint_contraction_args import logger, PHASES
 
 
+def geo_compat(geometry, data):
+
+    required_keys = ["LVP", "passive_filling_duration"]
+    for key in required_keys:
+        msg = 'Expected "{}" to be a key in data'.format(key)
+        assert key in data, msg
+
+    setattr(geometry, "pressure", data.get("LVP"))
+    setattr(geometry, "passive_filling_duration",
+            data.get("passive_filling_duration"))
+    setattr(geometry, "num_points", len(geometry.pressure))
+    setattr(
+        geometry,
+        "num_contract_points",
+        geometry.num_points - geometry.passive_filling_duration,
+    )
+
+    for new, old in [
+        ("circumferential", "c0"),
+        ("longitudinal", "l0"),
+        ("radial", "r0"),
+        ("fiber", "f0"),
+        ("sheet", "s0"),
+        ("sheet_normal", "n0"),
+        ("sfun", "cfun"),
+    ]:
+        setattr(geometry, new, getattr(geometry, old, None))
+
+    for key, attr in [
+        ("LVV", "volume"),
+        ("RVV", "rv_volume"),
+        ("RVP", "rv_pressure"),
+        ("strains", "strains"),
+    ]:
+
+        if key in data:
+            setattr(geometry, attr, data.get(key))
+
+    return geometry
+
 def get_dimesion(u):
     from dolfin import DOLFIN_VERSION_MAJOR
     from ufl.domain import find_geometric_dimension

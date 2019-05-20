@@ -243,6 +243,10 @@ def save_patient_data_to_simfile(patient, sim_file):
         if hasattr(patient, att):
             local_basis.append(getattr(patient, att))
 
+    meshfunctions = {}
+    for dim, name in enumerate(['vfun', 'efun', 'ffun', 'cfun']):
+        meshfunctions[dim] = getattr(patient, name)
+
     save_geometry_to_h5(
         patient.mesh, sim_file, "", patient.markers, fields, local_basis
     )

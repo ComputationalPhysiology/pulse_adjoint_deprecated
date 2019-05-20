@@ -166,10 +166,10 @@ if __name__ == "__main__":
 
 
     # test_adjoint_calculations("lv", "CG_1", "passive", "active_strain")
-    test_adjoint_calculations("lv", "regional", "passive", "active_strain")
+    # test_adjoint_calculations("lv", "regional", "passive", "active_strain")
     
     # test_adjoint_calculations("lv", "CG_1", "active", "active_strain")
-    # test_adjoint_calculations("lv", "regional", "active", "active_strain")
+    test_adjoint_calculations("lv", "regional", "active", "active_strain")
     
     # test_adjoint_calculations("lv", "CG_1", "active", "active_stress")
     # test_adjoint_calculations("lv", "regional", "active", "active_stress")

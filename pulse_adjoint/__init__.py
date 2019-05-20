@@ -24,6 +24,9 @@ from .patient_data import Patient, FullPatient, LVTestPatient, BiVTestPatient
 from .adjoint_contraction_args import logger
 from .setup_optimization import RegionalParameter
 
+from pulse import annotation
+annotation.annotate = True
+
 
 __version__ = "1.0"
 __author__ = "Henrik Finsberg"

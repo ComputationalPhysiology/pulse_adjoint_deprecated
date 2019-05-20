@@ -52,6 +52,7 @@ from .utils import (
     UnableToChangePressureExeption,
     get_simulated_pressure,
     check_group_exists,
+    geo_compat,
 )
 from .forward_runner import ActiveForwardRunner, PassiveForwardRunner
 from .optimization_targets import *
@@ -62,41 +63,7 @@ from .optimal_control import OptimalControl
 
 def assimilate(geometry, data, params):
 
-    required_keys = ["LVP", "passive_filling_duration"]
-    for key in required_keys:
-        msg = 'Expected "{}" to be a key in data'.format(key)
-        assert key in data, msg
-
-    setattr(geometry, "pressure", data.get("LVP"))
-    setattr(geometry, "passive_filling_duration", data.get("passive_filling_duration"))
-    setattr(geometry, "num_points", len(geometry.pressure))
-    setattr(
-        geometry,
-        "num_contract_points",
-        geometry.num_points - geometry.passive_filling_duration,
-    )
-
-    for new, old in [
-        ("circumferential", "c0"),
-        ("longitudinal", "l0"),
-        ("radial", "r0"),
-        ("fiber", "f0"),
-        ("sheet", "s0"),
-        ("sheet_normal", "n0"),
-        ("sfun", "cfun"),
-    ]:
-        setattr(geometry, new, getattr(geometry, old, None))
-
-    for key, attr in [
-        ("LVV", "volume"),
-        ("RVV", "rv_volume"),
-        ("RVP", "rv_pressure"),
-        ("strains", "strains"),
-    ]:
-
-        if key in data:
-            setattr(geometry, attr, data.get(key))
-
+    geometry = geo_compat(geometry, data)
     save_patient_data_to_simfile(geometry, params["sim_file"])
 
     from .io import passive_inflation_exists
